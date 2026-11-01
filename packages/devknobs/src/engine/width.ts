@@ -367,7 +367,6 @@ function showCover(): void {
   if (!loadCover) return;
   clearTimeout(coverPoll);
   clearTimeout(coverCap);
-  if (frame) loadCover.style.colorScheme = frame.style.colorScheme;
   loadCover.hidden = false;
   const look = () => {
     if (readable()) hideCover();
@@ -808,6 +807,7 @@ function resize(): void {
   const native = current.scheme !== "system" && handsSchemeDown(frame.getRootNode());
   if (native) frame.style.colorScheme = current.scheme;
   else frame.style.removeProperty("color-scheme");
+  if (loadCover) loadCover.style.colorScheme = frame.style.colorScheme;
   frame.style.filter = visionFilter(current.vision);
   checkZoom();
   warmFold();

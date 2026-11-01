@@ -121,9 +121,9 @@ export const VIEWPORT_CSS = `
   top: 0;
   left: 0;
 }
-/* Where a phone's browser leaves the page in its screen. */
 /* Holds the cover over the frame. */
 .page { position: relative; }
+/* Where a phone's browser leaves the page in its screen. */
 .page.placed { position: absolute; }
 /* Over the frame while its page loads or a host loads it again, so a browser's
    error page never flashes: the frame's own canvas, a dot that breathes. */

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { SCREENS, turn } from "../src/engine/devices";
 import { type ColumnEdge, DOCK_WIDTH, setDockWidth, watchColumn } from "../src/engine/dock";
 import { FOLD_TIME } from "../src/engine/fold";
+import * as frameModule from "../src/engine/frame";
 import { UNFRAMED } from "../src/engine/frame";
 import type { FrameRefusal } from "../src/engine/native";
 import { FRESH_ATTRIBUTE, FRESH_RELOAD_KEY } from "../src/engine/fresh";
@@ -1009,6 +1010,24 @@ describe("the frame over the page", () => {
       await load(PAGE, "other");
       expect(covered()).toBe(false);
       expect(Reflect.get(named("blocked"), "hidden")).toBe(false);
+    });
+
+    test("wears the frame's scheme, and follows it while up", () => {
+      const handsDown = spyOn(frameModule, "handsSchemeDown").mockReturnValue(true);
+      Reflect.set(FakeElement.prototype, "getRootNode", () => body);
+      try {
+        holdTimers();
+        apply({ ...VIEWPORT, scheme: "dark" });
+        const scheme = () => Reflect.get(Reflect.get(named("loading"), "style"), "colorScheme");
+        expect(covered()).toBe(true);
+        expect(Reflect.get(Reflect.get(frameElement(), "style"), "colorScheme")).toBe("dark");
+        expect(scheme()).toBe("dark");
+        apply({ ...VIEWPORT, scheme: "light" });
+        expect(scheme()).toBe("light");
+      } finally {
+        handsDown.mockRestore();
+        Reflect.deleteProperty(FakeElement.prototype, "getRootNode");
+      }
     });
 
     test("never stays past its cap", () => {
