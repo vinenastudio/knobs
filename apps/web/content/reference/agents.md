@@ -23,7 +23,7 @@ the page, such as playwright's `page.evaluate` or the chrome devtools mcp's
 - [`grab()`](/docs/grab) takes an element, an array or a NodeList of them, and skips entries
   that are not elements, such as a `querySelector` that found nothing.
 - `reset()` leaves the panel as it is: open or closed, docked or not, its
-  handle shown or hidden, its dev tab icon (`devIcon`) as set.
+  handle shown or hidden, its dev tab icon (`devIcon`) and real phone mode (`realPhone`) as set.
 
 ```js
 window.devknobs.setState({ scheme: 'dark', panel: { open: false, handle: false } });

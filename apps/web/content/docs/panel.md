@@ -3,7 +3,7 @@ title: the panel
 meta_title: The devknobs panel: open, move, search and pin your knobs
 description: Open the devknobs panel with Shift K, move it along the window edge, search every knob by name or value, pin the ones you use, and change its shortcuts.
 order: 2
-updated: 2026-10-28
+updated: 2026-11-01
 ---
 
 ## open and move it
@@ -33,7 +33,7 @@ while the panel is out and the focus is in no field:
 | `⇧S`          | shows the [storage](/docs/requests-and-storage)  |
 | `⇧` backspace | resets every knob                                |
 
-every other key goes to the page. the gear in the footer opens the settings, where you can change every key but `/` and hide the handle. the dev tab icon switch there puts a `DEV` ribbon on the tab's icon: on local hosts only by default, or on any host or none, for this tab. turned off or unmounted, the page has its own icons back.
+every other key goes to the page. the gear in the footer opens the settings, where you can change every key but `/` and hide the handle. the dev tab icon switch there puts a `DEV` ribbon on the tab's icon: on local hosts only by default, or on any host or none, for this tab. turned off or unmounted, the page has its own icons back. with the extension, the real phone mode switch sends the device's user agent with the frame's page loads, so sites serve their mobile site; some sites may sign you out. it is one setting for every tab and site.
 
 ## pinning
 

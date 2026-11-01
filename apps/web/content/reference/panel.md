@@ -72,6 +72,8 @@ the gear button at the end of the footer opens the settings, in place of the row
 
 the dev tab icon switch draws a yellow `DEV` ribbon on every icon link of the page, the apple touch icon too, from the icon's own picture. an icon the page cannot read, from another origin that does not allow it (CORS), keeps its own picture, and below 32px the ribbon has no `DEV` text. it is `panel.devIcon`: `auto`, the default, shows it on a local host only (localhost, `*.localhost`, `*.local`, `0.0.0.0`, a loopback or private network address), `on` on any host, `off` on none, and it holds for this tab. turned off, or with devknobs unmounted, every link has its own address back.
 
+the real phone mode switch shows only with a host that sends requests as another browser, the extension. on, the device's user agent and client hints go with the frame's own page loads, so a site serves its mobile site; the page around the frame, its service worker and other tabs keep the real browser. some sites may sign you out, as they see one session as two browsers. it is `panel.realPhone`, off by default, one setting for every tab and site, which the host keeps (`native.realPhone`). see [what servers see](/docs/extension#what-servers-see).
+
 ## shortcuts
 
 the panel, grab, inspect, replay, requests, storage and reset keys above are the defaults, and each can be set from the panel: the settings list them under shortcuts, click one and press the new key, escape to cancel.

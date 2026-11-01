@@ -8,7 +8,7 @@ updated: 2026-11-01
 
 ## what it does
 
-the same devknobs panel on any page you open, with no change to the site's code. the toolbar button opens and closes it. Chrome and Edge only.
+the same devknobs panel on any page you open, with no change to the site's code. the toolbar button opens it, and closing it from there turns knobs off for the tab: every knob back to its default, and a page loaded as another browser loads again. Chrome and Edge only.
 
 ## install
 
