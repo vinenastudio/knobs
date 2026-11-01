@@ -15,7 +15,7 @@ import {
   type TabMessage,
 } from './messages.ts';
 import { FrameLoads } from './refusal.ts';
-import { loadsUnder, uaCommand, uaRules } from './ua.ts';
+import { endFollow, type Follow, liveFollows, loadsUnder, uaCommand, uaRules } from './ua.ts';
 
 const PROTOCOL_VERSION = '1.3';
 const key = (tabId: number) => `tab:${tabId}`;
@@ -422,8 +422,34 @@ async function pageLoads(tabId: number, url: string) {
 // frame sends nothing; the frame emulates its browser in the page. The ids are any free ones,
 // since the framing rules take tab ids and free ids too: these are told apart by their request headers.
 // Tabs following real phone mode's frame to another origin: the host and browser of that one
-// page load, whose rule goes once it commits.
-const followUas = new Map<number, { host: string; ua: NativeUa }>();
+// page load, whose rule goes once it commits or its time is up. Kept through the service
+// worker's restarts, so a restarted one drops a rule it can no longer end.
+const FOLLOW_KEY = 'followUa';
+let followsKept: Promise<Map<number, Follow>> | null = null;
+
+function followUas(): Promise<Map<number, Follow>> {
+  followsKept ??= chrome.storage.session.get(FOLLOW_KEY).then((stored) => {
+    const kept = (stored[FOLLOW_KEY] ?? {}) as Record<string, Follow>;
+    const live = liveFollows(
+      new Map(Object.entries(kept).map(([tabId, follow]) => [Number(tabId), follow])),
+      Date.now(),
+    );
+    for (const [tabId, { until }] of live) {
+      setTimeout(() => void unfollowUa(tabId, until), until - Date.now());
+    }
+    return live;
+  });
+  return followsKept;
+}
+
+/** Take the tab's follow and its rule away: the one ending at `until` only, where given. */
+async function unfollowUa(tabId: number, until?: number) {
+  const follows = await followUas();
+  if (endFollow(follows, tabId, until)) {
+    void chrome.storage.session.set({ [FOLLOW_KEY]: Object.fromEntries(follows) });
+    await ruleUas();
+  }
+}
 const UA_KEY = 'ua';
 let uaTabsKept: Promise<Map<number, { host: string | null; ua: NativeUa }>> | null = null;
 
@@ -459,7 +485,7 @@ function ruleUas(): Promise<void> {
         return last;
       };
       await chrome.declarativeNetRequest.updateSessionRules({
-        addRules: uaRules(tabs, free, followUas),
+        addRules: uaRules(tabs, free, await followUas()),
         removeRuleIds: rules.filter(isUaRule).map(({ id }) => id),
       });
     });
@@ -515,24 +541,20 @@ function markUaLoaded(tabId: number, on: boolean): Promise<void> {
   return run;
 }
 
-function unfollowUa(tabId: number) {
-  if (followUas.delete(tabId)) {
-    void ruleUas();
-  }
-}
-
 chrome.webNavigation.onCommitted.addListener(({ frameId, tabId, url }) => {
   if (frameId !== 0) {
     return;
   }
-  const followed = followUas.get(tabId);
-  if (followed) {
-    unfollowUa(tabId);
-    // Served to the device, so the page loads again once real phone mode or the device goes.
-    void markUaLoaded(tabId, URL.parse(url)?.hostname === followed.host);
-    return;
-  }
-  void uaTabs().then((tabs) => markUaLoaded(tabId, loadsUnder(tabs, tabId, url)));
+  void followUas().then(async (follows) => {
+    const followed = follows.get(tabId);
+    if (followed) {
+      await unfollowUa(tabId);
+      // Served to the device, so the page loads again once real phone mode or the device goes.
+      await markUaLoaded(tabId, URL.parse(url)?.hostname === followed.host);
+      return;
+    }
+    await markUaLoaded(tabId, loadsUnder(await uaTabs(), tabId, url));
+  });
 });
 
 /** The user agent the tab's requests carry, null for the browser's own, from the page at `url`. */
@@ -604,10 +626,13 @@ async function follow(tabId: number, state: Carry) {
   handoffs.set(tabId, { origin: to.origin, state, until: Date.now() + HANDOFF_MS, url: to.href });
   const frameUa = (await uaTabs()).get(tabId)?.ua;
   if (frameUa?.frame) {
-    followUas.set(tabId, { host: to.hostname, ua: frameUa });
+    const until = Date.now() + HANDOFF_MS;
+    const follows = await followUas();
+    follows.set(tabId, { host: to.hostname, ua: frameUa, until });
+    void chrome.storage.session.set({ [FOLLOW_KEY]: Object.fromEntries(follows) });
     await ruleUas();
-    // One that never commits leaves no rule behind.
-    setTimeout(() => unfollowUa(tabId), HANDOFF_MS);
+    // One that never commits leaves no rule behind; a later follow in the tab keeps its own.
+    setTimeout(() => void unfollowUa(tabId, until), HANDOFF_MS);
   }
   await chrome.tabs.update(tabId, { url: to.href });
 }
@@ -660,7 +685,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     // The debugger went with the tab.
   });
   void markUaLoaded(tabId, false);
-  unfollowUa(tabId);
+  void unfollowUa(tabId);
   forgetReopen(tabId);
   bypassing.delete(tabId);
   firstLoads.delete(tabId);
@@ -861,6 +886,10 @@ chrome.runtime.onMessage.addListener(
     return true;
   },
 );
+
+// A service worker that starts again puts the user agent rules back from what it kept, so a
+// follow's rule whose time ran out while it slept goes.
+void ruleUas();
 
 // Lets the smoke test, or a look from the service worker's console, read a tab's knobs.
 // `detached` runs what Chrome's bar closing does, which a test cannot click.

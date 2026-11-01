@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import { type NativeUa, PRESETS } from '@vinena/knobs';
 import {
   CLIENT_HINTS,
+  endFollow,
+  liveFollows,
   loadsUnder,
   type HeaderChange,
   RESOURCE_TYPES,
@@ -226,5 +228,31 @@ describe('loadsUnder', () => {
     expect(loadsUnder(tabs, 8, 'https://example.com/')).toBe(false);
     expect(loadsUnder(new Map(), 7, 'https://example.com/')).toBe(false);
     expect(loadsUnder(tabs, 7, 'not a url')).toBe(false);
+  });
+});
+
+describe('follows', () => {
+  const follow = (until: number) => ({ host: 'm.example.com', ua: uaOf('iphone-safari'), until });
+
+  test('a restarted service worker keeps only the follows still on their way', () => {
+    const kept = new Map([
+      [7, follow(2000)],
+      [8, follow(500)],
+    ]);
+    expect([...liveFollows(kept, 1000).keys()]).toEqual([7]);
+  });
+
+  test("an earlier follow's timer never ends a later one in the same tab", () => {
+    const follows = new Map([[7, follow(2000)]]);
+    expect(endFollow(follows, 7, 1000)).toBe(false);
+    expect(follows.has(7)).toBe(true);
+    expect(endFollow(follows, 7, 2000)).toBe(true);
+    expect(follows.has(7)).toBe(false);
+  });
+
+  test("a commit ends the tab's follow whatever its time", () => {
+    const follows = new Map([[7, follow(2000)]]);
+    expect(endFollow(follows, 7)).toBe(true);
+    expect(endFollow(follows, 7)).toBe(false);
   });
 });

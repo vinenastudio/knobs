@@ -164,3 +164,30 @@ export function loadsUnder(tabs: ReadonlyMap<number, TabUa>, tabId: number, url:
   const tab = tabs.get(tabId);
   return host !== undefined && tab?.host === host && !tab.ua.frame;
 }
+
+/** A tab following real phone mode's frame: the host and browser of that one load, until `until`. */
+export interface Follow {
+  host: string;
+  ua: NativeUa;
+  until: number;
+}
+
+/** The follows still on their way at `now`: a restarted service worker drops the rest. */
+export function liveFollows(
+  follows: ReadonlyMap<number, Follow>,
+  now: number,
+): Map<number, Follow> {
+  return new Map([...follows].filter(([, { until }]) => until > now));
+}
+
+/**
+ * Take the tab's follow away, only the one that ends at `until` where it is given, so an
+ * earlier follow's timer never takes a later one. Says whether it took one.
+ */
+export function endFollow(follows: Map<number, Follow>, tabId: number, until?: number): boolean {
+  const follow = follows.get(tabId);
+  if (!follow || (until !== undefined && follow.until !== until)) {
+    return false;
+  }
+  return follows.delete(tabId);
+}
