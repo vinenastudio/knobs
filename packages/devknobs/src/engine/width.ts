@@ -206,6 +206,15 @@ let loader: ((frame: HTMLIFrameElement, url: string) => boolean) | null = null;
 const ANSWER_WAIT = 6000;
 /** Counts the refusals, so an answer to an older one is dropped. */
 let refusals = 0;
+/** Over the frame while its page loads, or a host loads it again, so an error page never shows. */
+let loadCover: HTMLElement | null = null;
+/** The next look at the frame's page while covered, and the cover's last moment. */
+let coverPoll = 0;
+let coverCap = 0;
+/** How often the covered frame is looked at, in ms. */
+const COVER_POLL = 50;
+/** The longest the cover stays up, in ms: past it, the frame shows whatever it has. */
+export const COVER_CAP = ANSWER_WAIT + 2000;
 let current: ViewportValue = {
   ...UNFRAMED,
   scheme: "system",
@@ -307,13 +316,17 @@ function whyRefused(): void {
   if (!box) return;
   explain(box, null, loadAgain);
   if (!askWhy) {
+    hideCover();
     box.hidden = false;
     return;
   }
+  // The error page stays covered while the host answers, through each load again it runs.
+  showCover();
   const still = () => turn === refusals && notice === box;
   let answered = false;
   const show = (refusal: FrameRefusal | null) => {
     if (!still()) return;
+    hideCover();
     box.hidden = false;
     explain(box, refusal, loadAgain);
   };
@@ -343,6 +356,33 @@ function whyRefused(): void {
   );
 }
 
+/** Is the frame's page in, past the blank one it starts with, and able to be read? */
+function readable(): boolean {
+  const doc = frameDocument();
+  return doc !== null && doc.URL !== "about:blank" && doc.readyState !== "loading";
+}
+
+/** Cover the frame until its page can be read, the notice shows, or `COVER_CAP` is up. */
+function showCover(): void {
+  if (!loadCover) return;
+  clearTimeout(coverPoll);
+  clearTimeout(coverCap);
+  if (frame) loadCover.style.colorScheme = frame.style.colorScheme;
+  loadCover.hidden = false;
+  const look = () => {
+    if (readable()) hideCover();
+    else coverPoll = window.setTimeout(look, COVER_POLL);
+  };
+  coverPoll = window.setTimeout(look, COVER_POLL);
+  coverCap = window.setTimeout(hideCover, COVER_CAP);
+}
+
+function hideCover(): void {
+  clearTimeout(coverPoll);
+  clearTimeout(coverCap);
+  if (loadCover) loadCover.hidden = true;
+}
+
 /** Load the frame's page again, after the host got ready to watch it. */
 function loadAgain(): void {
   if (!frame) return;
@@ -350,6 +390,7 @@ function loadAgain(): void {
   readyPage = null;
   refusals += 1;
   if (notice) notice.hidden = true;
+  showCover();
   navigate(frame, frameUrl);
 }
 
@@ -378,7 +419,10 @@ function onLoad(): void {
   const doc = frameDocument();
   if (notice) notice.hidden = true;
   if (doc === null) whyRefused();
-  else refusals += 1;
+  else {
+    refusals += 1;
+    hideCover();
+  }
   locate();
   const view = frameWindow();
   if (view && doc) {
@@ -1196,7 +1240,11 @@ function open(veiled: number | null, first: boolean): void {
   notice = createNotice(() => exit?.());
   pageBox = document.createElement("div");
   pageBox.className = "page";
-  pageBox.append(frame);
+  loadCover = document.createElement("div");
+  loadCover.className = "loading";
+  loadCover.setAttribute("aria-hidden", "true");
+  pageBox.append(frame, loadCover);
+  showCover();
   glass.append(pageBox);
   // The page's scroll minimizing or bringing back the bars resizes the frame.
   browser = createBrowser(glass, frame, resize, onReloading, painted);
@@ -1301,6 +1349,8 @@ function teardown(): void {
   mockDrawing = null;
   mockKey = "";
   frame = null;
+  hideCover();
+  loadCover = null;
   notice = null;
   readout = null;
   caption = null;

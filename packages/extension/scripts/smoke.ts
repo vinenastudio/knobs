@@ -1409,6 +1409,34 @@ async function firstOpen() {
           ),
         tabId,
       );
+    // Counts the animation frames in which the frame shows an error page, or nothing it can read,
+    // with neither devknobs' loading cover nor its notice over it.
+    const watchExposed = () =>
+      tab.evaluate(() => {
+        const marked = window as Window & { exposedFrames?: number };
+        marked.exposedFrames = 0;
+        const look = () => {
+          const root = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot;
+          const frame = root?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]');
+          if (frame) {
+            let doc: Document | null;
+            try {
+              doc = frame.contentDocument;
+            } catch {
+              doc = null;
+            }
+            const over = (selector: string) =>
+              root?.querySelector<HTMLElement>(selector)?.hidden === false;
+            if (doc === null && !over('.loading') && !over('.blocked')) {
+              marked.exposedFrames! += 1;
+            }
+          }
+          requestAnimationFrame(look);
+        };
+        requestAnimationFrame(look);
+      });
+    const exposedFrames = () =>
+      tab.evaluate(() => (window as Window & { exposedFrames?: number }).exposedFrames ?? -1);
     // Polls the frame until it shows `want`, noting whether the notice ever came up meanwhile.
     const opens = async (want: string) => {
       const start = Date.now();
@@ -1439,11 +1467,14 @@ async function firstOpen() {
     // (a) The page's own frame-src leaves its origin out.
     await tab.goto(`${url}frame-src`);
     await ready(tab);
+    await watchExposed();
     await set(tab, { frame: true, width: 400 });
     const framed = await opens('devknobs smoke');
-    log('first open frame-src', framed);
+    const framedExposed = await exposedFrames();
+    log('first open frame-src', { ...framed, exposed: framedExposed });
     assert.equal(framed.text, 'devknobs smoke');
     assert.equal(framed.noticed, false);
+    assert.equal(framedExposed, 0, 'no error page shows uncovered');
     // A link clicked in the frame, then a reload of it from the page above, as devknobs' own
     // reloads go: the page's frame-src holds them too, and they land all the same.
     await tab.evaluate(() => {
@@ -1602,10 +1633,13 @@ async function firstOpen() {
     });
     await tab.reload();
     await ready(tab);
+    await watchExposed();
     await set(tab, { frame: true, width: 400 });
     const stale = await opens('from the network');
+    const staleExposed = await exposedFrames();
     const debuggerOn = await attached();
-    log('first open stale worker', { ...stale, debuggerOn });
+    log('first open stale worker', { ...stale, debuggerOn, exposed: staleExposed });
+    assert.equal(staleExposed, 0, 'the refused copy never shows uncovered');
     assert.equal(stale.text, 'from the network');
     assert.equal(stale.noticed, false, 'no notice while it loads again');
     assert.equal(debuggerOn, false, 'no debugger');

@@ -4,6 +4,7 @@
 
 - a host can load the frame's page itself: `native.load(frame, url)`, given an address on the page's own origin, is called once the frame is in the document, on its first load and on each load again. it returns true where the host set the frame's address itself, such as a browser extension from its own world, which the page's `frame-src` policy does not bind, and false to leave it to devknobs. false, or no `load` at all, and devknobs sets the address as before
 - with a host that answers `native.refused`, the refusal notice waits for its answer, 6 seconds at most, and a `retry` with `now` runs with the notice hidden and loads the frame again, so a refusal the host gets past never shows. with no host the notice shows at once, as before
+- the frame's screen is covered while its page loads, in the frame's own canvas color with a small dot that breathes (still with reduced motion), and through each load again a host runs after a refusal, so a browser's error page never flashes in the device. it goes as soon as the frame's page can be read, before its load event, when the notice shows, or after 8 seconds at most. with no host the notice shows at once, as before
 
 ## 0.5.2
 

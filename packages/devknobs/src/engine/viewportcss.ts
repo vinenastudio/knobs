@@ -122,7 +122,35 @@ export const VIEWPORT_CSS = `
   left: 0;
 }
 /* Where a phone's browser leaves the page in its screen. */
+/* Holds the cover over the frame. */
+.page { position: relative; }
 .page.placed { position: absolute; }
+/* Over the frame while its page loads or a host loads it again, so a browser's
+   error page never flashes: the frame's own canvas, a dot that breathes. */
+.loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: Canvas;
+  color: CanvasText;
+  pointer-events: none;
+}
+.loading[hidden] { display: none; }
+.loading::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.25;
+  animation: devknobs-breathe 1.2s ease-in-out infinite alternate;
+}
+@keyframes devknobs-breathe { to { opacity: 0.08; } }
+@media (prefers-reduced-motion: reduce) {
+  .loading::after { animation: none; }
+}
 iframe {
   display: block;
   border: 0;

@@ -25,6 +25,7 @@ import {
   panelSized,
   reset,
   RIDE_SLOW,
+  COVER_CAP,
   STRIP,
   sync,
   zoomKey,
@@ -934,6 +935,91 @@ describe("the frame over the page", () => {
     await load(PAGE, "other");
     const notice = everything().find((element) => Reflect.get(element, "className") === "blocked");
     expect(notice && Reflect.get(notice, "hidden")).toBe(false);
+  });
+
+  describe("the cover over a loading frame", () => {
+    const named = (name: string) =>
+      everything().find((element) => Reflect.get(element, "className") === name) ?? new FakeElement();
+    const covered = () => Reflect.get(named("loading"), "hidden") === false;
+    /** Holds each timer by its delay, to run by hand. */
+    function holdTimers(): Map<number, (() => void)[]> {
+      const timers = new Map<number, (() => void)[]>();
+      Reflect.set(window, "setTimeout", (run: () => void, delay: number) => {
+        timers.set(delay, [...(timers.get(delay) ?? []), run]);
+        return timers.size;
+      });
+      return timers;
+    }
+    const run = (timers: Map<number, (() => void)[]>, delay: number) => {
+      const due = timers.get(delay) ?? [];
+      timers.delete(delay);
+      for (const next of due) next();
+    };
+
+    test("covers the frame as it opens, and goes once the page can be read, before its load", async () => {
+      const timers = holdTimers();
+      apply(VIEWPORT);
+      expect(covered()).toBe(true);
+      run(timers, 50);
+      expect(covered()).toBe(true);
+      attach();
+      view.commit(PAGE);
+      Reflect.set(Reflect.get(frameElement(), "contentDocument"), "readyState", "interactive");
+      run(timers, 50);
+      expect(covered()).toBe(false);
+    });
+
+    test("stays over the error page through each load again, and gives way to the notice on the last refusal", async () => {
+      let runs = 0;
+      onRefused(async () =>
+        runs < 2
+          ? { why: "loading the page again", retry: { label: "load again", now: true, run: async () => void (runs += 1) } }
+          : { why: "still refused" },
+      );
+      apply(VIEWPORT);
+      await load(PAGE, "other");
+      await Bun.sleep(1);
+      expect(runs).toBe(1);
+      expect(covered()).toBe(true);
+      expect(Reflect.get(named("blocked"), "hidden")).toBe(true);
+      await load(PAGE, "other");
+      await Bun.sleep(1);
+      expect(runs).toBe(2);
+      expect(covered()).toBe(true);
+      await load(PAGE, "other");
+      await Bun.sleep(1);
+      expect(covered()).toBe(false);
+      expect(Reflect.get(named("blocked"), "hidden")).toBe(false);
+    });
+
+    test("goes once a load again gets the page in", async () => {
+      onRefused(async () => ({ why: "again", retry: { label: "load again", now: true, run: async () => {} } }));
+      apply(VIEWPORT);
+      await load(PAGE, "other");
+      await Bun.sleep(1);
+      expect(covered()).toBe(true);
+      await load(PAGE);
+      expect(covered()).toBe(false);
+      expect(Reflect.get(named("blocked"), "hidden")).toBe(true);
+    });
+
+    test("gives way to the notice at once with no host to ask", async () => {
+      apply(VIEWPORT);
+      expect(covered()).toBe(true);
+      await load(PAGE, "other");
+      expect(covered()).toBe(false);
+      expect(Reflect.get(named("blocked"), "hidden")).toBe(false);
+    });
+
+    test("never stays past its cap", () => {
+      const timers = holdTimers();
+      onRefused(() => new Promise(() => {}));
+      apply(VIEWPORT);
+      expect(covered()).toBe(true);
+      expect(COVER_CAP).toBeGreaterThan(6000);
+      run(timers, COVER_CAP);
+      expect(covered()).toBe(false);
+    });
   });
 
   test("hands a host with nothing to wait for the frame once it is in the document", () => {
