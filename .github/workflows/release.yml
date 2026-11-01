@@ -4,6 +4,7 @@ name: Release
 # provenance on its own. Push a tag like `knobs@0.5.0` that matches packages/devknobs.
 # The build job runs installs, tests and third-party actions without id-token, so only the
 # publish job (first-party actions only, no install, no lifecycle scripts) can mint an npm token.
+# Provenance attests this whole workflow; the split only keeps the publish token away from build and dependency code.
 
 on:
   push:
@@ -13,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-knobs
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 # No turbo remote cache here: a release always builds dist from source.
@@ -24,11 +25,18 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       publish: ${{ steps.version.outputs.publish }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          fetch-depth: 0
           persist-credentials: false
+      - name: Check tag is on main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag $GITHUB_REF_NAME points to a commit that is not on main."
+            exit 1
+          fi
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -63,7 +71,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/pack"
           npm pack --pack-destination "$RUNNER_TEMP/pack"
       - if: steps.version.outputs.publish == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: knobs-tarball
           path: ${{ runner.temp }}/pack/*.tgz
@@ -78,25 +86,27 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           sparse-checkout: .nvmrc
           sparse-checkout-cone-mode: false
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: knobs-tarball
           path: ${{ runner.temp }}/pack
-      # Trusted publishing needs npm 11.5.1 or later.
+      # Trusted publishing needs npm 11.5.1 or later. Node 24 bundles it (v24.22.2 ships npm 11.19.1).
+      # No npm self-update here: that would run registry code in the job that holds id-token.
       - name: Check npm version
         run: |
-          if ! node -e 'const [a, b, c] = process.argv[1].split(".").map(Number); process.exit(a > 11 || (a === 11 && (b > 5 || (b === 5 && c >= 1))) ? 0 : 1)' "$(npm --version)"; then
-            npm install -g npm@^11.5.1
-          fi
           npm --version
+          if ! node -e 'const [a, b, c] = process.argv[1].split(".").map(Number); process.exit(a > 11 || (a === 11 && (b > 5 || (b === 5 && c >= 1))) ? 0 : 1)' "$(npm --version)"; then
+            echo "::error::npm $(npm --version) is older than 11.5.1, which trusted publishing needs."
+            exit 1
+          fi
       # Publishing a tarball runs no lifecycle scripts.
       - name: Publish to npm
         env:
