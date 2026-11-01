@@ -68,6 +68,8 @@ let running = false;
 let native: NativeDriver | null = null;
 /** Why the driver last went off or on, for the panel, null with nothing to say. */
 let nativeNote: string | null = null;
+/** Real phone mode as the host last heard it, or the page started with it. */
+let toldRealPhone = false;
 /** Running inside the width knob's frame, where the page above drives the knobs. */
 let inFrame = false;
 let stopRelay: (() => void) | null = null;
@@ -94,6 +96,11 @@ function driver(): NativeDriver | null {
 
 export function applyState(next: DevknobsState): void {
   state = inFrame ? framed(next) : next;
+  // The host keeps real phone mode for every tab: it hears each turn made after the start.
+  if (running && !inFrame && native?.realPhone && toldRealPhone !== state.panel.realPhone) {
+    toldRealPhone = state.panel.realPhone;
+    native.realPhone(toldRealPhone);
+  }
   const active = driver();
   // What a native driver takes stays out of the page.
   const page = inPage(state, active);
@@ -132,9 +139,10 @@ export function applyState(next: DevknobsState): void {
   if (active && !inFrame) drive(active, state);
   else if (native && !inFrame) driveUa(native, state);
   spacing.apply(state.spacing);
-  ua.apply(state.ua);
   // A size the driver sets brings no frame up.
   const sized = inFrame ? state : framing(state, active);
+  // The page around the frame stays the real browser: the copy inside is the device.
+  ua.apply(!inFrame && needsFrame(sized) ? DEFAULT_STATE.ua : state.ua);
   width.apply(sized);
   // While the frame is up, the copy inside it looks at the page at that width.
   overflow.apply(state.overflow && !needsFrame(sized));
@@ -156,6 +164,11 @@ export function setNative(on: boolean, note?: string | null): void {
   enableNative(on);
   if (changed && !on && native && !inFrame) release(native, false);
   if (running && (changed || note !== undefined)) applyState(state);
+}
+
+/** Can the host send requests as another browser, so real phone mode does something? */
+export function hostSendsUa(): boolean {
+  return native?.ua !== undefined && native.realPhone !== undefined;
 }
 
 /** The driver's switch for the panel: null where the host gives none. */
@@ -269,7 +282,11 @@ export function start(options: EngineOptions = {}): void {
   // A host can say why a page refused the frame.
   width.onRefused(native?.refused ?? null);
   width.onFramed(native?.framed ?? null);
-  applyState(merge(stored ? load() : { ...DEFAULT_STATE }, options.state ?? {}));
+  width.onLoader(native?.load ?? null);
+  const first = merge(stored ? load() : { ...DEFAULT_STATE }, options.state ?? {});
+  // What the page starts with is no turn of the host's setting.
+  toldRealPhone = first.panel.realPhone;
+  applyState(first);
   if (!inFrame) return;
   relay(overflow.overflowCount());
   stopRelay = overflow.onCount(relay);
@@ -289,6 +306,7 @@ export function stop(): void {
   width.onZoom(null);
   width.onRefused(null);
   width.onFramed(null);
+  width.onLoader(null);
   media.destroy();
   touch.reset();
   touchPointer.reset();

@@ -13,6 +13,7 @@ function look(over: Partial<Look> = {}): Look {
     background: WHITE,
     top: WHITE,
     bottom: WHITE,
+    header: false,
     footer: false,
     under: [],
     dark: false,

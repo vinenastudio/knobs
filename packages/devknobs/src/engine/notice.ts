@@ -26,8 +26,7 @@ export function createNotice(close: () => void): HTMLElement {
 
 /**
  * Say why under the notice, as a host told it, with a button for its details
- * and one to find out more, which runs the host's `retry` and then `again`,
- * at once where the host says so.
+ * and one to find out more, which runs the host's `retry` and then `again`.
  * Null takes it away.
  */
 export function explain(box: HTMLElement, refusal: FrameRefusal | null, again: () => void): void {
@@ -66,6 +65,5 @@ export function explain(box: HTMLElement, refusal: FrameRefusal | null, again: (
     };
     button.addEventListener("click", run);
     why.append(button);
-    if (retry.now) run();
   }
 }

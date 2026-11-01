@@ -13,6 +13,8 @@ export interface Look {
    * or sticky bar touching the top of the viewport, else the page's.
    */
   top: string;
+  /** Is `top` a fixed or sticky bar's, holding the top of the viewport? */
+  header: boolean;
   /** What fills the screen under the viewport: a fixed bar's color touching its bottom, else the content at its bottom edge. */
   bottom: string;
   /** Is `bottom` a fixed bar's, carried down under the bars, where Safari shows the page past the viewport otherwise? */

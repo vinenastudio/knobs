@@ -17,23 +17,28 @@ export interface Identity {
   /** A touch screen in the frame: `ontouchstart`, touch points and a coarse pointer. */
   touch: boolean;
   dpr: DprValue;
+  /** Real phone mode: the frame's page loads go to servers as the device, so the page loads again when it turns. */
+  served?: boolean;
 }
 
-type IdentityKnobs = Pick<DevknobsState, "ua" | "device" | "dpr">;
+type IdentityKnobs = Pick<DevknobsState, "ua" | "device" | "dpr"> & { panel?: Pick<DevknobsState["panel"], "realPhone"> };
 
 /** What the frame's new window is patched with: its identity, and the screen it reads. */
 type PatchKnobs = IdentityKnobs & Pick<DevknobsState, "posture" | "orientation">;
 
 export function identityOf(state: IdentityKnobs): Identity {
   const agent = ua.uaPreset(state.ua.preset) ? state.ua.preset : ua.userAgentOf(state.ua);
-  return { agent, touch: hasTouch(state.device), dpr: state.dpr };
+  return { agent, touch: hasTouch(state.device), dpr: state.dpr, ...(state.panel?.realPhone ? { served: true } : {}) };
 }
 
 /** Does a page loaded as `loaded` read wrong under `next`? Not while no page has loaded. */
 export function stale(loaded: Identity | null, next: Identity): boolean {
   return (
     loaded !== null &&
-    (loaded.agent !== next.agent || loaded.touch !== next.touch || loaded.dpr !== next.dpr)
+    (loaded.agent !== next.agent ||
+      loaded.touch !== next.touch ||
+      loaded.dpr !== next.dpr ||
+      (loaded.served ?? false) !== (next.served ?? false))
   );
 }
 

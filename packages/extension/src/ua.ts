@@ -103,3 +103,91 @@ export function uaCommand(ua: NativeUa | null): Command {
     },
   };
 }
+
+/** A tab's user agent, as the background keeps it, with the host of its page. */
+export interface TabUa {
+  host: string | null;
+  ua: NativeUa;
+}
+
+/**
+ * The rules that send each tab's user agent: on that tab's requests to its page's own host
+ * alone, never on a service worker's, which no tab owns. A tab with no host gets none. Real
+ * phone mode's (`frame`) goes on the frame's own page loads alone: a rule has no frame id to
+ * tell the frame's other requests from the page's, so those keep the real browser.
+ */
+export function uaRules(
+  tabs: ReadonlyMap<number, TabUa>,
+  free: () => number,
+  navigations: ReadonlyMap<number, TabUa> = new Map(),
+): Array<chrome.declarativeNetRequest.Rule> {
+  // The tab following real phone mode's frame to another origin of its site: that one load of
+  // the page there goes as the device, as the frame's did, so the server sends the same page.
+  const following: Array<chrome.declarativeNetRequest.Rule> = [...navigations].flatMap(
+    ([tabId, { host, ua }]) =>
+      host
+        ? [
+            {
+              action: { requestHeaders: uaHeaders(ua), type: 'modifyHeaders' as const },
+              condition: {
+                requestDomains: [host],
+                resourceTypes: ['main_frame' as const],
+                tabIds: [tabId],
+              },
+              id: free(),
+            },
+          ]
+        : [],
+  );
+  return following.concat(
+    [...tabs].flatMap(([tabId, { host, ua }]) =>
+      host
+        ? [
+            {
+              action: { requestHeaders: uaHeaders(ua), type: 'modifyHeaders' as const },
+              condition: {
+                requestDomains: [host],
+                resourceTypes: ua.frame ? ['sub_frame' as const] : [...RESOURCE_TYPES],
+                tabIds: [tabId],
+              },
+              id: free(),
+            },
+          ]
+        : [],
+    ),
+  );
+}
+
+/** Does the tab's page at `url` load under its user agent rule, so its server sees that browser? */
+export function loadsUnder(tabs: ReadonlyMap<number, TabUa>, tabId: number, url: string): boolean {
+  const host = URL.parse(url)?.hostname;
+  const tab = tabs.get(tabId);
+  return host !== undefined && tab?.host === host && !tab.ua.frame;
+}
+
+/** A tab following real phone mode's frame: the host and browser of that one load, until `until`. */
+export interface Follow {
+  host: string;
+  ua: NativeUa;
+  until: number;
+}
+
+/** The follows still on their way at `now`: a restarted service worker drops the rest. */
+export function liveFollows(
+  follows: ReadonlyMap<number, Follow>,
+  now: number,
+): Map<number, Follow> {
+  return new Map([...follows].filter(([, { until }]) => until > now));
+}
+
+/**
+ * Take the tab's follow away, only the one that ends at `until` where it is given, so an
+ * earlier follow's timer never takes a later one. Says whether it took one.
+ */
+export function endFollow(follows: Map<number, Follow>, tabId: number, until?: number): boolean {
+  const follow = follows.get(tabId);
+  if (!follow || (until !== undefined && follow.until !== until)) {
+    return false;
+  }
+  return follows.delete(tabId);
+}

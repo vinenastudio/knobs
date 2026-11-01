@@ -4,6 +4,7 @@
   "version": "0.5.2",
   "description": "The knobs panel on any page, with text size, offline, media preferences, viewport and user agent set for real by Chrome.",
   "homepage_url": "https://knobs.dev",
+  "minimum_chrome_version": "128",
   "permissions": [
     "debugger",
     "declarativeNetRequestWithHostAccess",

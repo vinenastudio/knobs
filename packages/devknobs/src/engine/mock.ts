@@ -56,8 +56,6 @@ export interface Mock {
   /** The body, in the mock. */
   body: Rect;
   screenRadius: Radius;
-  /** The screen's corners are continuous, as on the phones with an island, not round. */
-  continuous: boolean;
   bodyRadius: Radius;
   parts: Part[];
   /** The body as a picture, which then has every part in it, in place of the drawn one. */
@@ -170,8 +168,7 @@ export function mockOf(id: string, orientation: OrientationValue): Mock | null {
       return key ? [shown, round("key", at(key))] : [shown];
     }),
   ];
-  const continuous = islandOf(id) !== null;
-  const upright: Mock = { width, height, inset, body, screenRadius, continuous, bodyRadius, parts };
+  const upright: Mock = { width, height, inset, body, screenRadius, bodyRadius, parts };
   if (orientation === "portrait") return upright;
   const clockwise = device.clockwise === true;
   return {

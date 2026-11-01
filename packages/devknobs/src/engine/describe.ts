@@ -241,6 +241,10 @@ function knobs(): { [K in Exclude<keyof DevknobsState, Skipped>]: Spec } {
             "The yellow DEV ribbon on the tab's icon and the apple-touch-icon. auto shows it on a local host only: localhost, *.localhost, *.local, 0.0.0.0, a loopback or private network address.",
             oneOf(DEV_ICONS),
           ),
+          realPhone: field(
+            "Real phone mode. true has a host that sends requests as another browser, the extension, send the device's user agent to servers for the frame's page loads, so a site serves its mobile site; some sites may sign you out. false sends none for a device in the frame. The extension saves a change made during a user gesture, such as a click (the panel's switch included), for every tab and site; a change a script makes without one stays in this tab.",
+            flag,
+          ),
         },
       },
       "frame",
@@ -263,8 +267,8 @@ export function describe(): KnobDescription[] {
 /** A knob's default, trimmed to the fields it lists. */
 function defaultOf(key: keyof DevknobsState): KnobValue {
   if (key === "panel") {
-    const { open, docked, handle, devIcon } = DEFAULT_STATE.panel;
-    return { open, docked, handle, devIcon };
+    const { open, docked, handle, devIcon, realPhone } = DEFAULT_STATE.panel;
+    return { open, docked, handle, devIcon, realPhone };
   }
   if (key === "clock") {
     const { mode, at, speed, header } = DEFAULT_STATE.clock;

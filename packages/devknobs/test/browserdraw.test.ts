@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import { createBrowser, readLook, screenFill } from "../src/engine/browserdraw";
+import { createBrowser, readLook, screenFill, seamRects } from "../src/engine/browserdraw";
 import type { Look } from "../src/engine/browserkit";
 import { MORPH } from "../src/engine/browserkit";
 import { BARS_DOWN, barsOf, type Screen, viewportOf } from "../src/engine/browserui";
@@ -153,6 +153,7 @@ function look(over: Partial<Look> = {}): Look {
     background: WHITE,
     top: WHITE,
     bottom: WHITE,
+    header: false,
     footer: false,
     under: [],
     dark: false,
@@ -544,5 +545,22 @@ describe("createBrowser", () => {
     show(false);
     for (const timer of shrinks()) timer.run();
     expect(scrolled).toEqual([]);
+  });
+});
+
+describe("seamRects", () => {
+  const page = { x: 0, y: 100, width: 400, height: 600 };
+
+  test("spans each edge a fixed bar holds, 2 device px on each side, at the frame's zoom", () => {
+    const unit = 1 / (2 * 0.8);
+    const { top, bottom } = seamRects(page, 1.25, unit, { header: true, footer: true });
+    expect(top).toEqual({ x: 0, y: 125 - 2 * unit, width: 500, height: 4 * unit });
+    expect(bottom).toEqual({ x: 0, y: 875 - 2 * unit, width: 500, height: 4 * unit });
+  });
+
+  test("leaves an edge no bar holds, and a frame that fills the screen, alone", () => {
+    expect(seamRects(page, 1, 0.5, { header: false, footer: true }).top).toBeNull();
+    expect(seamRects(page, 1, 0.5, { header: true, footer: false }).bottom).toBeNull();
+    expect(seamRects(null, 1, 0.5, { header: true, footer: true })).toEqual({ top: null, bottom: null });
   });
 });

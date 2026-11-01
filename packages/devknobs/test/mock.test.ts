@@ -28,9 +28,9 @@ describe("mockOf", () => {
   });
 
   test("gives each device its own radii, not the screen's and the bezel", () => {
-    expect(mockOf("iphone-16", "portrait")).toMatchObject({ screenRadius: 55, bodyRadius: 75.5 });
+    expect(mockOf("iphone-16", "portrait")).toMatchObject({ screenRadius: 55.8, bodyRadius: 75.5 });
     expect(mockOf("iphone-16-pro", "portrait")).toMatchObject({
-      screenRadius: 62,
+      screenRadius: 63.2,
       bodyRadius: 77.9,
     });
     expect(mockOf("pixel-9", "portrait")).toMatchObject({ screenRadius: 55, bodyRadius: 77 });
@@ -69,16 +69,16 @@ describe("mockOf", () => {
     expect(upright?.inset).toEqual({
       top: 14.7,
       right: 14.7 + 2.7,
-      bottom: 14.4,
+      bottom: 14.7,
       left: 14.7 + 2.7,
     });
     expect(upright?.width).toBeCloseTo(431.4 + 5.4);
-    expect(upright?.height).toBeCloseTo(903.1);
+    expect(upright?.height).toBeCloseTo(903.4);
     expect(upright?.body).toMatchObject({ x: 2.7, y: 0 });
     expect(upright?.body.width).toBeCloseTo(431.4);
-    expect(upright?.body.height).toBeCloseTo(903.1);
+    expect(upright?.body.height).toBeCloseTo(903.4);
     const turned = mockOf("iphone-16-pro", "landscape");
-    expect(turned?.inset).toEqual({ top: 14.7 + 2.7, right: 14.4, bottom: 14.7 + 2.7, left: 14.7 });
+    expect(turned?.inset).toEqual({ top: 14.7 + 2.7, right: 14.7, bottom: 14.7 + 2.7, left: 14.7 });
     expect(turned?.width).toBe(upright?.height ?? 0);
     expect(turned?.height).toBe(upright?.width ?? 0);
     expect(turned?.body.x).toBe(0);

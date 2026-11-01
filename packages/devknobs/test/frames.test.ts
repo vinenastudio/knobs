@@ -25,6 +25,7 @@ function fakeKit() {
       onZoom() {},
       onRefused() {},
       onFramed() {},
+      onLoader() {},
       frameWindow: () => null,
       panelSized() {},
       zoomKey: () => true,

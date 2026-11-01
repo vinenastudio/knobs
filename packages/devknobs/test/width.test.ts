@@ -2,11 +2,14 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { SCREENS, turn } from "../src/engine/devices";
 import { type ColumnEdge, DOCK_WIDTH, setDockWidth, watchColumn } from "../src/engine/dock";
 import { FOLD_TIME } from "../src/engine/fold";
+import * as frameModule from "../src/engine/frame";
 import { UNFRAMED } from "../src/engine/frame";
+import type { FrameRefusal } from "../src/engine/native";
 import { FRESH_ATTRIBUTE, FRESH_RELOAD_KEY } from "../src/engine/fresh";
 import { patchedAs } from "../src/engine/identity";
 import { mockOf } from "../src/engine/mock";
 import { holeAt, holePath, MORPH_TIME, rounded, windowRect } from "../src/engine/morph";
+import { evenHole } from "../src/engine/morphrun";
 import { keepDrawing, SNAPSHOT_KEY } from "../src/engine/placeholder";
 import { DEFAULT_STATE, merge } from "../src/engine/store";
 import { type Mark, MARK_EVENT } from "../src/engine/touchmark";
@@ -17,12 +20,14 @@ import {
   idle as caughtUp,
   label,
   onFramed,
+  onLoader,
   onRefused,
   onZoom,
   origin,
   panelSized,
   reset,
   RIDE_SLOW,
+  COVER_CAP,
   STRIP,
   sync,
   zoomKey,
@@ -732,6 +737,7 @@ afterEach(() => {
   onZoom(null);
   onRefused(null);
   onFramed(null);
+  onLoader(null);
   FakeDialog.prototype.showModal = NATIVE_SHOW_MODAL;
   for (const name of [
     "window",
@@ -858,6 +864,213 @@ describe("the frame over the page", () => {
     expect(named("why").children[0]?.textContent).toBe("still refused");
     reset();
     expect(heard).toEqual([true, false]);
+  });
+
+  test("keeps the notice hidden while the host answers, and through a load again it runs at once", async () => {
+    let answer = (_refusal: FrameRefusal | null) => {};
+    let finish = () => {};
+    onRefused(() => new Promise((resolve) => (answer = resolve)));
+    apply(VIEWPORT);
+    await load(PAGE, "other");
+    const named = (name: string) =>
+      everything().find((element) => Reflect.get(element, "className") === name) ?? new FakeElement();
+    expect(Reflect.get(named("blocked"), "hidden")).toBe(true);
+    answer({ why: "waiting", retry: { label: "load again", now: true, run: () => new Promise((resolve) => (finish = resolve)) } });
+    await Bun.sleep(1);
+    expect(Reflect.get(named("blocked"), "hidden")).toBe(true);
+    expect(named("why").children).toEqual([]);
+    Reflect.set(frameElement(), "src", "");
+    finish();
+    await Bun.sleep(1);
+    expect(Reflect.get(frameElement(), "src")).toBe(PAGE);
+    expect(Reflect.get(named("blocked"), "hidden")).toBe(true);
+  });
+
+  test("shows the notice where the host cannot say, or its load again fails, and keeps it hidden after a good load", async () => {
+    const named = (name: string) =>
+      everything().find((element) => Reflect.get(element, "className") === name) ?? new FakeElement();
+    onRefused(async () => {
+      throw new Error("no host");
+    });
+    apply(VIEWPORT);
+    await load(PAGE, "other");
+    await Bun.sleep(1);
+    expect(Reflect.get(named("blocked"), "hidden")).toBe(false);
+    onRefused(async () => ({
+      why: "waiting",
+      retry: { label: "load again", now: true, run: async () => Promise.reject(new Error("could not load again")) },
+    }));
+    await load(PAGE, "other");
+    await Bun.sleep(1);
+    expect(Reflect.get(named("blocked"), "hidden")).toBe(false);
+    expect(named("why").children[0]?.textContent).toBe("could not load again");
+    let answer = (_refusal: FrameRefusal | null) => {};
+    onRefused(() => new Promise((resolve) => (answer = resolve)));
+    await load(PAGE, "other");
+    await load(PAGE);
+    answer({ why: "too late" });
+    await Bun.sleep(1);
+    expect(Reflect.get(named("blocked"), "hidden")).toBe(true);
+  });
+
+  test("shows the notice once the host has not answered in time", async () => {
+    const timers: (() => void)[] = [];
+    const delays: number[] = [];
+    Reflect.set(window, "setTimeout", (run: () => void, delay: number) => {
+      delays.push(delay);
+      return timers.push(run);
+    });
+    onRefused(() => new Promise(() => {}));
+    apply(VIEWPORT);
+    await load(PAGE, "other");
+    const notice = everything().find((element) => Reflect.get(element, "className") === "blocked");
+    expect(notice && Reflect.get(notice, "hidden")).toBe(true);
+    const waited = delays.at(-1) ?? 0;
+    expect(waited).toBeGreaterThan(0);
+    expect(waited).toBeLessThanOrEqual(6000);
+    for (const run of timers.splice(0)) run();
+    expect(notice && Reflect.get(notice, "hidden")).toBe(false);
+  });
+
+  test("shows the notice at once with no host to ask", async () => {
+    apply(VIEWPORT);
+    await load(PAGE, "other");
+    const notice = everything().find((element) => Reflect.get(element, "className") === "blocked");
+    expect(notice && Reflect.get(notice, "hidden")).toBe(false);
+  });
+
+  describe("the cover over a loading frame", () => {
+    const named = (name: string) =>
+      everything().find((element) => Reflect.get(element, "className") === name) ?? new FakeElement();
+    const covered = () => Reflect.get(named("loading"), "hidden") === false;
+    /** Holds each timer by its delay, to run by hand. */
+    function holdTimers(): Map<number, (() => void)[]> {
+      const timers = new Map<number, (() => void)[]>();
+      Reflect.set(window, "setTimeout", (run: () => void, delay: number) => {
+        timers.set(delay, [...(timers.get(delay) ?? []), run]);
+        return timers.size;
+      });
+      return timers;
+    }
+    const run = (timers: Map<number, (() => void)[]>, delay: number) => {
+      const due = timers.get(delay) ?? [];
+      timers.delete(delay);
+      for (const next of due) next();
+    };
+
+    test("covers the frame as it opens, and goes once the page can be read, before its load", async () => {
+      const timers = holdTimers();
+      apply(VIEWPORT);
+      expect(covered()).toBe(true);
+      run(timers, 50);
+      expect(covered()).toBe(true);
+      attach();
+      view.commit(PAGE);
+      Reflect.set(Reflect.get(frameElement(), "contentDocument"), "readyState", "interactive");
+      run(timers, 50);
+      expect(covered()).toBe(false);
+    });
+
+    test("stays over the error page through each load again, and gives way to the notice on the last refusal", async () => {
+      let runs = 0;
+      onRefused(async () =>
+        runs < 2
+          ? { why: "loading the page again", retry: { label: "load again", now: true, run: async () => void (runs += 1) } }
+          : { why: "still refused" },
+      );
+      apply(VIEWPORT);
+      await load(PAGE, "other");
+      await Bun.sleep(1);
+      expect(runs).toBe(1);
+      expect(covered()).toBe(true);
+      expect(Reflect.get(named("blocked"), "hidden")).toBe(true);
+      await load(PAGE, "other");
+      await Bun.sleep(1);
+      expect(runs).toBe(2);
+      expect(covered()).toBe(true);
+      await load(PAGE, "other");
+      await Bun.sleep(1);
+      expect(covered()).toBe(false);
+      expect(Reflect.get(named("blocked"), "hidden")).toBe(false);
+    });
+
+    test("goes once a load again gets the page in", async () => {
+      onRefused(async () => ({ why: "again", retry: { label: "load again", now: true, run: async () => {} } }));
+      apply(VIEWPORT);
+      await load(PAGE, "other");
+      await Bun.sleep(1);
+      expect(covered()).toBe(true);
+      await load(PAGE);
+      expect(covered()).toBe(false);
+      expect(Reflect.get(named("blocked"), "hidden")).toBe(true);
+    });
+
+    test("gives way to the notice at once with no host to ask", async () => {
+      apply(VIEWPORT);
+      expect(covered()).toBe(true);
+      await load(PAGE, "other");
+      expect(covered()).toBe(false);
+      expect(Reflect.get(named("blocked"), "hidden")).toBe(false);
+    });
+
+    test("wears the frame's scheme, and follows it while up", () => {
+      const handsDown = spyOn(frameModule, "handsSchemeDown").mockReturnValue(true);
+      Reflect.set(FakeElement.prototype, "getRootNode", () => body);
+      try {
+        holdTimers();
+        apply({ ...VIEWPORT, scheme: "dark" });
+        const scheme = () => Reflect.get(Reflect.get(named("loading"), "style"), "colorScheme");
+        expect(covered()).toBe(true);
+        expect(Reflect.get(Reflect.get(frameElement(), "style"), "colorScheme")).toBe("dark");
+        expect(scheme()).toBe("dark");
+        apply({ ...VIEWPORT, scheme: "light" });
+        expect(scheme()).toBe("light");
+      } finally {
+        handsDown.mockRestore();
+        Reflect.deleteProperty(FakeElement.prototype, "getRootNode");
+      }
+    });
+
+    test("never stays past its cap", () => {
+      const timers = holdTimers();
+      onRefused(() => new Promise(() => {}));
+      apply(VIEWPORT);
+      expect(covered()).toBe(true);
+      expect(COVER_CAP).toBeGreaterThan(6000);
+      run(timers, COVER_CAP);
+      expect(covered()).toBe(false);
+    });
+  });
+
+  test("hands a host with nothing to wait for the frame once it is in the document", () => {
+    const attached: boolean[] = [];
+    onLoader((frame) => {
+      attached.push(everything().some((element) => Object.is(element, frame)));
+      return true;
+    });
+    apply(VIEWPORT);
+    expect(attached).toEqual([true]);
+    expect(Reflect.get(frameElement(), "src")).toBeUndefined();
+  });
+
+  test("has the host load the frame's page where it takes it, and sets the address itself where it does not", async () => {
+    const loads: string[] = [];
+    let takes = true;
+    onFramed(async () => {});
+    onLoader((_frame, url) => {
+      loads.push(url);
+      return takes;
+    });
+    onRefused(async () => ({ why: "refused", retry: { label: "load again", now: true, run: async () => {} } }));
+    apply(VIEWPORT);
+    await Bun.sleep(1);
+    expect(loads).toEqual([PAGE]);
+    expect(Reflect.get(frameElement(), "src")).toBeUndefined();
+    takes = false;
+    await load(PAGE, "other");
+    await Bun.sleep(1);
+    expect(loads).toEqual([PAGE, PAGE]);
+    expect(Reflect.get(frameElement(), "src")).toBe(PAGE);
   });
 
   test("holds the frame's first load until the host has let it in", async () => {
@@ -1020,7 +1233,8 @@ describe("the frame over the page", () => {
     // The drawn browser's loading line asks what moves it as the frame goes.
     Reflect.set(FakeElement.prototype, "getAnimations", () => []);
     // The letterbox sits off the window's corner, and the phone's screen is drawn fitted, at 85%,
-    // its corners as round as the Duo's cover screen: the hinge's two far less.
+    // its corners as round as the Duo's cover screen: the hinge's two far less. The opening
+    // morphs with every corner as round as the roundest, so it keeps one even shape.
     const box = { left: 10, top: 20, width: 1500, height: 850 };
     const place = fit({ ...PHONE, height: 874 }, box);
     expect(place.transform).toBeLessThan(1);
@@ -1028,6 +1242,8 @@ describe("the frame over the page", () => {
     const [a = 0, b = 0, c = 0, d = 0] = fitted;
     const screen = { x: 579, y: 69, width: 342, height: 744, radius: [a, b, c, d] as const };
     const whole = windowRect(box);
+    const even = evenHole(screen);
+    expect(even.radius).toEqual([b, b, b, b]);
     const create = document.createElement;
     Reflect.set(document, "createElement", (tag: string) => {
       const element = new FakeElement(tag.toUpperCase());
@@ -1061,21 +1277,21 @@ describe("the frame over the page", () => {
       expect(picked).toContain(holePath(whole));
       expect(picked).toContain(holePath(holeAt(whole, round, 40, MORPH_TIME.round)));
       expect(picked).toContain(holePath(round));
-      expect(picked).toContain(holePath(holeAt(round, screen, 40, MORPH_TIME.mat)));
-      expect(picked.at(-1)).toBe(holePath(screen));
+      expect(picked).toContain(holePath(holeAt(round, even, 40, MORPH_TIME.mat)));
+      expect(picked.at(-1)).toBe(holePath(even));
       expect(picked.at(-1)).toContain(`A${Math.round(b * 100) / 100} `);
       // A picture of the body that loads late moves the screen as the case comes in, and the opening goes with it.
       const glass = everything().find((element) => Reflect.get(element, "className") === "glass");
       const moved = { ...screen, x: screen.x + 3, y: screen.y - 2 };
       const stood = glass?.getBoundingClientRect;
       if (glass) glass.getBoundingClientRect = () => ({ ...moved, left: box.left + moved.x, top: box.top + moved.y });
-      expect((await play(2)).at(-1)).toBe(holePath(moved));
+      expect((await play(2)).at(-1)).toBe(holePath(evenHole(moved)));
       if (glass && stood) glass.getBoundingClientRect = stood;
-      expect((await play(2)).at(-1)).toBe(holePath(screen));
+      expect((await play(2)).at(-1)).toBe(holePath(even));
       apply(KNOBS);
       const removed = await play(20);
-      expect(removed[0]).toBe(holePath(screen));
-      expect(removed).toContain(holePath(holeAt(screen, round, 40, MORPH_TIME.mat)));
+      expect(removed[0]).toBe(holePath(even));
+      expect(removed).toContain(holePath(holeAt(even, round, 40, MORPH_TIME.mat)));
       expect(removed).toContain(holePath(round));
       expect(removed.at(-1)).toBe(holePath(whole));
       expect(keyframes.length).toBeGreaterThan(0);
@@ -1667,9 +1883,8 @@ describe("a phone's body", () => {
     expect(Reflect.get(glass().style, "left")).toBe(left);
     expect(Reflect.get(glass().style, "borderRadius")).toBe("62px 62px 62px 62px");
     expect(Reflect.get(glass().style, "boxShadow")).toBe("0 0 0 2px #000");
-    // Its continuous corners, where the browser draws them, from the same radius.
-    expect(Reflect.get(glass(), "className")).toBe("glass mocked continuous");
-    expect(glass().style.getPropertyValue("--continuous")).toBe(`${62 * 1.363}px`);
+    // A plain round clip, no superellipse.
+    expect(Reflect.get(glass(), "className")).toBe("glass mocked");
   });
 
   test("is the drawn mock when the image does not load, as with the folder deleted", async () => {
@@ -1680,7 +1895,7 @@ describe("a phone's body", () => {
     const tags = mockDrawing().children.map((element) => element.tagName);
     expect(tags).toEqual([...Array(5).fill("rect"), "path", "path", "rect"]);
     expect(Reflect.get(glass().style, "left")).toBe(`${19.7 + 2.7}px`);
-    expect(Reflect.get(glass().style, "borderRadius")).toBe("55px 55px 55px 55px");
+    expect(Reflect.get(glass().style, "borderRadius")).toBe("55.8px 55.8px 55.8px 55.8px");
     expect(Reflect.get(glass().style, "boxShadow")).toBe("");
   });
 
@@ -1893,6 +2108,7 @@ describe("the touch cursor over the screen", () => {
       background: "rgb(255, 255, 255)",
       top: "rgb(255, 255, 255)",
       bottom: "rgb(255, 255, 255)",
+      header: false,
       footer: false,
       under: [],
       dark: false,

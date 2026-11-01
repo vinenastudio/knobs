@@ -12,7 +12,7 @@ import { isListed } from "../src/ui/list";
 import { viewHead } from "../src/ui/pane";
 import type { LivePrefs } from "../src/ui/prefs";
 import { createRows, type Rows, rowLine } from "../src/ui/rows";
-import { createSettings, type Settings, type SettingsContext } from "../src/ui/settings";
+import { createSettings, REAL_PHONE_HINT, type Settings, type SettingsContext } from "../src/ui/settings";
 import { stage } from "../src/ui/stage";
 import { CSS } from "../src/ui/styles";
 import type { Tips } from "../src/ui/tooltip";
@@ -88,6 +88,8 @@ function buildSettings(more: Partial<SettingsContext> = {}): Settings {
     showHandle: () => {},
     devIconShown: () => true,
     setDevIcon: () => {},
+    realPhone: false,
+    setRealPhone: () => {},
     native: null,
     setNative: () => {},
     prefer: null,
@@ -454,6 +456,29 @@ describe("the settings' dev tab icon switch", () => {
     shown = false;
     toggle?.fire("click");
     expect(picked).toEqual([false, true]);
+  });
+});
+
+describe("the settings' real phone mode switch", () => {
+  test("is not there without a host that sends requests as another browser", () => {
+    expect(fake(buildSettings().view).find("switch").map((node) => node.attributes.get("aria-label"))).not.toContain(
+      "real phone mode",
+    );
+  });
+
+  test("says what it costs, shows its state and says what the user picks", () => {
+    const picked: boolean[] = [];
+    const made = buildSettings({ realPhone: true, setRealPhone: (on) => picked.push(on) });
+    const view = fake(made.view);
+    const toggle = view.find("switch").find((node) => node.attributes.get("aria-label") === "real phone mode");
+    const row = view.children.find((child) => child.children[0]?.children[0]?.children[1]?.textContent === "real phone mode");
+    expect(row?.children[1]?.textContent).toBe(REAL_PHONE_HINT);
+    made.drawRealPhone(false);
+    toggle?.fire("click");
+    made.drawRealPhone(true);
+    expect(toggle?.attributes.get("aria-checked")).toBe("true");
+    toggle?.fire("click");
+    expect(picked).toEqual([true, false]);
   });
 });
 

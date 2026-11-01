@@ -63,6 +63,25 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(caches.match('/worker/${kind}/page').then((cached) => cached ?? fetch(event.request)));
   }
 });`;
+// As X's: answers the frame at once from a copy it saved as it installed, which refuses frames,
+// and saves a new copy from the network behind it, for the next load, 1.5 seconds on: past the
+// first load again, so only the second gets it.
+const staleWorker = `self.addEventListener('install', (event) => {
+  self.skipWaiting();
+  event.waitUntil(caches.open('pages').then((cache) => cache.put('/worker/stale/page', new Response(
+    '<!doctype html><html><head><meta charset="utf-8"></head><body><h1>from the cache</h1></body></html>',
+    { headers: { 'content-type': 'text/html', 'x-frame-options': 'DENY', 'content-security-policy': "frame-ancestors 'none'" } },
+  ))));
+});
+self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+self.addEventListener('fetch', (event) => {
+  if (event.request.mode === 'navigate' && event.request.destination === 'iframe') {
+    event.respondWith(caches.match('/worker/stale/page'));
+    event.waitUntil(new Promise((resolve) => setTimeout(resolve, 1500))
+      .then(() => fetch('/worker/stale/page', { cache: 'no-store' }))
+      .then((fresh) => caches.open('pages').then((cache) => cache.put('/worker/stale/page', fresh))));
+  }
+});`;
 // As an app that renders into <body> as it starts, such as a React root there: it takes out
 // every node it did not put there (`clears`) or puts a new <body> in (`replaces`). `reloads`
 // clears too, and reloads the tab once its frame's copy loads past the service worker, as a
@@ -89,6 +108,10 @@ addEventListener('message', (event) => {
   }
 });
 </script>`;
+// How many times the server sent each next page of the frame-src pages.
+const nextLoads = new Map<string, number>();
+// The user agent of the last page load of /phone on each host, as the tab's own.
+const phoneLoads = new Map<string, string>();
 // How many times the server sent each kind's page.
 const workerLoads = new Map<string, number>();
 // The user agent and client hints of the last request of each kind under /ua/: the page as a
@@ -253,12 +276,14 @@ self.addEventListener('fetch', (event) => {
   }
   // Pages under /worker/<kind>/ that refuse frames, each kind with a service worker of its scope:
   // `network` fetches the page from the server, `cache` answers it from Cache Storage.
-  const worker = /^\/worker\/(network|cache|clears|replaces|reloads)\/(sw\.js)?/.exec(path);
+  const worker = /^\/worker\/(network|cache|stale|clears|replaces|reloads)\/(sw\.js)?/.exec(path);
   if (worker) {
     const [, kind, script] = worker;
     if (script) {
       response.setHeader('content-type', 'text/javascript');
-      response.end(kind === 'network' ? networkWorker : cacheWorker(kind!));
+      response.end(
+        kind === 'network' ? networkWorker : kind === 'stale' ? staleWorker : cacheWorker(kind!),
+      );
       return;
     }
     workerLoads.set(kind!, (workerLoads.get(kind!) ?? 0) + 1);
@@ -267,7 +292,7 @@ self.addEventListener('fetch', (event) => {
     response.setHeader('content-security-policy', "frame-ancestors 'none'");
     response.end(
       page(
-        `<script>navigator.serviceWorker.register("/worker/${kind}/sw.js")</script>${kind === 'network' || kind === 'cache' ? '' : app(kind!)}`,
+        `<script>navigator.serviceWorker.register("/worker/${kind}/sw.js")</script>${kind === 'network' || kind === 'cache' || kind === 'stale' ? '' : app(kind!)}`,
       ).replace('<h1>devknobs smoke</h1>', '<h1>from the network</h1>'),
     );
     return;
@@ -279,7 +304,85 @@ self.addEventListener('fetch', (event) => {
     response.end();
     return;
   }
+  // As a site that sends a phone's browser to its mobile host: on www.knobs.localhost, a
+  // request that comes as an iPhone goes to the same page on m.knobs.localhost, which only its
+  // own origin may frame. A device's frame sends its browser in real phone mode alone.
+  if (path === '/phone') {
+    if (request.headers['sec-fetch-dest'] === 'document') {
+      phoneLoads.set(request.headers.host ?? '', request.headers['user-agent'] ?? '');
+    }
+    if (
+      request.headers.host?.startsWith('www.knobs.localhost:') &&
+      request.headers['user-agent']?.includes('iPhone')
+    ) {
+      response.statusCode = 302;
+      response.setHeader('location', `http://m.knobs.localhost:${port}/phone`);
+      response.end();
+      return;
+    }
+    response.setHeader('content-type', 'text/html');
+    response.setHeader('x-frame-options', 'SAMEORIGIN');
+    response.end(page());
+    return;
+  }
   response.setHeader('content-type', 'text/html');
+  // A page whose own policy lets no frame of its origin in, and one whose frame-ancestors
+  // already lets the page itself frame it, whose policy then stays: its inline script is blocked.
+  // The same, with a next page that takes 1.5 seconds to answer, with or without a service
+  // worker that lets every load through.
+  const slow = /^\/slow\/(plain|sw)\/(page|next|sw\.js)$/.exec(path);
+  if (slow) {
+    const [, kind, part] = slow;
+    if (part === 'sw.js') {
+      response.setHeader('content-type', 'text/javascript');
+      response.end(networkWorker);
+      return;
+    }
+    response.setHeader('content-type', 'text/html');
+    response.setHeader('content-security-policy', 'frame-src https://example.com');
+    const register =
+      kind === 'sw' ? `<script>navigator.serviceWorker.register("/slow/sw/sw.js")</script>` : '';
+    if (part === 'next') {
+      setTimeout(
+        () =>
+          response.end(page(register).replace('<h1>devknobs smoke</h1>', '<h1>the next page</h1>')),
+        1500,
+      );
+      return;
+    }
+    response.end(page(register));
+    return;
+  }
+  // The same with a policy that only reports, and the times each next page was sent.
+  if (path === '/frame-src-report' || path === '/frame-src-next?report') {
+    response.setHeader('content-security-policy-report-only', 'frame-src https://example.com');
+  }
+  if (path.startsWith('/frame-src-next')) {
+    nextLoads.set(path, (nextLoads.get(path) ?? 0) + 1);
+  }
+  if (path === '/frame-src' || path === '/frame-src-next') {
+    response.setHeader('content-security-policy', 'frame-src https://example.com');
+  }
+  if (path === '/frame-src-report') {
+    response.end(page());
+    return;
+  }
+  if (path.startsWith('/frame-src-next')) {
+    response.end(page().replace('<h1>devknobs smoke</h1>', '<h1>the next page</h1>'));
+    return;
+  }
+  const ancestors = /^\/ancestors-(self|none|absent)$/.exec(path)?.[1];
+  if (ancestors) {
+    response.setHeader('x-frame-options', 'DENY');
+    response.setHeader(
+      'content-security-policy',
+      ancestors === 'absent'
+        ? "script-src 'self'"
+        : `frame-ancestors '${ancestors}'; script-src 'self'`,
+    );
+    response.end(page('<script>window.inlineRan = true;</script>'));
+    return;
+  }
   if (path === '/csp') {
     response.setHeader('content-security-policy', "default-src 'self'");
   }
@@ -463,6 +566,22 @@ const set = (tab: Page, patch: DevknobsStatePatch) =>
   tab.evaluate((patch) => {
     window.devknobs!.setState(patch);
   }, patch);
+
+/**
+ * Set knobs that make the extension load the page again, and wait for that load and its
+ * devknobs. The reload comes once the extension has taken its rule off, after `set` returns,
+ * or while it runs, which takes its page away from under it.
+ */
+async function setAndReload(tab: Page, patch: DevknobsStatePatch) {
+  const loaded = tab.waitForEvent('load', { timeout: 15_000 });
+  await set(tab, patch).catch((error: unknown) => {
+    if (!String(error).includes('Execution context was destroyed')) {
+      throw error;
+    }
+  });
+  await loaded;
+  await ready(tab);
+}
 
 /** Does the closed panel's handle show on the page's edge? */
 const handleShown = (tab: Page) =>
@@ -922,7 +1041,7 @@ async function refusalCauses() {
         unknown
       >;
     };
-    // The framing rule stays off this tab, so its own frame is refused.
+    // The framing rules stay off this tab, so its own frame is refused.
     const dropRule = () =>
       worker.evaluate((tabId) => {
         const rules = chrome.declarativeNetRequest;
@@ -931,7 +1050,7 @@ async function refusalCauses() {
           updateSessionRules: (options: chrome.declarativeNetRequest.UpdateRuleOptions) =>
             update({
               ...options,
-              addRules: options.addRules?.filter((rule) => rule.id !== tabId),
+              addRules: options.addRules?.filter((rule) => !rule.condition.tabIds?.includes(tabId)),
             }),
         });
       }, tabId);
@@ -969,7 +1088,7 @@ async function refusalCauses() {
     assert.equal(await attached(), false, 'the debugger leaves once it has watched');
     await unframe();
 
-    // (b) A knob keeps the debugger on: a redirect to another host is named.
+    // (b) A knob keeps the debugger on: a redirect to another site is named, not followed.
     await tab.goto(`${url}bounce`);
     await ready(tab);
     await set(tab, { text: 20 });
@@ -989,7 +1108,8 @@ async function refusalCauses() {
     );
     await unframe();
 
-    // (c) A service worker answers the frame with X-Frame-Options, which no rule can strip.
+    // (c) A service worker answers the frame with X-Frame-Options, which no rule can strip: once
+    // the loads again fail, the notice says so in plain words, the record has the cause.
     await tab.goto(`${url}sw-deny`);
     await ready(tab);
     await tab.evaluate(async () => {
@@ -1000,7 +1120,7 @@ async function refusalCauses() {
     log('refusal: service worker', fromWorker);
     assert.equal(
       fromWorker,
-      `127.0.0.1:${port}/sw-deny answered 200 with X-Frame-Options: DENY (from a service worker)`,
+      `127.0.0.1:${port}/sw-deny answered 200 with X-Frame-Options: DENY (from a service worker); this site's service worker serves a saved copy of the page that refuses frames`,
     );
     const served = (await copied()).response as Record<string, unknown>;
     log('refusal: service worker response', served);
@@ -1145,7 +1265,9 @@ async function workerFrames() {
         rules,
       });
       assert.deepEqual(seen, { notice: false, text: 'from the network' });
-      assert.deepEqual(rules, [{ hosts: ['127.0.0.1'], tabIds: [-1], types: ['xmlhttprequest'] }]);
+      // One takes X-Frame-Options off, the other the CSP whose frame-ancestors refuses the page.
+      const rule = { hosts: ['127.0.0.1'], tabIds: [-1], types: ['xmlhttprequest'] };
+      assert.deepEqual(rules, [rule, rule]);
       assert.equal(await attached(tabId), false, 'no debugger for a network fetch');
       await unframe(tab);
       assert.equal(await noWorkerRules(), true, 'the rule goes with the frame');
@@ -1160,7 +1282,7 @@ async function workerFrames() {
       notice: false,
       text: 'from the network',
     });
-    assert.equal((await workerRules()).length, 1);
+    assert.equal((await workerRules()).length, 2);
     await other.close();
     assert.equal(await noWorkerRules(), true, 'the rule goes with the tab');
     log('worker rule', 'gone with the frame and with the tab');
@@ -1170,16 +1292,16 @@ async function workerFrames() {
     const cache = `${url}worker/cache/page`;
     await controlled(tab, cache);
     const why = tab.locator('[data-devknobs="viewport"] .blocked .why');
-    const bypass = why.locator('button.retry', { hasText: 'without the service worker' });
+    const bypass = why.locator('button.retry', { hasText: 'past the service worker' });
     await set(tab, { text: 20 });
     await tab.waitForFunction(() => getComputedStyle(document.documentElement).fontSize === '20px');
     await set(tab, { frame: true, width: 400 });
-    await why.locator('div', { hasText: /from a service worker/ }).waitFor({ timeout: 10_000 });
+    await why.locator('div', { hasText: /saved copy/ }).waitFor({ timeout: 10_000 });
     const cached = await why.locator('div').first().textContent();
     log('worker cache', cached);
     assert.equal(
       cached,
-      `blocked by Chrome: frame-ancestors 'none' on 127.0.0.1 (from a service worker)`,
+      "blocked by Chrome: frame-ancestors 'none' on 127.0.0.1 (from a service worker); this site's service worker serves a saved copy of the page that refuses frames",
     );
     log('worker cache button', await bypass.textContent());
     await bypass.click();
@@ -1238,7 +1360,7 @@ async function workerFrames() {
       }));
       assert.deepEqual(kept, { body: 'from the app', panel: true, viewport: true }, kind);
       const appWhy = tab.locator('[data-devknobs="viewport"] .blocked .why');
-      const appBypass = appWhy.locator('button.retry', { hasText: 'without the service worker' });
+      const appBypass = appWhy.locator('button.retry', { hasText: 'past the service worker' });
       await appBypass.waitFor({ timeout: 10_000 });
       const reloaded = kind === 'reloads' ? tab.waitForEvent('load') : null;
       await appBypass.click();
@@ -1271,6 +1393,301 @@ async function workerFrames() {
     }
   } finally {
     await workers.close();
+    await rm(own, { force: true, recursive: true });
+  }
+}
+
+/**
+ * Pages that refused devknobs' frame on its first open load with no notice and no debugger: one
+ * whose own frame-src policy leaves its origin out, one whose service worker answers from a copy
+ * that refuses frames and saves a new one behind it, as X's does, and one whose server sends a
+ * phone to another origin, where the tab follows with its device. X-Frame-Options always goes,
+ * and a CSP whose frame-ancestors lets the page itself in stays.
+ */
+async function firstOpen() {
+  const own = await mkdtemp(join(tmpdir(), 'knobs-smoke-first-'));
+  const first = await chromium.launchPersistentContext(own, {
+    args: [
+      `--disable-extensions-except=${dist}`,
+      `--load-extension=${dist}`,
+      `--window-size=${viewport.width},${viewport.height}`,
+    ],
+    channel: 'chromium',
+    colorScheme: null,
+    headless: true,
+    viewport,
+  });
+  try {
+    const worker = first.serviceWorkers()[0] ?? (await first.waitForEvent('serviceworker'));
+    const tab = first.pages()[0] ?? (await first.newPage());
+    const tabId = await worker.evaluate(async () => (await chrome.tabs.query({}))[0]!.id!);
+    const attached = () =>
+      worker.evaluate(
+        (tabId) =>
+          chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', { expression: '1' }).then(
+            () => true,
+            () => false,
+          ),
+        tabId,
+      );
+    // Counts the animation frames in which the frame shows an error page, or nothing it can read,
+    // with neither devknobs' loading cover nor its notice over it.
+    const watchExposed = () =>
+      tab.evaluate(() => {
+        const marked = window as Window & { exposedFrames?: number };
+        marked.exposedFrames = 0;
+        const look = () => {
+          const root = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot;
+          const frame = root?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]');
+          if (frame) {
+            let doc: Document | null;
+            try {
+              doc = frame.contentDocument;
+            } catch {
+              doc = null;
+            }
+            const over = (selector: string) =>
+              root?.querySelector<HTMLElement>(selector)?.hidden === false;
+            if (doc === null && !over('.loading') && !over('.blocked')) {
+              marked.exposedFrames! += 1;
+            }
+          }
+          requestAnimationFrame(look);
+        };
+        requestAnimationFrame(look);
+      });
+    const exposedFrames = () =>
+      tab.evaluate(() => (window as Window & { exposedFrames?: number }).exposedFrames ?? -1);
+    // Polls the frame until it shows `want`, noting whether the notice ever came up meanwhile.
+    const opens = async (want: string) => {
+      const start = Date.now();
+      let noticed = false;
+      let seen = await framedText(tab);
+      while (!(seen.text === want && seen.notice === false) && Date.now() - start < 10_000) {
+        noticed ||= seen.notice === true;
+        await tab.waitForTimeout(20);
+        seen = await framedText(tab);
+      }
+      return { ...seen, ms: Date.now() - start, noticed };
+    };
+    const innerRan = () =>
+      tab.evaluate(
+        () =>
+          (
+            document
+              .querySelector('[data-devknobs="viewport"]')
+              ?.shadowRoot?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')
+              ?.contentWindow as (Window & { inlineRan?: boolean }) | null
+          )?.inlineRan === true,
+      );
+    const unframe = async () => {
+      await set(tab, { device: 'none', frame: false, width: 'full' });
+      await tab.evaluate(() => window.devknobs!.ready());
+    };
+
+    // (a) The page's own frame-src leaves its origin out.
+    await tab.goto(`${url}frame-src`);
+    await ready(tab);
+    await watchExposed();
+    await set(tab, { frame: true, width: 400 });
+    const framed = await opens('devknobs smoke');
+    const framedExposed = await exposedFrames();
+    log('first open frame-src', { ...framed, exposed: framedExposed });
+    assert.equal(framed.text, 'devknobs smoke');
+    assert.equal(framed.noticed, false);
+    assert.equal(framedExposed, 0, 'no error page shows uncovered');
+    // A link clicked in the frame, then a reload of it from the page above, as devknobs' own
+    // reloads go: the page's frame-src holds them too, and they land all the same.
+    await tab.evaluate(() => {
+      const inner = document
+        .querySelector('[data-devknobs="viewport"]')!
+        .shadowRoot!.querySelector<HTMLIFrameElement>(
+          'iframe[data-devknobs-frame]',
+        )!.contentDocument!;
+      const link = inner.createElement('a');
+      link.href = '/frame-src-next';
+      inner.body.append(link);
+      link.click();
+    });
+    const clicked = await opens('the next page');
+    await tab.evaluate(() => {
+      const inner = document
+        .querySelector('[data-devknobs="viewport"]')!
+        .shadowRoot!.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')!;
+      inner.contentDocument!.querySelector('h1')!.textContent = 'before the reload';
+      inner.contentWindow!.location.reload();
+    });
+    const reloadedFrame = await opens('the next page');
+    log('first open frame-src link and reload', { clicked, reloadedFrame });
+    assert.equal(clicked.text, 'the next page');
+    assert.equal(reloadedFrame.text, 'the next page');
+    // Closed, the frame hands the tab the page it went to.
+    await Promise.all([
+      tab.waitForURL(`${url}frame-src-next`),
+      set(tab, { frame: false, width: 'full' }).catch(() => {}),
+    ]);
+    await ready(tab);
+
+    // A next page slow to answer, with and without a service worker: the frame lands on it,
+    // a link clicked and a reload alike, and the notice never shows meanwhile.
+    for (const kind of ['plain', 'sw']) {
+      await tab.goto(`${url}slow/${kind}/page`);
+      if (kind === 'sw') {
+        await tab.evaluate(async () => {
+          await navigator.serviceWorker.ready;
+        });
+        await tab.reload();
+      }
+      await ready(tab);
+      await set(tab, { frame: true, width: 400 });
+      await opens('devknobs smoke');
+      await tab.evaluate(() => {
+        const inner = document
+          .querySelector('[data-devknobs="viewport"]')!
+          .shadowRoot!.querySelector<HTMLIFrameElement>(
+            'iframe[data-devknobs-frame]',
+          )!.contentDocument!;
+        const link = inner.createElement('a');
+        link.href = 'next';
+        inner.body.append(link);
+        link.click();
+      });
+      const slowClick = await opens('the next page');
+      await tab.evaluate(() => {
+        const inner = document
+          .querySelector('[data-devknobs="viewport"]')!
+          .shadowRoot!.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')!;
+        inner.contentDocument!.querySelector('h1')!.textContent = 'before the reload';
+        inner.contentWindow!.location.reload();
+      });
+      await tab.waitForTimeout(100);
+      const slowReload = await opens('the next page');
+      log(`first open frame-src slow ${kind}`, { slowClick, slowReload });
+      assert.deepEqual(
+        [slowClick.text, slowClick.noticed, slowReload.text, slowReload.noticed],
+        ['the next page', false, 'the next page', false],
+        kind,
+      );
+      await Promise.all([
+        tab.waitForURL(`${url}slow/${kind}/next`),
+        set(tab, { frame: false, width: 'full' }).catch(() => {}),
+      ]);
+      await ready(tab);
+    }
+
+    // A frame of the page's own its policy refuses leaves devknobs' frame where it is.
+    const inFrame = () =>
+      tab.evaluate(
+        () =>
+          document
+            .querySelector('[data-devknobs="viewport"]')
+            ?.shadowRoot?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')
+            ?.contentDocument?.querySelector('h1')?.textContent ?? null,
+      );
+    await tab.goto(`${url}frame-src`);
+    await ready(tab);
+    await set(tab, { frame: true, width: 400 });
+    await opens('devknobs smoke');
+    await tab.evaluate(() => {
+      const own = document.createElement('iframe');
+      own.src = '/frame-src-next?own';
+      document.body.append(own);
+    });
+    await tab.waitForTimeout(1500);
+    const ownFrame = {
+      devknobs: await inFrame(),
+      loads: nextLoads.get('/frame-src-next?own') ?? 0,
+    };
+    log('first open frame-src, own frame refused', ownFrame);
+    assert.deepEqual(ownFrame, { devknobs: 'devknobs smoke', loads: 0 });
+    await unframe();
+
+    // A policy that only reports: a link clicked in the frame loads once, as Chrome loads it.
+    await tab.goto(`${url}frame-src-report`);
+    await ready(tab);
+    await set(tab, { frame: true, width: 400 });
+    await opens('devknobs smoke');
+    await tab.evaluate(() => {
+      const inner = document
+        .querySelector('[data-devknobs="viewport"]')!
+        .shadowRoot!.querySelector<HTMLIFrameElement>(
+          'iframe[data-devknobs-frame]',
+        )!.contentDocument!;
+      const link = inner.createElement('a');
+      link.href = '/frame-src-next?report';
+      inner.body.append(link);
+      link.click();
+    });
+    await opens('the next page');
+    await tab.waitForTimeout(1500);
+    const reported = nextLoads.get('/frame-src-next?report');
+    log('first open frame-src, report only', { loads: reported });
+    assert.equal(reported, 1);
+    await Promise.all([
+      tab.waitForURL(`${url}frame-src-next?report`),
+      set(tab, { frame: false, width: 'full' }).catch(() => {}),
+    ]);
+    await ready(tab);
+
+    // (b) A CSP whose frame-ancestors has 'self', or that has none, stays, X-Frame-Options
+    // aside; 'none' goes.
+    const policies: Record<string, unknown> = {};
+    for (const kind of ['self', 'none', 'absent']) {
+      await tab.goto(`${url}ancestors-${kind}`);
+      await ready(tab);
+      await set(tab, { frame: true, width: 400 });
+      const seen = await opens('devknobs smoke');
+      policies[kind] = { inlineRan: await innerRan(), text: seen.text };
+      await unframe();
+    }
+    log('first open frame-ancestors', policies);
+    assert.deepEqual(policies, {
+      absent: { inlineRan: false, text: 'devknobs smoke' },
+      none: { inlineRan: true, text: 'devknobs smoke' },
+      self: { inlineRan: false, text: 'devknobs smoke' },
+    });
+
+    // (c) The service worker answers from a copy that refuses frames and saves a new one behind.
+    await tab.goto(`${url}worker/stale/page`);
+    await tab.evaluate(async () => {
+      await navigator.serviceWorker.ready;
+    });
+    await tab.reload();
+    await ready(tab);
+    await watchExposed();
+    await set(tab, { frame: true, width: 400 });
+    const stale = await opens('from the network');
+    const staleExposed = await exposedFrames();
+    const debuggerOn = await attached();
+    log('first open stale worker', { ...stale, debuggerOn, exposed: staleExposed });
+    assert.equal(staleExposed, 0, 'the refused copy never shows uncovered');
+    assert.equal(stale.text, 'from the network');
+    assert.equal(stale.noticed, false, 'no notice while it loads again');
+    assert.equal(debuggerOn, false, 'no debugger');
+    await unframe();
+
+    // (d) In real phone mode, as an iPhone, the frame's page on www.knobs.localhost is sent to m.knobs.localhost,
+    // of the same site: the tab follows.
+    await tab.goto(`http://www.knobs.localhost:${port}/phone`);
+    await ready(tab);
+    await set(tab, { device: 'iphone-18-pro', mock: true, panel: { realPhone: true } });
+    await tab.waitForURL(`http://m.knobs.localhost:${port}/phone`, { timeout: 10_000 });
+    await ready(tab);
+    const followed = await opens('devknobs smoke');
+    const device = await tab.evaluate(() => window.devknobs!.getState().device);
+    const followedAs = phoneLoads.get(`m.knobs.localhost:${port}`) ?? '';
+    log('first open followed', { ...followed, device, followedAs, url: tab.url() });
+    assert.equal(device, 'iphone-18-pro');
+    // The tab's own load of the mobile host went as the iPhone, as the frame's did.
+    assert.match(followedAs, /iPhone/);
+    assert.equal(followed.text, 'devknobs smoke');
+    // The mobile host served this page to the iPhone, so it loads again as Chrome once the
+    // device goes.
+    phoneLoads.delete(`m.knobs.localhost:${port}`);
+    await setAndReload(tab, { device: 'none', frame: false, width: 'full' });
+    assert.doesNotMatch(phoneLoads.get(`m.knobs.localhost:${port}`) ?? '', /iPhone/);
+  } finally {
+    await first.close();
     await rm(own, { force: true, recursive: true });
   }
 }
@@ -1476,9 +1893,10 @@ async function strictPolicy() {
         const differ = await pixelsApart(browser, shots[0]!, shots[1]!);
         log(`strict policy: ${step.name}, pixels apart`, differ);
         // Under load Chromium can round an image's edge a step or two apart, the bezel's on CI:
-        // a few faint pixels pass, a changed color or layout does not.
+        // a few faint pixels pass, a changed color or layout does not. An iPhone 17's two side
+        // edges a step apart down their length are 577 of them.
         assert.equal(differ.far, 0, `the same pixels: ${step.name}`);
-        assert.ok(differ.apart <= 500, `the same pixels: ${step.name}`);
+        assert.ok(differ.apart <= 1000, `the same pixels: ${step.name}`);
       }
     }
   } finally {
@@ -1835,17 +2253,29 @@ async function preferPage() {
   }
 }
 
+// Real phone mode as a tab's devknobs has it, once it is `on`.
+const realPhoneIn = (page: Page, on: boolean) =>
+  page.waitForFunction((on) => window.devknobs?.getState().panel.realPhone === on, on);
+// devknobs' frame on the page, as a page script reads it.
+const frameOf = () =>
+  document
+    .querySelector('[data-devknobs="viewport"]')
+    ?.shadowRoot?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]');
 const UA_KINDS = ['page', 'fetch', 'image', 'worker-fetch'];
+// What the tab itself requests: a service worker's fetches belong to no tab, and keep Chrome's own.
+const TAB_KINDS = ['page', 'fetch', 'image'];
 const hints = (headers: Record<string, string> | undefined) =>
   Object.keys(headers ?? {}).filter((name) => name.startsWith('sec-ch-ua'));
 const agentOf = (id: string) => PRESETS.ua.find((preset) => preset.id === id)!.userAgent;
 
 /**
- * The user agent sent to servers. With the ua knob on, the tab's requests (its page, a fetch, an
- * image, its frame) and what the page's service worker fetches carry the preset's user agent and
- * client hints, in place of Chrome's own, with no debugger and in-page too; with the debugger on
- * the tab, its scripts and workers read the same. Another tab keeps Chrome's own, and system puts
- * it back, rules gone.
+ * The user agent sent to servers. With the ua knob on, the tab's requests to its own host (its
+ * page, a fetch, an image, its frame) carry the preset's user agent and client hints, in place of
+ * Chrome's own, with no debugger and in-page too; with the debugger on the tab, its scripts and
+ * workers read the same. The page's service worker, another tab and another host keep Chrome's
+ * own. A device in the frame sends none: only the frame's page reads its browser. System puts it
+ * back, rules gone, and a page loaded as another browser loads again as Chrome. Closing the panel
+ * from the toolbar turns knobs off for the tab, and a reload brings none back.
  */
 async function uaRequests() {
   const own = await mkdtemp(join(tmpdir(), 'knobs-smoke-ua-'));
@@ -1935,24 +2365,31 @@ async function uaRequests() {
       log(`ua: rules, ${mode}`, rules);
       assert.deepEqual(
         rules.map(({ host, tabIds }) => ({ host, tabIds })),
-        [
-          { host: undefined, tabIds: [tabId] },
-          { host: ['127.0.0.1'], tabIds: [-1] },
-        ],
+        [{ host: ['127.0.0.1'], tabIds: [tabId] }],
       );
       const seen = await probe(tab);
       log(`ua: iphone safari, ${mode}`, seen);
-      for (const kind of UA_KINDS) {
+      for (const kind of TAB_KINDS) {
         assert.equal(seen[kind]?.['user-agent'], iphone, `${kind} goes as an iPhone, ${mode}`);
         assert.deepEqual(hints(seen[kind]), [], `${kind} has no client hints, ${mode}`);
       }
+      assert.equal(
+        seen['worker-fetch']?.['user-agent'],
+        chromeAgent,
+        `the worker goes as Chrome, ${mode}`,
+      );
     };
     const androidChrome = async (mode: string) => {
       await set(tab, { ua: { preset: 'android-chrome' } });
       await rulesFor(android);
       const seen = await probe(tab);
       log(`ua: android chrome, ${mode}`, seen);
-      for (const kind of UA_KINDS) {
+      assert.equal(
+        seen['worker-fetch']?.['user-agent'],
+        chromeAgent,
+        `the worker goes as Chrome, ${mode}`,
+      );
+      for (const kind of TAB_KINDS) {
         assert.equal(seen[kind]?.['user-agent'], android, `${kind} goes as Android, ${mode}`);
         assert.equal(seen[kind]?.['sec-ch-ua-mobile'], '?1');
         assert.equal(seen[kind]?.['sec-ch-ua-platform'], '"Android"');
@@ -2024,30 +2461,219 @@ async function uaRequests() {
     await iphoneSafari('in-page');
     await androidChrome('in-page');
 
-    // A device drawn around the page: the frame's load goes as its iPhone.
+    // A device drawn around the page: nothing goes to servers as its iPhone, the frame's page
+    // reads it, and the page around the frame stays Chrome. The page loaded as Android loads
+    // again as Chrome first.
+    uaSeen.clear();
+    await setAndReload(tab, { ua: { preset: 'system' } });
+    await rulesFor(null);
+    assert.equal(uaSeen.get('page')?.['user-agent'], chromeAgent, 'loads again as Chrome');
     uaSeen.delete('frame');
     await set(tab, { device: 'iphone-18-pro', mock: true });
-    await tab.waitForFunction(
-      () =>
-        document
-          .querySelector('[data-devknobs="viewport"]')
-          ?.shadowRoot?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')
-          ?.contentWindow?.devknobs !== undefined,
-    );
+    await tab.waitForFunction(`(${frameOf.toString()})()?.contentWindow?.devknobs !== undefined`);
     await tab.evaluate(() => window.devknobs!.ready());
+    assert.equal(await tab.evaluate(() => window.devknobs!.getState().ua.preset), 'iphone-safari');
+    assert.deepEqual(await uaRules(), [], 'a device in the frame sets no rule');
     log('ua: frame of an iPhone 18 Pro', uaSeen.get('frame'));
+    assert.equal(uaSeen.get('frame')?.['user-agent'], chromeAgent);
+    const reads = await tab.evaluate(
+      `({ top: navigator.userAgent, frame: (${frameOf.toString()})().contentWindow.navigator.userAgent })`,
+    );
+    log('ua: framed, read', reads);
+    assert.deepEqual(reads, { frame: iphone, top: chromeAgent });
+    uaSeen.clear();
+    await tab.evaluate(async () => {
+      await fetch('/ua/fetch', { cache: 'no-store' });
+      await fetch('/ua/via-worker', { cache: 'no-store' });
+    });
+    log('ua: framed, top page', Object.fromEntries(uaSeen));
+    assert.equal(uaSeen.get('fetch')?.['user-agent'], chromeAgent);
+    assert.equal(uaSeen.get('worker-fetch')?.['user-agent'], chromeAgent);
+    const second = await browser.newPage();
+    await second.goto(`${url}ua/page`);
+    await ready(second);
+    const secondSeen = await probe(second);
+    log('ua: framed, second tab', secondSeen);
+    for (const kind of UA_KINDS) {
+      assert.equal(
+        secondSeen[kind]?.['user-agent'],
+        chromeAgent,
+        `${kind} of a second tab goes as Chrome`,
+      );
+    }
+    // Real phone mode: the frame's page loads go as the iPhone, nothing else does. It is one
+    // setting for every tab: a tab on another host turns with it.
+    const elsewhere = await browser.newPage();
+    await elsewhere.goto(`${otherOrigin}ua/page`);
+    await ready(elsewhere);
+    // A script's turn stays in its own tab: the setting for every tab is the user's to turn.
+    // Playwright's evaluate counts as a user's gesture, which lasts 5 seconds: the script runs past it.
+    const scripted = await elsewhere.evaluate(
+      () =>
+        new Promise<boolean>((resolve) => {
+          setTimeout(() => {
+            window.devknobs!.setState({ panel: { realPhone: true } });
+            resolve(navigator.userActivation.isActive);
+          }, 5500);
+        }),
+    );
+    assert.equal(scripted, false, 'no gesture behind the script');
+    await elsewhere.waitForTimeout(300);
+    assert.equal(
+      await worker.evaluate(
+        async () => (await chrome.storage.local.get('realPhone'))['realPhone'] ?? false,
+      ),
+      false,
+      'a script does not turn it for every tab',
+    );
+    assert.equal(await tab.evaluate(() => window.devknobs!.getState().panel.realPhone), false);
+    await set(elsewhere, { panel: { realPhone: false } });
+    log('ua: real phone mode, by a script', 'that tab only');
+    uaSeen.delete('frame');
+    // The panel's switch, clicked: on in every tab.
+    await showSettings(tab);
+    await tab.locator('[aria-label="real phone mode"]').click();
+    await realPhoneIn(tab, true);
+    await realPhoneIn(elsewhere, true);
+    log('ua: real phone mode, another host', 'on there too');
+    for (let tries = 0; uaSeen.get('frame')?.['user-agent'] !== iphone && tries < 200; tries++) {
+      await tab.waitForTimeout(25);
+    }
+    const phoneRules = await worker.evaluate(async () =>
+      (await chrome.declarativeNetRequest.getSessionRules())
+        .filter(({ action }) => action.requestHeaders !== undefined)
+        .map(({ condition }) => condition),
+    );
+    log('ua: real phone mode, rules', phoneRules);
+    assert.deepEqual(phoneRules, [
+      { requestDomains: ['127.0.0.1'], resourceTypes: ['sub_frame'], tabIds: [tabId] },
+    ]);
+    log('ua: real phone mode, frame', uaSeen.get('frame'));
     assert.equal(uaSeen.get('frame')?.['user-agent'], iphone);
-    assert.deepEqual(hints(uaSeen.get('frame')), []);
-    // Its browser changed with the frame up: the frame loads again as the new one.
+    uaSeen.clear();
+    await tab.evaluate(async () => {
+      await fetch('/ua/fetch', { cache: 'no-store' });
+      await fetch('/ua/via-worker', { cache: 'no-store' });
+    });
+    log('ua: real phone mode, top page', Object.fromEntries(uaSeen));
+    assert.equal(uaSeen.get('fetch')?.['user-agent'], chromeAgent);
+    assert.equal(uaSeen.get('worker-fetch')?.['user-agent'], chromeAgent);
+    const phoneSecond = await probe(second);
+    log('ua: real phone mode, second tab', phoneSecond);
+    for (const kind of UA_KINDS) {
+      assert.equal(
+        phoneSecond[kind]?.['user-agent'],
+        chromeAgent,
+        `${kind} of a second tab goes as Chrome`,
+      );
+    }
+    uaSeen.clear();
+    await showSettings(elsewhere);
+    await elsewhere.locator('[aria-label="real phone mode"]').click();
+    await realPhoneIn(tab, false);
+    await elsewhere.close();
+    await rulesFor(null);
+    // The frame loads again as Chrome; the next change waits for it.
+    for (
+      let tries = 0;
+      uaSeen.get('frame')?.['user-agent'] !== chromeAgent && tries < 200;
+      tries++
+    ) {
+      await tab.waitForTimeout(25);
+    }
+    assert.equal(uaSeen.get('frame')?.['user-agent'], chromeAgent);
+    await tab.waitForFunction(`(${frameOf.toString()})()?.contentWindow?.devknobs !== undefined`);
+    await tab.evaluate(`(${frameOf.toString()})().contentWindow.devknobs.ready()`);
+    await second.close();
+    // A browser the ua knob picks itself goes to the frame's load.
     await set(tab, { ua: { preset: 'android-chrome' } });
     for (let tries = 0; uaSeen.get('frame')?.['user-agent'] !== android && tries < 100; tries++) {
       await tab.waitForTimeout(20);
     }
     log('ua: frame after a change', uaSeen.get('frame'));
     assert.equal(uaSeen.get('frame')?.['user-agent'], android);
+    // Another host keeps Chrome's own.
+    uaSeen.clear();
+    await tab.goto(`${otherOrigin}ua/page`);
+    await ready(tab);
+    log('ua: another host', uaSeen.get('page'));
+    assert.equal(uaSeen.get('page')?.['user-agent'], chromeAgent);
+    await tab.goto(pageUrl);
+    await ready(tab);
     await set(tab, { device: 'none', dpr: 'system', height: 'full', mock: false, width: 'full' });
     await tab.waitForFunction(() => document.querySelector('[data-devknobs="viewport"]') === null);
 
+    // A page loaded as another browser loads again as Chrome once that browser goes.
+    const reloadsAsChrome = async (label: string, off: DevknobsStatePatch) => {
+      uaSeen.clear();
+      await setAndReload(tab, off);
+      log(`ua: ${label}, then off`, uaSeen.get('page'));
+      assert.equal(
+        uaSeen.get('page')?.['user-agent'],
+        chromeAgent,
+        `${label}: loads again as Chrome`,
+      );
+      assert.deepEqual(await rulesFor(null), []);
+    };
+    await set(tab, { ua: { preset: 'android-chrome' } });
+    await rulesFor(android);
+    assert.equal((await probe(tab))['page']?.['user-agent'], android);
+    await reloadsAsChrome('ua knob', { ua: { preset: 'system' } });
+    // From the whole tab's browser to real phone mode's frame alone: the page loads again as Chrome.
+    await set(tab, { ua: { preset: 'android-chrome' } });
+    await rulesFor(android);
+    assert.equal((await probe(tab))['page']?.['user-agent'], android);
+    uaSeen.clear();
+    await setAndReload(tab, { device: 'iphone-18-pro', mock: true, panel: { realPhone: true } });
+    log('ua: whole tab, then real phone mode', uaSeen.get('page'));
+    assert.equal(uaSeen.get('page')?.['user-agent'], chromeAgent, 'loads again as Chrome');
+    await set(tab, {
+      device: 'none',
+      dpr: 'system',
+      height: 'full',
+      mock: false,
+      panel: { realPhone: false },
+      width: 'full',
+    });
+    await rulesFor(null);
+    await tab.waitForFunction(() => document.querySelector('[data-devknobs="viewport"]') === null);
+    // The debugger sizing the whole tab as the phone: the tab is the device, and goes as it.
+    await worker.evaluate(() => chrome.storage.local.set({ native: true }));
+    await set(tab, { browser: 'off', device: 'iphone-17', mock: false });
+    await rulesFor(iphone);
+    assert.equal((await probe(tab))['page']?.['user-agent'], iphone);
+    await reloadsAsChrome('native viewport', {
+      device: 'none',
+      dpr: 'system',
+      height: 'full',
+      width: 'full',
+    });
+
+    // Closed from the toolbar: knobs off for the tab, every rule gone, and a reload brings none back.
+    const toggle = () =>
+      worker.evaluate((tabId) => chrome.tabs.sendMessage(tabId, { type: 'toggle' }), tabId);
+    // Closed first: the settings were opened for real phone mode's switch.
+    await set(tab, { panel: { open: false } });
+    await toggle();
+    await tab.waitForFunction(() => window.devknobs?.getState().panel.open === true);
+    await set(tab, { device: 'iphone-18-pro', mock: true, ua: { preset: 'android-chrome' } });
+    await rulesFor(android);
+    await toggle();
+    await tab.waitForFunction(() => window.devknobs?.getState().panel.open === false);
+    await tab.waitForFunction(() => document.querySelector('[data-devknobs="viewport"]') === null);
+    let left = await worker.evaluate(() => chrome.declarativeNetRequest.getSessionRules());
+    for (let tries = 0; left.length > 0 && tries < 100; tries++) {
+      await tab.waitForTimeout(20);
+      left = await worker.evaluate(() => chrome.declarativeNetRequest.getSessionRules());
+    }
+    log('ua: closed from the toolbar, rules', left);
+    assert.deepEqual(left, []);
+    await tab.reload();
+    await ready(tab);
+    const after = await tab.evaluate(() => window.devknobs!.getState());
+    log('ua: closed, reloaded', { device: after.device, ua: after.ua.preset });
+    assert.equal(after.device, 'none');
+    assert.equal(after.ua.preset, 'system');
     // System: Chrome's own again, every rule gone.
     await set(tab, { ua: { preset: 'system' } });
     assert.deepEqual(await rulesFor(null), []);
@@ -2416,7 +3042,8 @@ try {
     worker.evaluate(async () =>
       (await chrome.declarativeNetRequest.getSessionRules())
         .filter(({ condition }) => !condition.tabIds?.includes(chrome.tabs.TAB_ID_NONE))
-        .map(({ condition, id }) => ({
+        .map(({ action, condition, id }) => ({
+          header: action.responseHeaders?.[0]?.header,
           host: condition.requestDomains,
           id,
           tabIds: condition.tabIds,
@@ -2463,9 +3090,13 @@ try {
   // Its frame of devknobs open: the rule is its own, and a frame of a host that is not its own keeps the headers.
   await set(other, { frame: true, width: 400 });
   await other.evaluate(() => window.devknobs!.ready());
-  const rules = await settledRules(1);
+  const rules = await settledRules(2);
   log('session rules', rules);
-  assert.deepEqual(rules, [{ host: ['localhost'], id: otherId, tabIds: [otherId] }]);
+  assert.deepEqual(rules, [
+    { header: 'x-frame-options', host: ['localhost'], id: otherId, tabIds: [otherId] },
+    { header: 'content-security-policy', host: ['localhost'], id: rules[1]?.id, tabIds: [otherId] },
+  ]);
+  assert.notEqual(rules[1]?.id, otherId);
   const ownHost = await frameOf(`${otherOrigin}deny`);
   const foreignHost = await frameOf(`${url}deny`);
   log('other tab frames, devknobs frame open', { foreignHost, ownHost });
@@ -2500,6 +3131,7 @@ try {
   await inPageMode();
   await refusalCauses();
   await workerFrames();
+  await firstOpen();
   await uaRequests();
   await strictPolicy();
   await pageOwnCopy();

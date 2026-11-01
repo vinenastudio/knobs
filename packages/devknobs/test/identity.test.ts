@@ -29,6 +29,13 @@ function freshWindow() {
 }
 
 describe("identityOf", () => {
+  test("real phone mode turning loads the frame again, so its server sees the change", () => {
+    const phone = state({ device: "iphone-16" });
+    const on = merge(phone, { panel: { realPhone: true } });
+    expect(stale(identityOf(phone), identityOf(on))).toBe(true);
+    expect(stale(identityOf(on), identityOf(merge(on, { scheme: "dark" })))).toBe(false);
+  });
+
   test("a phone of another platform is another identity, one of the same is not", () => {
     const iphone = identityOf(state({ device: "iphone-16-pro" }));
     expect(iphone).toEqual({ agent: "iphone-safari", touch: true, dpr: 3 });

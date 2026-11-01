@@ -8,7 +8,7 @@ import type {
   UaValue,
 } from "../types";
 import { layoutOf } from "./browserui";
-import { deviceOf, formId } from "./devices";
+import { deviceOf, formId, formOf } from "./devices";
 import { knobFrame } from "./frame";
 import { mockOf } from "./mock";
 import { type UaPreset, uaPreset, userAgentOf } from "./ua";
@@ -44,7 +44,10 @@ export interface NativeViewport {
  * device's browser too. A custom string has the user agent alone, with an
  * empty `platform` and `uaPlatform` and no brands.
  */
-export type NativeUa = Pick<UaPreset, "userAgent" | "platform" | "mobile" | "brands" | "uaPlatform" | "hints">;
+export type NativeUa = Pick<UaPreset, "userAgent" | "platform" | "mobile" | "brands" | "uaPlatform" | "hints"> & {
+  /** For the frame's own page loads alone: real phone mode's device, which the page around the frame never sends. */
+  frame?: true;
+};
 
 /**
  * A host that sets some knobs for real, in the browser itself, such as a
@@ -96,6 +99,20 @@ export interface NativeDriver {
    * settles, so the host can let it in first.
    */
   framed?: (open: boolean) => void | Promise<void>;
+  /**
+   * Load the frame's page at `url`, an address on the page's own origin, in
+   * place of devknobs setting the frame's `src`, as a browser extension can
+   * from its own world, which the page's own `frame-src` policy does not
+   * reach. False leaves it to devknobs.
+   */
+  load?: (frame: HTMLIFrameElement, url: string) => boolean;
+  /**
+   * Told each time real phone mode (`panel.realPhone`) turns, from the panel
+   * or `setState()`, for the host to keep as one setting for every tab and
+   * site; the host hands it back with `setState`. Real phone mode is offered
+   * only where the host has this and `ua`.
+   */
+  realPhone?: (on: boolean) => void;
 }
 
 /** Why the frame's page was refused, as the host knows it. */
@@ -104,7 +121,10 @@ export interface FrameRefusal {
   why: string;
   /** What the notice's "copy details" button puts on the clipboard. */
   details?: string;
-  /** A button that runs `run`, then loads the frame again, to find out more. `now` runs it at once, unpressed. */
+  /**
+   * A button that runs `run`, then loads the frame again, to find out more.
+   * `now` runs it at once, unpressed, with the notice kept hidden meanwhile.
+   */
   retry?: { label: string; run: () => Promise<void>; now?: boolean };
 }
 
@@ -239,12 +259,26 @@ export function drive(driver: NativeDriver, state: DevknobsState): void {
   const { scheme, motion, contrast, transparency } = state;
   hand(driver, "media", { scheme, motion, contrast, transparency });
   if (driver.viewport) hand(driver, "viewport", nativeViewport(state));
-  driveUa(driver, state);
+  driveUa(driver, state, driver.viewport !== undefined && nativeViewport(state) !== null);
+}
+
+/**
+ * The browser a host sends requests as: the ua knob, unless it is the one the
+ * device brought and the device stays in the frame. The frame emulates that
+ * browser in its page alone, so a site's session never meets two browsers at
+ * once. A host sizing the whole tab as the device (`sized`) sends it too. In
+ * real phone mode the device's goes out for the frame's page loads alone.
+ */
+export function hostUa(state: DevknobsState, sized: boolean): NativeUa | null {
+  const brought = [deviceOf(state.device)?.ua, formOf(state.device, state.posture)?.ua];
+  if (sized || !brought.includes(state.ua.preset)) return nativeUa(state.ua);
+  const ua = state.panel.realPhone ? nativeUa(state.ua) : null;
+  return ua && { ...ua, frame: true };
 }
 
 /** Hand the driver the ua knob, which it takes with its switch off too. */
-export function driveUa(driver: NativeDriver, state: DevknobsState): void {
-  if (driver.ua) hand(driver, "ua", nativeUa(state.ua));
+export function driveUa(driver: NativeDriver, state: DevknobsState, sized = false): void {
+  if (driver.ua) hand(driver, "ua", hostUa(state, sized));
 }
 
 /**

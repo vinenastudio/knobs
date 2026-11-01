@@ -23,6 +23,7 @@ const LOOK = {
   background: "rgb(255, 255, 255)",
   top: "rgb(255, 255, 255)",
   bottom: "rgb(255, 255, 255)",
+  header: false,
   footer: false,
   under: [],
   dark: false,
@@ -103,6 +104,12 @@ describe("the kept drawing", () => {
     items.set(SNAPSHOT_KEY, JSON.stringify({ ...kept(), look: { ...LOOK, background: "red" } }));
     expect(readSnapshot(PHONE, VIEW)).toBeNull();
     items.set(SNAPSHOT_KEY, JSON.stringify({ ...kept(), look: { ...LOOK, scheme: "dim" } }));
+    expect(readSnapshot(PHONE, VIEW)).toBeNull();
+  });
+
+  test("is not shown when kept before the header was read, which its colors cannot tell", () => {
+    const { header: _, ...before } = LOOK;
+    items.set(SNAPSHOT_KEY, JSON.stringify({ ...kept(), look: before }));
     expect(readSnapshot(PHONE, VIEW)).toBeNull();
   });
 

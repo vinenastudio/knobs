@@ -32,6 +32,7 @@ let exit: (() => void) | null = null;
 let zoomTo: ((zoom: ZoomValue) => void) | null = null;
 let askWhy: ((url: string) => Promise<FrameRefusal | null>) | null = null;
 let framed: ((open: boolean) => void | Promise<void>) | null = null;
+let loader: ((frame: HTMLIFrameElement, url: string) => boolean) | null = null;
 
 function arrived(loaded: FrameKit): void {
   kit = loaded;
@@ -39,6 +40,7 @@ function arrived(loaded: FrameKit): void {
   loaded.width.onZoom(zoomTo);
   loaded.width.onRefused(askWhy);
   loaded.width.onFramed(framed);
+  loaded.width.onLoader(loader);
   for (const run of waiting.splice(0)) run(loaded);
   for (const state of [before, latest]) {
     if (!state) continue;
@@ -133,6 +135,11 @@ export function onRefused(handler: ((url: string) => Promise<FrameRefusal | null
 export function onFramed(handler: ((open: boolean) => void | Promise<void>) | null): void {
   framed = handler;
   kit?.width.onFramed(handler);
+}
+
+export function onLoader(handler: ((frame: HTMLIFrameElement, url: string) => boolean) | null): void {
+  loader = handler;
+  kit?.width.onLoader(handler);
 }
 
 /** The window inside the frame, while there is one. */

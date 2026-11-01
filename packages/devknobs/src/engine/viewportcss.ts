@@ -121,8 +121,45 @@ export const VIEWPORT_CSS = `
   top: 0;
   left: 0;
 }
+/* Holds the cover over the frame. */
+.page { position: relative; }
 /* Where a phone's browser leaves the page in its screen. */
 .page.placed { position: absolute; }
+/* Over the frame while its page loads or a host loads it again, so a browser's
+   error page never flashes: the frame's own canvas, a dot that breathes. */
+.loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: Canvas;
+  color: CanvasText;
+  /* The user's own scheme, unless the knob forces one. */
+  color-scheme: light dark;
+  pointer-events: none;
+}
+.loading[hidden] { display: none; }
+/* The veil wears the cover between two devices, its dot in the mat's opening. */
+.veil.loading::after {
+  position: absolute;
+  left: var(--dot-x, 50%);
+  top: var(--dot-y, 50%);
+  translate: -50% -50%;
+}
+.loading::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.25;
+  animation: devknobs-breathe 1.2s ease-in-out infinite alternate;
+}
+@keyframes devknobs-breathe { to { opacity: 0.08; } }
+@media (prefers-reduced-motion: reduce) {
+  .loading::after { animation: none; }
+}
 iframe {
   display: block;
   border: 0;

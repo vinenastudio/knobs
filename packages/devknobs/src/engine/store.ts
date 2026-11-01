@@ -128,6 +128,7 @@ export const DEFAULT_STATE: DevknobsState = {
     docked: false,
     handle: true,
     devIcon: "auto",
+    realPhone: false,
     pinned: [...DEFAULT_PINNED],
   },
 };
@@ -353,6 +354,7 @@ export function parse(json: string | null | undefined, place?: string | null): D
       handle: bool(panel.handle, DEFAULT_STATE.panel.handle),
       // A session stored before the ribbon shows it on a local host.
       devIcon: oneOf(panel.devIcon, DEV_ICONS, DEFAULT_STATE.panel.devIcon),
+      realPhone: bool(panel.realPhone, DEFAULT_STATE.panel.realPhone),
       // A stored panel keeps its list as it is, an empty one too, and one stored
       // before rows stayed listed has none pinned. With no panel stored, a
       // fresh session, the default rows are listed.
@@ -385,7 +387,7 @@ export function merge(state: DevknobsState, patch: DevknobsStatePatch): Devknobs
     network: { ...state.network, ...held.network },
     ua: { ...state.ua, ...held.ua },
     panel: { ...state.panel, ...held.panel },
-  });
+  }, patch.ua === undefined);
 }
 
 /** Either storage's value under a key, or null where it cannot be read. */
@@ -398,12 +400,16 @@ function item(kind: "session" | "local", key: string): string | null {
 }
 
 export function load(): DevknobsState {
-  return parse(item("session", STORAGE_KEY), item("local", PLACE_KEY));
+  const state = parse(item("session", STORAGE_KEY), item("local", PLACE_KEY));
+  // The host keeps real phone mode for every tab and hands it over as the page loads: a stored one is ignored.
+  return { ...state, panel: { ...state.panel, realPhone: DEFAULT_STATE.panel.realPhone } };
 }
 
 export function save(state: DevknobsState): void {
   try {
-    webStorage("session")?.setItem(STORAGE_KEY, JSON.stringify(stamped(state, STATE_VERSION)));
+    // Real phone mode is the host's, for every tab: the session keeps none.
+    const { realPhone: _, ...panel } = state.panel;
+    webStorage("session")?.setItem(STORAGE_KEY, JSON.stringify(stamped({ ...state, panel }, STATE_VERSION)));
   } catch {
     // Private mode, disabled storage: knobs still work, they just do not stick.
   }

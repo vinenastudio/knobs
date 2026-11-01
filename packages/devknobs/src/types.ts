@@ -198,6 +198,13 @@ export interface PanelValue {
   /** The dev ribbon on the tab's icon, for this tab. */
   devIcon: DevIconValue;
   /**
+   * Real phone mode: a host that sends requests as another browser sends the
+   * device's to servers for the frame's page loads, so a site serves its
+   * mobile site. Off, a device in the frame sends none. The host keeps it as
+   * one setting for every tab and site.
+   */
+  realPhone: boolean;
+  /**
    * Ids of the rows set from the panel. Each stays in the list, back at its
    * default too, until a hold on its `×` takes it off. Reset all lists the default rows
    * again.

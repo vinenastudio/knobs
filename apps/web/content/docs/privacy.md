@@ -3,7 +3,7 @@ title: privacy
 meta_title: knobs privacy: what the panel, extension and site collect
 description: What the devknobs npm package, the Chrome extension and the knobs.dev site keep and send: no telemetry in the panel, and page views and clicks on the site only.
 order: 10
-updated: 2026-10-25
+updated: 2026-11-01
 ---
 
 ## the npm package
@@ -28,7 +28,7 @@ the extension's own code makes no network requests. its device images ship insid
 
 Chrome's debugger attaches only when you ask for something that needs it, and Chrome shows its bar while it is on. while on, it notes the last few loads of the tab's frames in memory, to say why a frame was refused: the address, redirects, the status, the headers that bear on framing, the `sec-fetch` values sent, why a load failed, and Chrome's console lines about it. to read the `sec-fetch` values it keeps the headers of up to 50 recent requests in memory, cookies and authorization included. those headers are never stored or sent. when a frame is refused, the extension hands the record of that load to the panel in the page, which shows it under the notice, and "copy details" puts it on your clipboard.
 
-servers see another user agent only while you set the ua knob or pick a device. response headers change only while devknobs' frame is open. see [chrome extension](/docs/extension) for the permissions.
+servers see another user agent only while you set the ua knob yourself or a device makes the whole tab (nothing drawn around it, in real mode); a device in the frame sends none, unless you turn on real phone mode. response headers change only while devknobs' frame is open. see [chrome extension](/docs/extension) for the permissions.
 
 ## knobs.dev
 

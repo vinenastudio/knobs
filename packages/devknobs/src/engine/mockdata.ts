@@ -77,13 +77,14 @@ function iphoneRight(control: number): Button[] {
  * but the 9 are measured the same way from Google's emulator frames, at their
  * own density: the bezel, the corner, the punch hole and the right side's
  * buttons, with the body radius an estimate as on the iPhones. The islands
- * of the 17 family, the 16 Pro and the Air, and the Air's screen radius, are
- * measured on the iOS 26.5 simulator instead. An island's screen radius is the
- * circle through the 45 degree point of its continuous corner.
+ * of the 17 family, the 16 Pro and the Air are
+ * measured on the iOS 26.5 simulator instead. A phone with an island draws
+ * its screen corner as a circle concentric with the body's: one bezel on
+ * every side, and the screen's radius the body's less it.
  */
 export const BODIES: Record<string, Body> = {
   "iphone-18-pro": {
-    bezel: sides(15.7, 16, 15.7, 15.7),
+    bezel: sides(15.7, 15.7, 15.7, 15.7),
     screenRadius: 62,
     bodyRadius: 77.7,
     out: 3,
@@ -92,7 +93,7 @@ export const BODIES: Record<string, Body> = {
     buttons: [left(186, 41.7), left(258.3, 67.7), left(344, 68), right(281.7, 107, 2.7)],
   },
   "iphone-18-pro-max": {
-    bezel: sides(15.3, 15.3, 15, 15.3),
+    bezel: sides(15.3, 15.3, 15.3, 15.3),
     screenRadius: 62,
     bodyRadius: 77.3,
     out: 2.7,
@@ -122,7 +123,7 @@ export const BODIES: Record<string, Body> = {
   },
   "iphone-air": {
     bezel: sides(15.3, 15.3, 15.3, 15.3),
-    screenRadius: 65,
+    screenRadius: 62,
     bodyRadius: 77.3,
     out: 2.7,
     // The island sits 6 lower than on the 17.
@@ -130,7 +131,7 @@ export const BODIES: Record<string, Body> = {
     buttons: [left(185, 41.7), left(257.3, 67.7), left(343, 67.7), right(280.7, 106.7, 3)],
   },
   "iphone-17": {
-    bezel: sides(14.3, 14.7, 14.3, 14.7),
+    bezel: sides(14.7, 14.7, 14.7, 14.7),
     screenRadius: 62,
     bodyRadius: 76.7,
     out: 3,
@@ -138,7 +139,7 @@ export const BODIES: Record<string, Body> = {
     buttons: [left(185, 41.7), left(257.3, 67.7), left(342.7, 68), right(280.3, 107, 2.7)],
   },
   "iphone-17-pro": {
-    bezel: sides(15.7, 16, 15.7, 15.7),
+    bezel: sides(15.7, 15.7, 15.7, 15.7),
     screenRadius: 62,
     bodyRadius: 77.7,
     out: 3,
@@ -146,7 +147,7 @@ export const BODIES: Record<string, Body> = {
     buttons: [left(186, 41.7), left(258.3, 67.7), left(344, 67.7), right(281.7, 107, 2.7)],
   },
   "iphone-17-pro-max": {
-    bezel: sides(15.3, 15.3, 15, 15.3),
+    bezel: sides(15.3, 15.3, 15.3, 15.3),
     screenRadius: 62,
     bodyRadius: 77.3,
     out: 2.7,
@@ -154,8 +155,8 @@ export const BODIES: Record<string, Body> = {
     buttons: [left(186.3, 41.7), left(258.7, 67.7), left(344.3, 67.7), right(282, 106.7)],
   },
   "iphone-16": {
-    bezel: sides(19.7, 19.7, 19.8, 19.7),
-    screenRadius: 55,
+    bezel: sides(19.7, 19.7, 19.7, 19.7),
+    screenRadius: 55.8,
     bodyRadius: 75.5,
     out: 2.7,
     front: [pill("sensor", 134, 11.3, 124.9, 36.7)],
@@ -163,7 +164,7 @@ export const BODIES: Record<string, Body> = {
   },
   "iphone-16-plus": {
     bezel: sides(19.7, 19.7, 19.7, 19.7),
-    screenRadius: 55,
+    screenRadius: 55.8,
     bodyRadius: 75.5,
     out: 2.7,
     front: [pill("sensor", 152.3, 11.3, 125.4, 36.7)],
@@ -171,8 +172,8 @@ export const BODIES: Record<string, Body> = {
     buttons: [...IPHONE_LEFT, ...iphoneRight(608.5)],
   },
   "iphone-16-pro": {
-    bezel: sides(14.7, 14.7, 14.4, 14.7),
-    screenRadius: 62,
+    bezel: sides(14.7, 14.7, 14.7, 14.7),
+    screenRadius: 63.2,
     bodyRadius: 77.9,
     out: 2.7,
     front: [pill("sensor", 138.33, 14, 125.33, 36.67)],
@@ -180,7 +181,7 @@ export const BODIES: Record<string, Body> = {
   },
   "iphone-16-pro-max": {
     bezel: sides(14.3, 14.3, 14.3, 14.3),
-    screenRadius: 62,
+    screenRadius: 63.6,
     bodyRadius: 77.9,
     out: 2.7,
     front: [pill("sensor", 157.3, 14, 125.4, 36.7)],

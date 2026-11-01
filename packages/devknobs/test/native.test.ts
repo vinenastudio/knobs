@@ -9,6 +9,7 @@ import {
   drive,
   framing,
   handing,
+  hostUa,
   inPage,
   type NativeDriver,
   type NativeMedia,
@@ -45,7 +46,7 @@ function recorder() {
     viewport: [] as (NativeViewport | null)[],
     ua: [] as (NativeUa | null)[],
   };
-  const driver: Required<Omit<NativeDriver, "setting" | "refused" | "framed">> = {
+  const driver: Required<Omit<NativeDriver, "setting" | "refused" | "framed" | "load" | "realPhone">> = {
     text: (value) => calls.text.push(value),
     offline: (value) => calls.offline.push(value),
     media: (value) => calls.media.push(value),
@@ -319,6 +320,44 @@ describe("framing", () => {
   });
 });
 
+describe("hostUa", () => {
+  test("sends no browser for the one a device brought into the frame", () => {
+    expect(hostUa(phone({ mock: true }), false)).toBeNull();
+    expect(hostUa(phone(), false)).toBeNull();
+  });
+
+  test("sends the device's browser when the host sizes the whole tab as the device", () => {
+    expect(hostUa(phone(), true)?.uaPlatform).toBe("iOS");
+  });
+
+  test("sends a browser the ua knob picked itself", () => {
+    expect(hostUa(phone({ ua: { preset: "android-chrome" } }), false)?.uaPlatform).toBe("Android");
+    expect(hostUa(merge(DEFAULT_STATE, { ua: { preset: "iphone-safari" } }), false)?.uaPlatform).toBe("iOS");
+  });
+
+  test("in real phone mode sends the device's browser for the frame's own loads alone", () => {
+    const on = phone({ mock: true, panel: { realPhone: true } });
+    expect(hostUa(on, false)).toMatchObject({ uaPlatform: "iOS", frame: true });
+    // A browser picked in the ua knob, or a whole tab sized as the device, goes to the whole tab as before.
+    expect(hostUa(phone({ panel: { realPhone: true } }), true)?.frame).toBeUndefined();
+    expect(hostUa(phone({ mock: true, panel: { realPhone: true }, ua: { preset: "android-chrome" } }), false)?.frame).toBeUndefined();
+  });
+
+  test("a device dropped by a new size sends nothing, nor keeps its browser", () => {
+    const resized = merge(phone(), { width: 500 });
+    expect(resized.device).toBe("none");
+    expect(resized.ua.preset).toBe("system");
+    expect(hostUa(resized, false)).toBeNull();
+    expect(hostUa(merge(phone(), { width: "full", height: "full" }), false)).toBeNull();
+  });
+
+  test("a driver with no viewport part sends none for a device in the frame", () => {
+    const calls: (NativeUa | null)[] = [];
+    drive({ ua: (value) => void calls.push(value) }, phone());
+    expect(calls).toEqual([null]);
+  });
+});
+
 describe("drive and release with a viewport", () => {
   test("hands the viewport, then null once a body is drawn, then null again on release only if changed", () => {
     const { calls, driver } = recorder();
@@ -534,6 +573,41 @@ describe("the engine with a native driver", () => {
     expect(calls.ua.at(-1)?.uaPlatform).toBe("iOS");
     engine.stop();
     expect(calls.ua.at(-1)).toBeNull();
+  });
+
+  test("tells the host each turn of real phone mode, from the panel or setState, never on mount", () => {
+    const turns: boolean[] = [];
+    engine.start({ persist: false, native: { ...recorder().driver, realPhone: (on) => void turns.push(on) } });
+    expect(turns).toEqual([]);
+    engine.setState({ panel: { realPhone: true } });
+    engine.setState({ text: 20 });
+    engine.setState({ panel: { realPhone: false } });
+    expect(turns).toEqual([true, false]);
+  });
+
+  test("never tells the host the setting a page starts with", () => {
+    const turns: boolean[] = [];
+    engine.start({
+      persist: false,
+      state: { panel: { realPhone: true } },
+      native: { ...recorder().driver, realPhone: (on) => void turns.push(on) },
+    });
+    expect(turns).toEqual([]);
+    engine.setState({ panel: { realPhone: true } });
+    expect(turns).toEqual([]);
+    engine.setState({ panel: { realPhone: false } });
+    expect(turns).toEqual([false]);
+  });
+
+  test("leaves the top page's navigator alone while a device's frame is up", () => {
+    engine.start({ persist: false });
+    engine.setState({ device: "iphone-17" });
+    const apply = ua.apply as unknown as Mock<typeof ua.apply>;
+    expect(engine.getState().ua.preset).toBe("iphone-safari");
+    expect(apply.mock.lastCall?.[0]).toEqual(DEFAULT_STATE.ua);
+    engine.reset();
+    engine.setState({ ua: { preset: "android-chrome" } });
+    expect(apply.mock.lastCall?.[0]).toMatchObject({ preset: "android-chrome" });
   });
 
   test("inside the width knob's frame, the page above says whether the driver is on", () => {

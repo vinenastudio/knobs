@@ -19,6 +19,8 @@ export type Request =
   | { on: boolean; type: 'native' };
 
 export type Response = {
+  /** Knobs a page on another origin handed this one, as the tab followed its frame here. */
+  carry?: Carry;
   error?: string;
   native?: boolean;
   state: KnobState;
@@ -31,8 +33,10 @@ export type Response = {
  * see the next one, `frame` says the frame opened or went, `bypass` has the
  * tab's loads skip service workers while it stays open, and `ua` is the user
  * agent the tab's requests carry, null for the browser's own. `prefer` keeps
- * whose copy of devknobs runs the panel on a page with its own, for every site.
- * `id` pairs the answer.
+ * whose copy of devknobs runs the panel on a page with its own, for every site,
+ * and `realPhone` keeps real phone mode, for every tab and site.
+ * `carry` hands the page's knobs on, as the tab follows its frame to another
+ * origin the service worker saw it land on. `id` pairs the answer.
  */
 export type Ask =
   | { type: 'why'; url: string }
@@ -40,7 +44,9 @@ export type Ask =
   | { open: boolean; type: 'frame' }
   | { type: 'bypass' }
   | { type: 'ua'; ua: NativeUa | null }
-  | { prefer: PreferValue; type: 'prefer' };
+  | { prefer: PreferValue; type: 'prefer' }
+  | { on: boolean; type: 'realPhone' }
+  | { state: Carry; type: 'carry' };
 export type Question = Ask & { id: number };
 
 /** What a page sends, through the bridge: the bridge asks for the tab's knobs itself. */
@@ -49,12 +55,27 @@ export type PageRequest = Exclude<Request, { type: 'get' }> | Question;
 /** `native` false: the switch is off, so the debugger saw nothing. */
 export type Answer = { error?: string; native?: boolean; record?: FrameLoad | null };
 
+/**
+ * devknobs' knobs as the page had them, for the page the tab goes to next. What a page sends is
+ * the page's to forge: devknobs' own `setState` checks each field as the next page takes it.
+ */
+export type Carry = Record<string, unknown>;
+
+// More than devknobs' knobs ever take.
+const CARRY_MAX = 64 * 1024;
+
+/** Knobs to carry, as a page sent them, or null for anything that is no object or too big. */
+export function readCarry(value: unknown): Carry | null {
+  return isFields(value) && JSON.stringify(value).length <= CARRY_MAX ? value : null;
+}
+
 /** Why the switch went off by itself: the user closed Chrome's debugging bar. */
 export type NativeReason = 'bar-closed';
 
 /** From the service worker to a tab's top frame. */
 export type TabMessage =
   | { type: 'detached' }
+  | { type: 'carry' }
   | { on: boolean; reason?: NativeReason; type: 'native' }
   | { type: 'toggle' }
   | { media: SystemMedia; type: 'system' };
@@ -69,6 +90,12 @@ export type SystemMessage = { type: 'read-system' } | { media: SystemMedia; type
  */
 export const PREFER_KEY = 'prefer';
 
+/**
+ * In `chrome.storage.local`: real phone mode, one setting for every tab and site. The bridge
+ * reads it as the page starts and hands it on as it changes, in any tab.
+ */
+export const REAL_PHONE_KEY = 'realPhone';
+
 /** The preference as stored, the extension's copy where none is. */
 export function readPrefer(value: unknown): PreferValue {
   return value === 'page' ? 'page' : 'extension';
@@ -78,9 +105,11 @@ export function readPrefer(value: unknown): PreferValue {
 export type PageMessage =
   | TabMessage
   | { prefer: PreferValue; type: 'prefer' }
+  | { on: boolean; type: 'realPhone' }
   | (Answer & { id: number; type: 'answer' })
   | {
       base: string;
+      carry?: Carry | undefined;
       native: boolean;
       state: KnobState;
       system?: SystemMedia | undefined;
@@ -107,6 +136,12 @@ export function detachMessage(reason: `${chrome.debugger.DetachReason}`): TabMes
 const CHANNEL = typeof KNOBS_CHANNEL === 'string' ? `:${KNOBS_CHANNEL}` : '';
 export const TO_BRIDGE = `devknobs-extension:native${CHANNEL}`;
 export const TO_PAGE = `devknobs-extension:tab${CHANNEL}`;
+/**
+ * Sent by the page world on devknobs' frame itself, with the address to load as its detail: the
+ * bridge sets the frame's address from its own world and cancels the event, or, where it does
+ * not, devknobs sets it.
+ */
+export const LOAD_FRAME = `devknobs-extension:load${CHANNEL}`;
 
 /** `TO_PAGE` of the store's 0.5 builds and older, one name for every copy of the extension. */
 export const LEGACY_TO_PAGE = 'devknobs-extension:tab';
@@ -241,11 +276,20 @@ export function readUa(value: unknown): NativeUa | null | undefined {
     !isText(uaPlatform) ||
     typeof mobile !== 'boolean' ||
     !brands ||
-    hints === null
+    hints === null ||
+    (value.frame !== undefined && value.frame !== true)
   ) {
     return undefined;
   }
-  return { brands, mobile, platform, uaPlatform, userAgent, ...(hints ? { hints } : {}) };
+  return {
+    brands,
+    mobile,
+    platform,
+    uaPlatform,
+    userAgent,
+    ...(hints ? { hints } : {}),
+    ...(value.frame ? { frame: true as const } : {}),
+  };
 }
 
 /** What a tab's page may send the service worker, through the bridge, or null for anything else. */
@@ -288,6 +332,13 @@ export function readPageMessage(value: unknown): PageRequest | null {
       return value.prefer === 'extension' || value.prefer === 'page'
         ? { id, prefer: value.prefer, type: 'prefer' }
         : null;
+    }
+    case 'realPhone': {
+      return typeof value.on === 'boolean' ? { id, on: value.on, type: 'realPhone' } : null;
+    }
+    case 'carry': {
+      const state = readCarry(value.state);
+      return state ? { id, state, type: 'carry' } : null;
     }
     default: {
       return null;

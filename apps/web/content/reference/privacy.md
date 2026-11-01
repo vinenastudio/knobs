@@ -46,13 +46,13 @@ the panel it puts on a page keeps the same `devknobs` and `devknobs:` keys in th
 
 - in real mode, a knob that goes to the browser (text size, offline, the preferences or a plain viewport) leaves its default. it detaches when they are all back, as reset does.
 - you press "find out why" under a refused frame's notice. it detaches once it finds the frame's load; if none matches, it may stay attached until the tab closes, you close the bar, or a knob is set and reset.
-- you press "load without the service worker", in either mode. it detaches once the frame closes, unless a knob keeps it.
+- you press "load past the service worker", in either mode. it detaches once the frame closes, unless a knob keeps it.
 
 while it is on, it notes the last few loads of the tab's frames in memory, to say why a frame was refused: the address, redirects, the status, the headers that bear on framing, the `sec-fetch` metadata sent, why a load failed, and Chrome's console lines and Audits issues about it. to read that metadata it keeps the headers of up to 50 recent requests in memory, cookies and authorization included; only the `sec-fetch` values go into the record, and the headers are never stored or sent. when a frame is refused, the extension hands the record of that load to the panel in the page, which shows it under the notice; "copy details" puts it on your clipboard. with real browser settings off, the debugger never attaches for a knob.
 
-**the user agent.** servers see another user agent only while you set the ua knob to a preset or a custom string, or pick a device, which sets its own browser. then a rule sets `User-Agent` and the client hints on that tab's requests and on what that host's service worker fetches. it goes with the tab, or once the knob is back to system.
+**the user agent.** servers see another user agent only while you set the ua knob to a preset or a custom string yourself, or the viewport makes the whole tab a device. a device in the frame sends none, unless you turn on real phone mode, which sends it on the frame's own page loads alone. then a rule sets `User-Agent` and the client hints on that tab's requests to its page's own host, never on what a service worker fetches or on another tab. no rule touches cookies. it goes with the tab, or once the knob is back to system, and a page loaded under it loads again.
 
-**the framing rule.** response headers are changed only while devknobs' frame is open in a tab: frame loads of the page's own host in that tab, and what that host's service worker fetches, lose `X-Frame-Options` and `Content-Security-Policy`. see [pages that refuse frames](/docs/extension#pages-that-refuse-frames).
+**the framing rule.** response headers are changed only while devknobs' frame is open in a tab: frame loads of the page's own host in that tab, and what that host's service worker fetches, lose `X-Frame-Options`, and `Content-Security-Policy` where its `frame-ancestors` refuses the page. see [pages that refuse frames](/docs/extension#pages-that-refuse-frames).
 
 each permission and what it is for is listed under [permissions](/docs/extension#permissions).
 

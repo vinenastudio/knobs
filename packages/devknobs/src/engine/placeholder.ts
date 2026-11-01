@@ -138,7 +138,10 @@ function lookOf(value: unknown): Look | null {
   };
   const top = color("top");
   const bottom = color("bottom");
-  return { background, top, bottom, footer: read("footer") === true, under: [], dark, scheme, host, canBack, canForward };
+  // A snapshot from before the header was read cannot tell one apart from the page's own color.
+  const header = read("header");
+  if (typeof header !== "boolean") return null;
+  return { background, top, bottom, header, footer: read("footer") === true, under: [], dark, scheme, host, canBack, canForward };
 }
 
 /** The drawing the last page kept, if it was drawn for these knobs at this window's size. */

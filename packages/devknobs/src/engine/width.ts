@@ -26,7 +26,7 @@ import { landSplash, spreadMat } from "./matsplash";
 import { type FrameRefusal, handing, nativeEnabled, settles } from "./native";
 import { createNotice, explain } from "./notice";
 import type { Mock, Rect } from "./mock";
-import { CONTINUOUS, corners, drawMock, UNDER } from "./mockdraw";
+import { corners, drawMock, UNDER } from "./mockdraw";
 import { drawnAt, glideFrame, gliding, landGlide, placeKey } from "./frameglide";
 import {
   finishFold,
@@ -197,8 +197,24 @@ let exit: (() => void) | null = null;
 let askWhy: ((url: string) => Promise<FrameRefusal | null>) | null = null;
 /** Hears the frame open and go. The engine hands it in. */
 let framed: ((open: boolean) => void | Promise<void>) | null = null;
+/** Loads the frame's page in place of setting its `src`. The engine hands it in. */
+let loader: ((frame: HTMLIFrameElement, url: string) => boolean) | null = null;
+/**
+ * How long the notice waits for the host's answer, in ms: past it, as with a
+ * host that never answers, it shows as it is.
+ */
+const ANSWER_WAIT = 6000;
 /** Counts the refusals, so an answer to an older one is dropped. */
 let refusals = 0;
+/** Over the frame while its page loads, or a host loads it again, so an error page never shows. */
+let loadCover: HTMLElement | null = null;
+/** The next look at the frame's page while covered, and the cover's last moment. */
+let coverPoll = 0;
+let coverCap = 0;
+/** How often the covered frame is looked at, in ms. */
+const COVER_POLL = 50;
+/** The longest the cover stays up, in ms: past it, the frame shows whatever it has. */
+export const COVER_CAP = ANSWER_WAIT + 2000;
 let current: ViewportValue = {
   ...UNFRAMED,
   scheme: "system",
@@ -280,20 +296,90 @@ export function onFramed(handler: ((open: boolean) => void | Promise<void>) | nu
   framed = handler;
 }
 
-/** Ask the host why the page was refused, and say so under the notice. */
+export function onLoader(handler: ((frame: HTMLIFrameElement, url: string) => boolean) | null): void {
+  loader = handler;
+}
+
+/** Send the frame to `url`, through the host where it loads the page itself. */
+function navigate(target: HTMLIFrameElement, url: string): void {
+  if (!loader?.(target, url)) target.src = url;
+}
+
+/**
+ * Ask the host why the page was refused, and say so under the notice. With a
+ * host to ask, the notice waits for its answer, and one that loads the page
+ * again at once keeps it hidden: a refusal it gets past never shows.
+ */
 function whyRefused(): void {
   const box = notice;
   const turn = ++refusals;
   if (!box) return;
   explain(box, null, loadAgain);
-  askWhy?.(frameUrl).then(
+  if (!askWhy) {
+    hideCover();
+    box.hidden = false;
+    return;
+  }
+  // The error page stays covered while the host answers, through each load again it runs.
+  showCover();
+  const still = () => turn === refusals && notice === box;
+  let answered = false;
+  const show = (refusal: FrameRefusal | null) => {
+    if (!still()) return;
+    hideCover();
+    box.hidden = false;
+    explain(box, refusal, loadAgain);
+  };
+  window.setTimeout(() => {
+    if (!answered) show(null);
+  }, ANSWER_WAIT);
+  askWhy(frameUrl).then(
     (refusal) => {
-      if (turn === refusals && notice === box && !box.hidden) explain(box, refusal, loadAgain);
+      answered = true;
+      const retry = refusal?.retry;
+      if (!retry?.now) {
+        show(refusal);
+        return;
+      }
+      retry.run().then(
+        () => {
+          if (still()) loadAgain();
+        },
+        (error: unknown) => show({ why: error instanceof Error ? error.message : String(error) }),
+      );
     },
+    // The host could not say: the notice shows as it is.
     () => {
-      // The host could not say: the notice stays as it is.
+      answered = true;
+      show(null);
     },
   );
+}
+
+/** Is the frame's page in, past the blank one it starts with, and able to be read? */
+function readable(): boolean {
+  const doc = frameDocument();
+  return doc !== null && doc.URL !== "about:blank" && doc.readyState !== "loading";
+}
+
+/** Cover the frame until its page can be read, the notice shows, or `COVER_CAP` is up. */
+function showCover(): void {
+  if (!loadCover) return;
+  clearTimeout(coverPoll);
+  clearTimeout(coverCap);
+  loadCover.hidden = false;
+  const look = () => {
+    if (readable()) hideCover();
+    else coverPoll = window.setTimeout(look, COVER_POLL);
+  };
+  coverPoll = window.setTimeout(look, COVER_POLL);
+  coverCap = window.setTimeout(hideCover, COVER_CAP);
+}
+
+function hideCover(): void {
+  clearTimeout(coverPoll);
+  clearTimeout(coverCap);
+  if (loadCover) loadCover.hidden = true;
 }
 
 /** Load the frame's page again, after the host got ready to watch it. */
@@ -303,7 +389,8 @@ function loadAgain(): void {
   readyPage = null;
   refusals += 1;
   if (notice) notice.hidden = true;
-  frame.src = frameUrl;
+  showCover();
+  navigate(frame, frameUrl);
 }
 
 export function onZoom(handler: ((zoom: ZoomValue) => void) | null): void {
@@ -329,8 +416,12 @@ function onLoad(): void {
   loaded = true;
   loadedAt = performance.now();
   const doc = frameDocument();
-  if (notice) notice.hidden = doc !== null;
+  if (notice) notice.hidden = true;
   if (doc === null) whyRefused();
+  else {
+    refusals += 1;
+    hideCover();
+  }
   locate();
   const view = frameWindow();
   if (view && doc) {
@@ -596,16 +687,13 @@ function showMock(mock: Mock | null, place: Fit): void {
     mockDrawing?.remove();
     mockDrawing = mock ? drawMock(mock, place, href) : null;
     if (mockDrawing) screen.append(mockDrawing);
-    glass.className = mock ? `glass mocked${mock.continuous ? " continuous" : ""}` : "glass";
+    glass.className = mock ? "glass mocked" : "glass";
   }
   const zoom = place.zoom;
   glass.style.left = mock ? `${mock.inset.left * zoom}px` : "";
   glass.style.top = mock ? `${mock.inset.top * zoom}px` : "";
   const round = mock ? corners(mock.screenRadius).map((radius) => `${radius * zoom}px`) : [];
   glass.style.borderRadius = round.join(" ");
-  const [corner = 0] = mock ? corners(mock.screenRadius) : [];
-  const continuous = mock?.continuous ? `${corner * CONTINUOUS.extent * zoom}px` : "";
-  glass.style.setProperty("--continuous", continuous);
   glass.style.boxShadow = href ? `0 0 0 ${UNDER * zoom}px #000` : "";
   if (mock && mockDrawing) {
     mockDrawing.style.width = `${mock.width * zoom}px`;
@@ -716,6 +804,9 @@ function resize(): void {
   const native = current.scheme !== "system" && handsSchemeDown(frame.getRootNode());
   if (native) frame.style.colorScheme = current.scheme;
   else frame.style.removeProperty("color-scheme");
+  if (loadCover) loadCover.style.colorScheme = coverScheme();
+  // The veil in a device change wears the cover too, and follows its scheme on the way.
+  if (veil?.className === "veil loading") veil.style.colorScheme = coverScheme();
   frame.style.filter = visionFilter(current.vision);
   checkZoom();
   warmFold();
@@ -1018,6 +1109,11 @@ function handBack(): void {
   window.scrollTo({ left: scroll.x, top: scroll.y, behavior: "instant" });
 }
 
+/** The scheme the loading cover wears: the one the knob forces, else the user's own. */
+function coverScheme(): string {
+  return current.scheme === "system" ? "" : current.scheme;
+}
+
 /** What a device change moves and asks of the frame, while there is one. */
 function scene(): Scene | null {
   if (!host || !back || !veil) return null;
@@ -1027,6 +1123,7 @@ function scene(): Scene | null {
     content: contentNodes,
     screenRect,
     fullRect,
+    scheme: coverScheme,
     covered: () => covered,
     hidePage,
     painted,
@@ -1132,12 +1229,12 @@ function open(veiled: number | null, first: boolean): void {
     const opened = frame;
     void waiting.then(() => {
       if (frame !== opened) return;
-      opened.src = frameUrl;
       opened.addEventListener("load", onLoad);
+      navigate(opened, frameUrl);
     });
-  } else {
-    frame.src = frameUrl;
+  } else if (!loader) {
     frame.addEventListener("load", onLoad);
+    navigate(frame, frameUrl);
   }
   reload.track({
     view: frameWindow,
@@ -1148,7 +1245,11 @@ function open(veiled: number | null, first: boolean): void {
   notice = createNotice(() => exit?.());
   pageBox = document.createElement("div");
   pageBox.className = "page";
-  pageBox.append(frame);
+  loadCover = document.createElement("div");
+  loadCover.className = "loading";
+  loadCover.setAttribute("aria-hidden", "true");
+  pageBox.append(frame, loadCover);
+  showCover();
   glass.append(pageBox);
   // The page's scroll minimizing or bringing back the bars resizes the frame.
   browser = createBrowser(glass, frame, resize, onReloading, painted);
@@ -1173,6 +1274,11 @@ function open(veiled: number | null, first: boolean): void {
   window.addEventListener("resize", resize);
   window.addEventListener("pagehide", keep);
   body.append(host);
+  // A host that loads the page itself hears the frame from the document, so it goes once in.
+  if (!waiting && loader) {
+    frame.addEventListener("load", onLoad);
+    navigate(frame, frameUrl);
+  }
   stopKeeping = keepMounted(host, { restored: remounted });
   const now = scene();
   if (veiled !== null && now) openVeiled(now, veiled);
@@ -1248,6 +1354,8 @@ function teardown(): void {
   mockDrawing = null;
   mockKey = "";
   frame = null;
+  hideCover();
+  loadCover = null;
   notice = null;
   readout = null;
   caption = null;

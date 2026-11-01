@@ -8,6 +8,7 @@ import {
   hold,
   SCREENS,
   screenOf,
+  settle,
   turn,
 } from "../src/engine/devices";
 import { DEFAULT_STATE, merge } from "../src/engine/store";
@@ -409,9 +410,29 @@ describe("the ua knob", () => {
     );
   });
 
-  test("a size that leaves the device behind keeps its browser", () => {
+  test("a size that leaves the device behind takes its browser too, so no host sends it", () => {
     const resized = merge(state({ device: "iphone-16" }), { width: 500 });
     expect(resized.device).toBe("none");
-    expect(resized.ua.preset).toBe("iphone-safari");
+    expect(resized.ua.preset).toBe("system");
+  });
+});
+
+describe("settle", () => {
+  test("a size that is no longer the device's drops the device and the browser it brought", () => {
+    const phone = merge(DEFAULT_STATE, { device: "iphone-18-pro" });
+    const dropped = settle({ ...phone, width: 500 });
+    expect(dropped.device).toBe("none");
+    expect(dropped.ua.preset).toBe("system");
+  });
+
+  test("a browser the same change names stays", () => {
+    const phone = merge(DEFAULT_STATE, { device: "iphone-16" });
+    expect(merge(phone, { width: 500, ua: { preset: "iphone-safari" } }).ua.preset).toBe("iphone-safari");
+    expect(merge(phone, { width: 500 }).ua.preset).toBe("system");
+  });
+
+  test("a browser picked apart from the device stays", () => {
+    const phone = merge(DEFAULT_STATE, { device: "iphone-18-pro", ua: { preset: "android-chrome" } });
+    expect(settle({ ...phone, width: 500 }).ua.preset).toBe("android-chrome");
   });
 });
