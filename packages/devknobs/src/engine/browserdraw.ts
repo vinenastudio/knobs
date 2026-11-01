@@ -198,6 +198,7 @@ export function readLook(frame: HTMLIFrameElement, probe: Probe | null = null): 
     background: white,
     top: white,
     bottom: white,
+    header: false,
     footer: false,
     under: [],
     dark: false,
@@ -214,7 +215,8 @@ export function readLook(frame: HTMLIFrameElement, probe: Probe | null = null): 
     const base = backgroundOf(doc, view, scheme === "dark");
     const [r, g, b] = base;
     const background = rgbText(base);
-    const top = edgeBar(doc, view, "top", base) ?? background;
+    const header = edgeBar(doc, view, "top", base);
+    const top = header ?? background;
     // Under the bars the phone shows the page's content, so the content at its bottom edge stands for it.
     const last = () => colorAt(doc, view, view.innerWidth / 2, view.innerHeight - 1, base);
     const footer = edgeBar(doc, view, "bottom", base);
@@ -238,6 +240,7 @@ export function readLook(frame: HTMLIFrameElement, probe: Probe | null = null): 
       background,
       top,
       bottom,
+      header: header !== null,
       footer: footer !== null,
       under,
       dark: luminance(r, g, b) < 0.4,
@@ -367,6 +370,13 @@ export function createBrowser(
   const band = createUnderbar(glass, frame);
   const layer = el("div", "browser");
   layer.setAttribute("aria-hidden", "true");
+  /** Over the frame's top and bottom edges, in a fixed bar's color, under the bars. */
+  const seams = [el("div", "seam"), el("div", "seam")];
+  for (const seam of seams) {
+    seam.setAttribute("aria-hidden", "true");
+    seam.style.cssText = "position:absolute;pointer-events:none";
+    seam.hidden = true;
+  }
   let view: BrowserView | null = null;
   let look: Look | null = null;
   let painted: Painted | null = null;
@@ -420,6 +430,27 @@ export function createBrowser(
     const bars = view?.bars ?? null;
     const shown = view && showsBand(bars, look) && reaches(frame) ? bandRect(applied, view.size.height) : null;
     band.show(shown, view?.zoom ?? 1, look);
+    placeSeams();
+  };
+  /**
+   * The frame's edges fall between device pixels, where the page's scrolling
+   * content and its fixed bar are snapped apart, and a row of the content
+   * shows past the bar. A seam in the bar's color covers that row.
+   */
+  const placeSeams = () => {
+    const ratio = glass.offsetWidth > 0 ? glass.getBoundingClientRect().width / glass.offsetWidth : 1;
+    const unit = 1 / ((window.devicePixelRatio || 1) * (ratio || 1));
+    const rects = look && reaches(frame) ? seamRects(applied, view?.zoom ?? 1, unit, look) : { top: null, bottom: null };
+    const colors = [look?.top ?? "", look?.bottom ?? ""];
+    [rects.top, rects.bottom].forEach((rect, index) => {
+      const seam = seams[index];
+      if (!seam) return;
+      seam.hidden = rect === null;
+      if (!rect) return;
+      if (!seam.isConnected) glass.insertBefore(seam, layer.isConnected ? layer : null);
+      place(seam, rect.x, rect.y, rect.width, rect.height);
+      seam.style.background = colors[index] ?? "";
+    });
   };
   /**
    * The page moved under the glass: read it again once a frame, and repaint
@@ -657,6 +688,8 @@ export function createBrowser(
     show(next) {
       view = next;
       if (next.bars && !layer.isConnected) glass.append(layer);
+      // Under the bars, over the page.
+      for (const seam of seams) if (seam.isConnected) glass.insertBefore(seam, layer.isConnected ? layer : null);
       if (!next.bars) layer.remove();
       place(layer, 0, 0, next.size.width, next.size.height);
       layer.style.transform = next.zoom === 1 ? "" : `scale(${next.zoom})`;
@@ -698,9 +731,27 @@ export function createBrowser(
       query = null;
       watched = null;
       layer.remove();
+      for (const seam of seams) seam.remove();
       blank.remove();
       band.remove();
     },
   };
   return browser;
+}
+
+/** The seams over the frame's top and bottom edges, in the glass's px, 2 device px each side of it. */
+export function seamRects(
+  page: Rect | null,
+  zoom: number,
+  unit: number,
+  look: Pick<Look, "header" | "footer">,
+): { top: Rect | null; bottom: Rect | null } {
+  if (!page) return { top: null, bottom: null };
+  const x = page.x * zoom;
+  const width = page.width * zoom;
+  const edge = (y: number): Rect => ({ x, y: y - 2 * unit, width, height: 4 * unit });
+  return {
+    top: look.header ? edge(page.y * zoom) : null,
+    bottom: look.footer ? edge((page.y + page.height) * zoom) : null,
+  };
 }

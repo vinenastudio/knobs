@@ -138,7 +138,8 @@ function lookOf(value: unknown): Look | null {
   };
   const top = color("top");
   const bottom = color("bottom");
-  return { background, top, bottom, footer: read("footer") === true, under: [], dark, scheme, host, canBack, canForward };
+  const header = read("header");
+  return { background, top, bottom, header: typeof header === "boolean" ? header : top !== background, footer: read("footer") === true, under: [], dark, scheme, host, canBack, canForward };
 }
 
 /** The drawing the last page kept, if it was drawn for these knobs at this window's size. */
