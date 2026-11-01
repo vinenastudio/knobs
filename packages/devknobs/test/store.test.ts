@@ -116,6 +116,7 @@ describe("parse", () => {
         docked: false,
         handle: true,
         devIcon: "auto",
+        realPhone: false,
         pinned: ["scheme", "clock"],
       },
     });
@@ -256,6 +257,7 @@ describe("parse", () => {
       docked: false,
       handle: true,
       devIcon: "auto",
+      realPhone: false,
       pinned: [],
     });
   });
@@ -479,6 +481,7 @@ describe("the place kept across sessions", () => {
       edge: "bottom",
       tab: "none",
       docked: false,
+      realPhone: false,
     });
     expect(parse(null, text).panel).toEqual({
       ...DEFAULT_STATE.panel,

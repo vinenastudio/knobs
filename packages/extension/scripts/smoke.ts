@@ -302,13 +302,13 @@ self.addEventListener('fetch', (event) => {
     response.end();
     return;
   }
-  // As a site that sends a phone to its mobile host: on www.knobs.localhost, a frame's load
-  // goes to the same page on m.knobs.localhost, which only its own origin may frame. A device's
-  // frame sends no phone user agent now, so this one goes by the load being a frame's.
+  // As a site that sends a phone's browser to its mobile host: on www.knobs.localhost, a
+  // request that comes as an iPhone goes to the same page on m.knobs.localhost, which only its
+  // own origin may frame. A device's frame sends its browser in real phone mode alone.
   if (path === '/phone') {
     if (
       request.headers.host?.startsWith('www.knobs.localhost:') &&
-      request.headers['sec-fetch-dest'] === 'iframe'
+      request.headers['user-agent']?.includes('iPhone')
     ) {
       response.statusCode = 302;
       response.setHeader('location', `http://m.knobs.localhost:${port}/phone`);
@@ -1645,11 +1645,11 @@ async function firstOpen() {
     assert.equal(debuggerOn, false, 'no debugger');
     await unframe();
 
-    // (d) The frame's page on www.knobs.localhost is sent to m.knobs.localhost,
+    // (d) In real phone mode, as an iPhone, the frame's page on www.knobs.localhost is sent to m.knobs.localhost,
     // of the same site: the tab follows.
     await tab.goto(`http://www.knobs.localhost:${port}/phone`);
     await ready(tab);
-    await set(tab, { device: 'iphone-18-pro', mock: true });
+    await set(tab, { device: 'iphone-18-pro', mock: true, panel: { realPhone: true } });
     await tab.waitForURL(`http://m.knobs.localhost:${port}/phone`, { timeout: 10_000 });
     await ready(tab);
     const followed = await opens('devknobs smoke');
@@ -2466,6 +2466,42 @@ async function uaRequests() {
         `${kind} of a second tab goes as Chrome`,
       );
     }
+    // Real phone mode: the frame's page loads go as the iPhone, nothing else does.
+    uaSeen.delete('frame');
+    await set(tab, { panel: { realPhone: true } });
+    for (let tries = 0; uaSeen.get('frame')?.['user-agent'] !== iphone && tries < 200; tries++) {
+      await tab.waitForTimeout(25);
+    }
+    const phoneRules = await worker.evaluate(async () =>
+      (await chrome.declarativeNetRequest.getSessionRules())
+        .filter(({ action }) => action.requestHeaders !== undefined)
+        .map(({ condition }) => condition),
+    );
+    log('ua: real phone mode, rules', phoneRules);
+    assert.deepEqual(phoneRules, [
+      { requestDomains: ['127.0.0.1'], resourceTypes: ['sub_frame'], tabIds: [tabId] },
+    ]);
+    log('ua: real phone mode, frame', uaSeen.get('frame'));
+    assert.equal(uaSeen.get('frame')?.['user-agent'], iphone);
+    uaSeen.clear();
+    await tab.evaluate(async () => {
+      await fetch('/ua/fetch', { cache: 'no-store' });
+      await fetch('/ua/via-worker', { cache: 'no-store' });
+    });
+    log('ua: real phone mode, top page', Object.fromEntries(uaSeen));
+    assert.equal(uaSeen.get('fetch')?.['user-agent'], chromeAgent);
+    assert.equal(uaSeen.get('worker-fetch')?.['user-agent'], chromeAgent);
+    const phoneSecond = await probe(second);
+    log('ua: real phone mode, second tab', phoneSecond);
+    for (const kind of UA_KINDS) {
+      assert.equal(
+        phoneSecond[kind]?.['user-agent'],
+        chromeAgent,
+        `${kind} of a second tab goes as Chrome`,
+      );
+    }
+    await set(tab, { panel: { realPhone: false } });
+    await rulesFor(null);
     await second.close();
     // A browser the ua knob picks itself goes to the frame's load.
     await set(tab, { ua: { preset: 'android-chrome' } });

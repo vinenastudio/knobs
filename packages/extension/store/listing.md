@@ -29,13 +29,13 @@ Some knobs are set for real by Chrome instead of being imitated inside the page:
 - Offline really cuts the tab's network.
 - Color scheme, contrast, reduced motion and reduced transparency reach every media query of the tab.
 - A plain width or a phone with nothing drawn around it becomes the tab's own viewport, with touch, and nothing reloads.
-- The user agent you pick and its client hints go out on the tab's requests to its own host, so servers see that browser. A phone picked in the frame sends none, so no site signs you out.
+- The user agent you pick and its client hints go out on the tab's requests to its own host, so servers see that browser. A phone picked in the frame sends none, so no site signs you out, unless you turn on real phone mode, which sends it with the frame's page loads so sites serve their mobile site.
 
 Real or in-page: the real knobs use Chrome's debugger, so Chrome shows its "started debugging this browser" bar while one is set. A switch in the panel's settings turns that off, and then every knob except the user agent is imitated in the page, as the npm package does it, with no bar. The user agent is always set by a request rule, which shows no bar.
 
 The panel also has the views a front end developer reaches for: grab (click an element to copy its html, the components that rendered it and where they live in the code, for a coding agent), inspect, a requests view laid out like the browser's network panel, storage, replay animations, and a phone or foldable drawn around the page.
 
-What servers see: nothing changes until you set a knob. The user agent knob changes the User-Agent and client hint headers of that tab's requests to its own host, never those of a service worker or another tab. A device in the frame changes none. While the panel's width frame is open, frames of the page's own host in that tab load without X-Frame-Options, and without a Content-Security-Policy whose frame-ancestors refuses the page, so the page can show inside the frame.
+What servers see: nothing changes until you set a knob. The user agent knob changes the User-Agent and client hint headers of that tab's requests to its own host, never those of a service worker or another tab. A device in the frame changes none, unless real phone mode is on: then the frame's own page loads in that tab carry the device's. While the panel's width frame is open, frames of the page's own host in that tab load without X-Frame-Options, and without a Content-Security-Policy whose frame-ancestors refuses the page, so the page can show inside the frame.
 
 Privacy: the extension sends nothing to the developer or any third party, and has no analytics. The panel's only requests go to the page you are on: its bundles and source maps for grab, its fonts, and a second load of the page in the frame. The device images ship in the extension. The extension keeps its settings in Chrome's storage on your computer, and the panel keeps its settings under devknobs keys in that page's own storage. Privacy policy: https://knobs.dev/docs/privacy
 
@@ -86,7 +86,7 @@ Used only on the user's action, to apply a setting for real to the tab they are 
 `declarativeNetRequestWithHostAccess`
 
 ```
-Session rules for the tab the user is working on, added and removed by the user's settings. (1) The user agent setting: a rule sets the User-Agent and client hint request headers on that tab's requests to its page's own host. No rule touches cookies. It goes when the setting goes back to system or the tab closes. (2) The width frame: only while the panel's frame is open in a tab, rules remove X-Frame-Options, and a Content-Security-Policy whose frame-ancestors refuses the page (one that allows 'self', or has no frame-ancestors, stays), from frame loads of the page's own host in that tab (and from what that host's service worker fetches from itself), so the page can load inside the frame. It goes when the frame closes, the tab loads another page or the tab closes.
+Session rules for the tab the user is working on, added and removed by the user's settings. (1) The user agent setting: a rule sets the User-Agent and client hint request headers on that tab's requests to its page's own host. With real phone mode on, a device's rule sets them on the frame's page loads of that host in that tab alone. No rule touches cookies. It goes when the setting goes back to system or the tab closes. (2) The width frame: only while the panel's frame is open in a tab, rules remove X-Frame-Options, and a Content-Security-Policy whose frame-ancestors refuses the page (one that allows 'self', or has no frame-ancestors, stays), from frame loads of the page's own host in that tab (and from what that host's service worker fetches from itself), so the page can load inside the frame. It goes when the frame closes, the tab loads another page or the tab closes.
 ```
 
 `offscreen`

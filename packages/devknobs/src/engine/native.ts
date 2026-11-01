@@ -44,7 +44,10 @@ export interface NativeViewport {
  * device's browser too. A custom string has the user agent alone, with an
  * empty `platform` and `uaPlatform` and no brands.
  */
-export type NativeUa = Pick<UaPreset, "userAgent" | "platform" | "mobile" | "brands" | "uaPlatform" | "hints">;
+export type NativeUa = Pick<UaPreset, "userAgent" | "platform" | "mobile" | "brands" | "uaPlatform" | "hints"> & {
+  /** For the frame's own page loads alone: real phone mode's device, which the page around the frame never sends. */
+  frame?: true;
+};
 
 /**
  * A host that sets some knobs for real, in the browser itself, such as a
@@ -256,12 +259,14 @@ export function drive(driver: NativeDriver, state: DevknobsState): void {
  * The browser a host sends requests as: the ua knob, unless it is the one the
  * device brought and the device stays in the frame. The frame emulates that
  * browser in its page alone, so a site's session never meets two browsers at
- * once. A host sizing the whole tab as the device (`sized`) sends it too.
+ * once. A host sizing the whole tab as the device (`sized`) sends it too. In
+ * real phone mode the device's goes out for the frame's page loads alone.
  */
 export function hostUa(state: DevknobsState, sized: boolean): NativeUa | null {
   const brought = [deviceOf(state.device)?.ua, formOf(state.device, state.posture)?.ua];
-  if (!sized && brought.includes(state.ua.preset)) return null;
-  return nativeUa(state.ua);
+  if (sized || !brought.includes(state.ua.preset)) return nativeUa(state.ua);
+  const ua = state.panel.realPhone ? nativeUa(state.ua) : null;
+  return ua && { ...ua, frame: true };
 }
 
 /** Hand the driver the ua knob, which it takes with its switch off too. */

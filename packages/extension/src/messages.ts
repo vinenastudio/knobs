@@ -267,11 +267,20 @@ export function readUa(value: unknown): NativeUa | null | undefined {
     !isText(uaPlatform) ||
     typeof mobile !== 'boolean' ||
     !brands ||
-    hints === null
+    hints === null ||
+    (value.frame !== undefined && value.frame !== true)
   ) {
     return undefined;
   }
-  return { brands, mobile, platform, uaPlatform, userAgent, ...(hints ? { hints } : {}) };
+  return {
+    brands,
+    mobile,
+    platform,
+    uaPlatform,
+    userAgent,
+    ...(hints ? { hints } : {}),
+    ...(value.frame ? { frame: true as const } : {}),
+  };
 }
 
 /** What a tab's page may send the service worker, through the bridge, or null for anything else. */

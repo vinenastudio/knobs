@@ -335,6 +335,14 @@ describe("hostUa", () => {
     expect(hostUa(merge(DEFAULT_STATE, { ua: { preset: "iphone-safari" } }), false)?.uaPlatform).toBe("iOS");
   });
 
+  test("in real phone mode sends the device's browser for the frame's own loads alone", () => {
+    const on = phone({ mock: true, panel: { realPhone: true } });
+    expect(hostUa(on, false)).toMatchObject({ uaPlatform: "iOS", frame: true });
+    // A browser picked in the ua knob, or a whole tab sized as the device, goes to the whole tab as before.
+    expect(hostUa(phone({ panel: { realPhone: true } }), true)?.frame).toBeUndefined();
+    expect(hostUa(phone({ mock: true, panel: { realPhone: true }, ua: { preset: "android-chrome" } }), false)?.frame).toBeUndefined();
+  });
+
   test("a driver with no viewport part sends none for a device in the frame", () => {
     const calls: (NativeUa | null)[] = [];
     drive({ ua: (value) => void calls.push(value) }, phone());

@@ -260,6 +260,11 @@ export function createPanel(options: PanelOptions = {}): Panel {
     devIconShown: () => devIconShown(engine.getState().panel.devIcon, window.location.hostname),
     setDevIcon: (on) =>
       engine.setState({ panel: { devIcon: devIconFor(on, window.location.hostname) } }),
+    realPhone: engine.hostSendsUa(),
+    setRealPhone: (on) => {
+      engine.setState({ panel: { realPhone: on } });
+      engine.keepPlace();
+    },
     native: engine.nativeSwitch()?.setting ?? null,
     setNative: (on) => {
       // The host hears it first, so it is ready for what the driver hands it next.
@@ -383,6 +388,7 @@ export function createPanel(options: PanelOptions = {}): Panel {
     wrap.dataset.handle = handleShown ? "shown" : "hidden";
     settings.drawHandle(handleShown);
     settings.drawDevIcon(devIconShown(state.panel.devIcon, window.location.hostname));
+    settings.drawRealPhone(state.panel.realPhone);
     const nativeNow = engine.nativeSwitch();
     if (nativeNow) settings.drawNative(nativeNow.on, nativeNow.note);
     settings.drawPrefer();

@@ -26,7 +26,7 @@ the npm package fakes every knob inside the page. the extension hands these to C
 - offline: requests really fail.
 - the preferences: color scheme, contrast, reduced motion and reduced transparency.
 - viewport: a plain size, or a device with no mock or browser drawn around it, becomes the tab's own viewport, with no reload.
-- user agent: the one you pick in the ua knob goes to the tab's own host, so servers see it too. a device in the frame sends none, so no site signs you out; the frame's page still reads the device's browser.
+- user agent: the one you pick in the ua knob goes to the tab's own host, so servers see it too. a device in the frame sends none, so no site signs you out; the frame's page still reads the device's browser. turn on "real phone mode" in the panel's settings to send it with the frame's page loads, so sites serve their mobile site; some sites may sign you out.
 
 while text size, offline, a preference or the viewport is set, Chrome shows its "started debugging this browser" bar. to avoid it, turn off "real browser settings" in the panel's settings, and those knobs work in the page as with the npm package. the user agent still reaches servers.
 

@@ -159,6 +159,11 @@ export function setNative(on: boolean, note?: string | null): void {
   if (running && (changed || note !== undefined)) applyState(state);
 }
 
+/** Can the host send requests as another browser, so real phone mode does something? */
+export function hostSendsUa(): boolean {
+  return native?.ua !== undefined;
+}
+
 /** The driver's switch for the panel: null where the host gives none. */
 export function nativeSwitch(): { setting: NativeSetting; on: boolean; note: string | null } | null {
   if (!native?.setting) return null;

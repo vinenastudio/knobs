@@ -465,7 +465,9 @@ function ruleUas(): Promise<void> {
 
 /** The tab's user agent on its debugger too, for its scripts and workers, or none. */
 async function overrideUa(tabId: number, clear = false) {
-  const ua = clear ? null : ((await uaTabs()).get(tabId)?.ua ?? null);
+  const kept = clear ? null : ((await uaTabs()).get(tabId)?.ua ?? null);
+  // Real phone mode's goes to the frame's page loads alone, never the whole tab's scripts.
+  const ua = kept?.frame ? null : kept;
   const { method, params } = uaCommand(ua);
   await chrome.debugger.sendCommand({ tabId }, method, params);
 }

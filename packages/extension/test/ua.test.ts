@@ -149,6 +149,20 @@ describe('uaRules', () => {
     ]);
   });
 
+  test("real phone mode's rule takes only the frame's page loads of the tab's host", () => {
+    const iphone = { ...uaOf('iphone-safari'), frame: true as const };
+    const [rule] = uaRules(new Map([[7, { host: 'example.com', ua: iphone }]]), counter());
+    expect(rule?.condition).toEqual({
+      requestDomains: ['example.com'],
+      resourceTypes: ['sub_frame'],
+      tabIds: [7],
+    });
+  });
+
+  test('a device in the frame with real phone mode off sets no rule at all', () => {
+    expect(uaRules(new Map(), counter())).toEqual([]);
+  });
+
   test("no rule reaches a service worker's requests, nor a tab with no host", () => {
     const rules = uaRules(
       new Map([
@@ -182,6 +196,13 @@ describe('loadsUnder', () => {
 
   test("a page of the rule's host loads under it, so it loads again once the rule goes", () => {
     expect(loadsUnder(tabs, 7, 'https://example.com/feed')).toBe(true);
+  });
+
+  test("real phone mode's rule never reaches the page itself, so nothing loads again", () => {
+    const frameOnly = new Map([
+      [7, { host: 'example.com', ua: { ...uaOf('iphone-safari'), frame: true as const } }],
+    ]);
+    expect(loadsUnder(frameOnly, 7, 'https://example.com/')).toBe(false);
   });
 
   test('another host, another tab or no rule loads as the real browser', () => {

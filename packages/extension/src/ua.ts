@@ -112,7 +112,9 @@ export interface TabUa {
 
 /**
  * The rules that send each tab's user agent: on that tab's requests to its page's own host
- * alone, never on a service worker's, which no tab owns. A tab with no host gets none.
+ * alone, never on a service worker's, which no tab owns. A tab with no host gets none. Real
+ * phone mode's (`frame`) goes on the frame's own page loads alone: a rule has no frame id to
+ * tell the frame's other requests from the page's, so those keep the real browser.
  */
 export function uaRules(
   tabs: ReadonlyMap<number, TabUa>,
@@ -125,7 +127,7 @@ export function uaRules(
             action: { requestHeaders: uaHeaders(ua), type: 'modifyHeaders' as const },
             condition: {
               requestDomains: [host],
-              resourceTypes: [...RESOURCE_TYPES],
+              resourceTypes: ua.frame ? ['sub_frame' as const] : [...RESOURCE_TYPES],
               tabIds: [tabId],
             },
             id: free(),
@@ -138,5 +140,6 @@ export function uaRules(
 /** Does the tab's page at `url` load under its user agent rule, so its server sees that browser? */
 export function loadsUnder(tabs: ReadonlyMap<number, TabUa>, tabId: number, url: string): boolean {
   const host = URL.parse(url)?.hostname;
-  return host !== undefined && tabs.get(tabId)?.host === host;
+  const tab = tabs.get(tabId);
+  return host !== undefined && tab?.host === host && !tab.ua.frame;
 }

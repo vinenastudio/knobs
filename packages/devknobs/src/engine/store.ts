@@ -46,7 +46,7 @@ export const PLACE_KEY = "devknobs:place";
 export const PLACE_VERSION = 2;
 
 /** What of the panel outlives the session: its side, where it sits on it, and whether it is pinned there. */
-export type PanelPlace = Pick<PanelValue, "side" | "y" | "top" | "edge" | "tab" | "docked">;
+export type PanelPlace = Pick<PanelValue, "side" | "y" | "top" | "edge" | "tab" | "docked" | "realPhone">;
 
 /**
  * The rows a fresh panel lists, in the order they stand: the device, the
@@ -128,6 +128,7 @@ export const DEFAULT_STATE: DevknobsState = {
     docked: false,
     handle: true,
     devIcon: "auto",
+    realPhone: false,
     pinned: [...DEFAULT_PINNED],
   },
 };
@@ -250,13 +251,14 @@ function placeOf(value: unknown, fallback: PanelPlace): PanelPlace {
     edge: oneOf(panel.edge, EDGES, own ? "none" : fallback.edge),
     tab: oneOf(panel.tab, EDGES, own ? "none" : fallback.tab),
     docked: bool(panel.docked, fallback.docked),
+    realPhone: bool(panel.realPhone, fallback.realPhone),
   };
 }
 
 /** The place of a state's panel, as `PLACE_KEY` keeps it. */
 export function placeText(state: DevknobsState): string {
-  const { side, y, top, edge, tab, docked } = state.panel;
-  return JSON.stringify(stamped({ side, y, top, edge, tab, docked }, PLACE_VERSION));
+  const { side, y, top, edge, tab, docked, realPhone } = state.panel;
+  return JSON.stringify(stamped({ side, y, top, edge, tab, docked, realPhone }, PLACE_VERSION));
 }
 
 /**

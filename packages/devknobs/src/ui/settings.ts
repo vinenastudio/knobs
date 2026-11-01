@@ -58,6 +58,10 @@ export interface SettingsContext {
   devIconShown(): boolean;
   /** The user turned the dev ribbon on the tab's icon off or on. */
   setDevIcon(on: boolean): void;
+  /** Real phone mode is offered: only a host that sends requests as another browser can. */
+  realPhone: boolean;
+  /** The user turned real phone mode off or on. */
+  setRealPhone(on: boolean): void;
   /** The words of the host's switch for its native driver, null with none. */
   native: { label: string; hint: string } | null;
   /** The user turned the native driver off or on. */
@@ -82,6 +86,8 @@ export interface Settings {
   drawHandle(shown: boolean): void;
   /** Show whether the tab's icon has the dev ribbon. */
   drawDevIcon(shown: boolean): void;
+  /** Show whether real phone mode is on. */
+  drawRealPhone(on: boolean): void;
   /** Show whether the native driver is on, and why it last went off or on in place of its hint. */
   drawNative(on: boolean, note: string | null): void;
   /** Show who runs the panel, where a host gives the choice. */
@@ -92,6 +98,9 @@ export interface Settings {
   leaveKeys(): void;
   destroy(): void;
 }
+
+/** What real phone mode costs, under its switch. */
+export const REAL_PHONE_HINT = "sends the phone's user agent to sites, so they serve their mobile site. some sites may sign you out.";
 
 export function createSettings(context: SettingsContext): Settings {
   const { keys, prefs, grab, mac, bindingsHere, keysToggle, said, tips, render, renderKeys } =
@@ -169,6 +178,25 @@ export function createSettings(context: SettingsContext): Settings {
     }).box;
     row.append(hint);
     keysView.append(row);
+  }
+  const realPhoneSwitch = button("switch row-control", "");
+  if (context.realPhone) {
+    realPhoneSwitch.setAttribute("role", "switch");
+    realPhoneSwitch.setAttribute("aria-label", "real phone mode");
+    const hint = el("div", "row-hint", REAL_PHONE_HINT);
+    hint.id = "devknobs-real-phone-hint";
+    realPhoneSwitch.setAttribute("aria-describedby", hint.id);
+    const row = rowBox({
+      main: el("div", "main"),
+      glyph: icon("smartphone"),
+      title: "real phone mode",
+      ends: [realPhoneSwitch],
+    }).box;
+    row.append(hint);
+    keysView.append(row);
+    realPhoneSwitch.addEventListener("click", () =>
+      context.setRealPhone(realPhoneSwitch.getAttribute("aria-checked") !== "true"),
+    );
   }
   const devIconSwitch = button("switch row-control", "");
   devIconSwitch.setAttribute("role", "switch");
@@ -346,6 +374,9 @@ export function createSettings(context: SettingsContext): Settings {
     },
     drawDevIcon(shown: boolean): void {
       mark(devIconSwitch, shown, "aria-checked");
+    },
+    drawRealPhone(on: boolean): void {
+      mark(realPhoneSwitch, on, "aria-checked");
     },
     drawNative(on: boolean, note: string | null): void {
       mark(nativeSwitch, on, "aria-checked");

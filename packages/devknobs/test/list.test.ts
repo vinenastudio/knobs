@@ -144,7 +144,7 @@ describe("pinned rows", () => {
     const reset = resetState(moved);
     expect(listed(reset)).toEqual(["scheme", "text", "locale", "device"]);
     expect(reset.scheme).toBe("system");
-    expect(reset.panel).toEqual({ open: true, ...place, handle: true, devIcon: "auto", pinned: [...DEFAULT_PINNED] });
+    expect(reset.panel).toEqual({ open: true, ...place, handle: true, devIcon: "auto", realPhone: false, pinned: [...DEFAULT_PINNED] });
     expect(resetState(BARE).panel.pinned).toEqual([...DEFAULT_PINNED]);
   });
 

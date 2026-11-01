@@ -161,6 +161,11 @@ describe('readUa', () => {
     expect(readUa({ ...ua, brands: [{ brand: 1 }] })).toBeUndefined();
     expect(readUa({ ...ua, hints: 'none' })).toBeUndefined();
     expect(readUa({ ...ua, userAgent: null })).toBeUndefined();
+    expect(readUa({ ...ua, frame: false })).toBeUndefined();
+  });
+
+  test("keeps real phone mode's word that it is for the frame alone", () => {
+    expect(readUa({ ...ua, frame: true })).toEqual({ ...ua, frame: true });
   });
 });
 

@@ -158,7 +158,7 @@ describe("describe", () => {
     const fields = panel?.value.type === "object" ? panel.value.fields : {};
     expect(fields.handle?.value).toEqual({ type: "boolean" });
     expect(fields.handle?.description).toContain("screenshots");
-    expect(panel?.default).toEqual({ open: false, docked: false, handle: true, devIcon: "auto" });
+    expect(panel?.default).toEqual({ open: false, docked: false, handle: true, devIcon: "auto", realPhone: false });
   });
 });
 
