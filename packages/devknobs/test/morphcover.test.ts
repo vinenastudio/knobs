@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Hole } from "../src/engine/morph";
-import { evenHole, forget, type Scene, start } from "../src/engine/morphrun";
+import { evenHole, forget, halt, type Scene, start } from "../src/engine/morphrun";
 
 /** A node with just the style a device change writes. */
 function node(className: string) {
@@ -29,6 +29,7 @@ describe("a device change from one device to another", () => {
   });
 
   afterEach(() => {
+    halt();
     forget();
     for (const name of ["window", "document", "getComputedStyle"]) Reflect.deleteProperty(globalThis, name);
   });
