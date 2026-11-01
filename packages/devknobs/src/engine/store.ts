@@ -354,8 +354,7 @@ export function parse(json: string | null | undefined, place?: string | null): D
       handle: bool(panel.handle, DEFAULT_STATE.panel.handle),
       // A session stored before the ribbon shows it on a local host.
       devIcon: oneOf(panel.devIcon, DEV_ICONS, DEFAULT_STATE.panel.devIcon),
-      // The host keeps it for every tab and hands it over as the page loads: a stored one is ignored.
-      realPhone: DEFAULT_STATE.panel.realPhone,
+      realPhone: bool(panel.realPhone, DEFAULT_STATE.panel.realPhone),
       // A stored panel keeps its list as it is, an empty one too, and one stored
       // before rows stayed listed has none pinned. With no panel stored, a
       // fresh session, the default rows are listed.
@@ -401,7 +400,9 @@ function item(kind: "session" | "local", key: string): string | null {
 }
 
 export function load(): DevknobsState {
-  return parse(item("session", STORAGE_KEY), item("local", PLACE_KEY));
+  const state = parse(item("session", STORAGE_KEY), item("local", PLACE_KEY));
+  // The host keeps real phone mode for every tab and hands it over as the page loads: a stored one is ignored.
+  return { ...state, panel: { ...state.panel, realPhone: DEFAULT_STATE.panel.realPhone } };
 }
 
 export function save(state: DevknobsState): void {

@@ -491,7 +491,8 @@ describe("the place kept across sessions", () => {
       tab: "none",
     });
     // Real phone mode is the host's to keep, never the session's or the place's.
-    expect(parse(JSON.stringify({ v: STATE_VERSION, panel: { realPhone: true } })).panel.realPhone).toBe(false);
+    // A frame's state from the page above keeps it; only a stored session's is ignored.
+    expect(parse(JSON.stringify({ v: STATE_VERSION, panel: { realPhone: true } })).panel.realPhone).toBe(true);
     const old = JSON.stringify({ ...JSON.parse(text), realPhone: true });
     expect(parse(null, old).panel.realPhone).toBe(false);
   });
@@ -606,6 +607,14 @@ describe("the kept place", () => {
     keepPlace(pinned);
     expect(JSON.parse(local.get(PLACE_KEY) ?? "").docked).toBe(true);
     expect(load().panel.docked).toBe(true);
+  });
+
+  test("a session neither keeps real phone mode nor brings an old one back", () => {
+    const { session } = stubStorage();
+    save(merge(load(), { panel: { realPhone: true } }));
+    expect(JSON.parse(session.get(STORAGE_KEY) ?? "").panel.realPhone).toBeUndefined();
+    session.set(STORAGE_KEY, JSON.stringify({ v: STATE_VERSION, panel: { realPhone: true } }));
+    expect(load().panel.realPhone).toBe(false);
   });
 
   test("keeping it writes the place that reads back", () => {
