@@ -519,7 +519,8 @@ async function setUa(tabId: number, ua: NativeUa | null, url: string | undefined
   if (JSON.stringify(had ?? null) === JSON.stringify(ua ? { host, ua } : null)) {
     return;
   }
-  const reload = !ua && url !== undefined && (await uaLoaded()).has(tabId);
+  // A frame-only rule leaves the page as the real browser too, so it loads again as one.
+  const reload = (!ua || ua.frame === true) && url !== undefined && (await uaLoaded()).has(tabId);
   if (reload) {
     await markUaLoaded(tabId, false);
   }

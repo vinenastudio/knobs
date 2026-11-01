@@ -2549,6 +2549,29 @@ async function uaRequests() {
     await rulesFor(android);
     assert.equal((await probe(tab))['page']?.['user-agent'], android);
     await reloadsAsChrome('ua knob', { ua: { preset: 'system' } });
+    // From the whole tab's browser to real phone mode's frame alone: the page loads again as Chrome.
+    await set(tab, { ua: { preset: 'android-chrome' } });
+    await rulesFor(android);
+    assert.equal((await probe(tab))['page']?.['user-agent'], android);
+    uaSeen.clear();
+    await set(tab, { device: 'iphone-18-pro', mock: true, panel: { realPhone: true } });
+    for (let tries = 0; !uaSeen.get('page') && tries < 200; tries++) {
+      await tab.waitForTimeout(25);
+    }
+    log('ua: whole tab, then real phone mode', uaSeen.get('page'));
+    assert.equal(uaSeen.get('page')?.['user-agent'], chromeAgent, 'loads again as Chrome');
+    await tab.waitForLoadState('load');
+    await ready(tab);
+    await set(tab, {
+      device: 'none',
+      dpr: 'system',
+      height: 'full',
+      mock: false,
+      panel: { realPhone: false },
+      width: 'full',
+    });
+    await rulesFor(null);
+    await tab.waitForFunction(() => document.querySelector('[data-devknobs="viewport"]') === null);
     // The debugger sizing the whole tab as the phone: the tab is the device, and goes as it.
     await worker.evaluate(() => chrome.storage.local.set({ native: true }));
     await set(tab, { browser: 'off', device: 'iphone-17', mock: false });
