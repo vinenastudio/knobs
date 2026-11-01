@@ -135,9 +135,18 @@ export const VIEWPORT_CSS = `
   justify-content: center;
   background: Canvas;
   color: CanvasText;
+  /* The user's own scheme, unless the knob forces one. */
+  color-scheme: light dark;
   pointer-events: none;
 }
 .loading[hidden] { display: none; }
+/* The veil wears the cover between two devices, its dot in the mat's opening. */
+.veil.loading::after {
+  position: absolute;
+  left: var(--dot-x, 50%);
+  top: var(--dot-y, 50%);
+  translate: -50% -50%;
+}
 .loading::after {
   content: "";
   width: 6px;

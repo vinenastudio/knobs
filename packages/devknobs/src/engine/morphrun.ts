@@ -37,6 +37,8 @@ export interface Scene {
   screenRect(): Hole;
   /** The mat's opening at the whole window, a px past each edge, square. */
   fullRect(): Hole;
+  /** The color scheme the frame's loading cover wears, "" for the user's own. */
+  scheme(): string;
   /** The window's own page is hidden under the frame. */
   covered(): boolean;
   /** Hide the window's own page under the frame. */
@@ -100,11 +102,29 @@ function clear(color: string): boolean {
 
 /** The veil takes the color the window's page paints its canvas in. */
 function paintVeil(veil: HTMLElement): void {
+  veil.className = "veil";
   const root = getComputedStyle(document.documentElement);
   const body = document.body ? getComputedStyle(document.body).backgroundColor : "";
   const color = [root.backgroundColor, body].find((value) => !clear(value));
   veil.style.background = color ?? "Canvas";
   veil.style.colorScheme = root.colorScheme || "normal";
+}
+
+/**
+ * From one device to another the veil, seen through the mat's opening, wears
+ * the frame's loading cover: its canvas in the frame's scheme, and the dot
+ * that breathes, in the middle of the opening.
+ */
+function paintCover(scene: Scene): void {
+  scene.veil.className = "veil loading";
+  scene.veil.style.background = "";
+  scene.veil.style.colorScheme = scene.scheme();
+}
+
+/** A screen's opening with every corner as round as its roundest, so it morphs as one shape. */
+export function evenHole(hole: Hole): Hole {
+  const round = Math.max(...hole.radius);
+  return { ...hole, radius: [round, round, round, round] };
 }
 
 /**
@@ -216,6 +236,8 @@ function moveHole(scene: Scene, to: () => Hole, time: number): Promise<void> {
 /** Cut the opening at `hole`, where it is not there already. */
 function placeHole(scene: Scene, hole: Hole): void {
   seen.hole = hole;
+  scene.veil.style.setProperty("--dot-x", `${hole.x + hole.width / 2}px`);
+  scene.veil.style.setProperty("--dot-y", `${hole.y + hole.height / 2}px`);
   const path = holePath(hole);
   if (path === cut) return;
   cut = path;
@@ -231,7 +253,7 @@ function track(scene: Scene): void {
   const step = () => {
     // A frame asked for before the tracking stopped draws nothing.
     if (tracking !== frame) return;
-    placeHole(scene, scene.screenRect());
+    placeHole(scene, evenHole(scene.screenRect()));
     frame = window.requestAnimationFrame(step);
     tracking = frame;
   };
@@ -294,7 +316,7 @@ async function perform(
   } else if (step.kind === "mat") {
     const to =
       step.to === "screen"
-        ? scene.screenRect
+        ? () => evenHole(scene.screenRect())
         : step.to === "round"
           ? () => rounded(scene.fullRect())
           : scene.fullRect;
@@ -314,8 +336,9 @@ async function perform(
 export function start(scene: Scene, target: "open" | "closed"): void {
   if (!clipped) {
     // From the frame as it stays: the opening is its screen, and nothing changes to see yet.
-    seen = { veil: 1, content: 1, hole: scene.screenRect() };
-    paintVeil(scene.veil);
+    seen = { veil: 1, content: 1, hole: evenHole(scene.screenRect()) };
+    if (target === "open") paintCover(scene);
+    else paintVeil(scene.veil);
     scene.veil.style.opacity = "1";
     cut = "";
     placeHole(scene, seen.hole);

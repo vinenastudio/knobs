@@ -807,7 +807,7 @@ function resize(): void {
   const native = current.scheme !== "system" && handsSchemeDown(frame.getRootNode());
   if (native) frame.style.colorScheme = current.scheme;
   else frame.style.removeProperty("color-scheme");
-  if (loadCover) loadCover.style.colorScheme = frame.style.colorScheme;
+  if (loadCover) loadCover.style.colorScheme = coverScheme();
   frame.style.filter = visionFilter(current.vision);
   checkZoom();
   warmFold();
@@ -1110,6 +1110,11 @@ function handBack(): void {
   window.scrollTo({ left: scroll.x, top: scroll.y, behavior: "instant" });
 }
 
+/** The scheme the loading cover wears: the one the knob forces, else the user's own. */
+function coverScheme(): string {
+  return current.scheme === "system" ? "" : current.scheme;
+}
+
 /** What a device change moves and asks of the frame, while there is one. */
 function scene(): Scene | null {
   if (!host || !back || !veil) return null;
@@ -1119,6 +1124,7 @@ function scene(): Scene | null {
     content: contentNodes,
     screenRect,
     fullRect,
+    scheme: coverScheme,
     covered: () => covered,
     hidePage,
     painted,

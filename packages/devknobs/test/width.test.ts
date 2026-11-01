@@ -9,6 +9,7 @@ import { FRESH_ATTRIBUTE, FRESH_RELOAD_KEY } from "../src/engine/fresh";
 import { patchedAs } from "../src/engine/identity";
 import { mockOf } from "../src/engine/mock";
 import { holeAt, holePath, MORPH_TIME, rounded, windowRect } from "../src/engine/morph";
+import { evenHole } from "../src/engine/morphrun";
 import { keepDrawing, SNAPSHOT_KEY } from "../src/engine/placeholder";
 import { DEFAULT_STATE, merge } from "../src/engine/store";
 import { type Mark, MARK_EVENT } from "../src/engine/touchmark";
@@ -1232,7 +1233,8 @@ describe("the frame over the page", () => {
     // The drawn browser's loading line asks what moves it as the frame goes.
     Reflect.set(FakeElement.prototype, "getAnimations", () => []);
     // The letterbox sits off the window's corner, and the phone's screen is drawn fitted, at 85%,
-    // its corners as round as the Duo's cover screen: the hinge's two far less.
+    // its corners as round as the Duo's cover screen: the hinge's two far less. The opening
+    // morphs with every corner as round as the roundest, so it keeps one even shape.
     const box = { left: 10, top: 20, width: 1500, height: 850 };
     const place = fit({ ...PHONE, height: 874 }, box);
     expect(place.transform).toBeLessThan(1);
@@ -1240,6 +1242,8 @@ describe("the frame over the page", () => {
     const [a = 0, b = 0, c = 0, d = 0] = fitted;
     const screen = { x: 579, y: 69, width: 342, height: 744, radius: [a, b, c, d] as const };
     const whole = windowRect(box);
+    const even = evenHole(screen);
+    expect(even.radius).toEqual([b, b, b, b]);
     const create = document.createElement;
     Reflect.set(document, "createElement", (tag: string) => {
       const element = new FakeElement(tag.toUpperCase());
@@ -1273,21 +1277,21 @@ describe("the frame over the page", () => {
       expect(picked).toContain(holePath(whole));
       expect(picked).toContain(holePath(holeAt(whole, round, 40, MORPH_TIME.round)));
       expect(picked).toContain(holePath(round));
-      expect(picked).toContain(holePath(holeAt(round, screen, 40, MORPH_TIME.mat)));
-      expect(picked.at(-1)).toBe(holePath(screen));
+      expect(picked).toContain(holePath(holeAt(round, even, 40, MORPH_TIME.mat)));
+      expect(picked.at(-1)).toBe(holePath(even));
       expect(picked.at(-1)).toContain(`A${Math.round(b * 100) / 100} `);
       // A picture of the body that loads late moves the screen as the case comes in, and the opening goes with it.
       const glass = everything().find((element) => Reflect.get(element, "className") === "glass");
       const moved = { ...screen, x: screen.x + 3, y: screen.y - 2 };
       const stood = glass?.getBoundingClientRect;
       if (glass) glass.getBoundingClientRect = () => ({ ...moved, left: box.left + moved.x, top: box.top + moved.y });
-      expect((await play(2)).at(-1)).toBe(holePath(moved));
+      expect((await play(2)).at(-1)).toBe(holePath(evenHole(moved)));
       if (glass && stood) glass.getBoundingClientRect = stood;
-      expect((await play(2)).at(-1)).toBe(holePath(screen));
+      expect((await play(2)).at(-1)).toBe(holePath(even));
       apply(KNOBS);
       const removed = await play(20);
-      expect(removed[0]).toBe(holePath(screen));
-      expect(removed).toContain(holePath(holeAt(screen, round, 40, MORPH_TIME.mat)));
+      expect(removed[0]).toBe(holePath(even));
+      expect(removed).toContain(holePath(holeAt(even, round, 40, MORPH_TIME.mat)));
       expect(removed).toContain(holePath(round));
       expect(removed.at(-1)).toBe(holePath(whole));
       expect(keyframes.length).toBeGreaterThan(0);
