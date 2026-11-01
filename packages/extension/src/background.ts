@@ -492,17 +492,24 @@ async function uaLoaded(): Promise<Set<number>> {
   return new Set(Array.isArray(stored) ? (stored as Array<number>) : []);
 }
 
-async function markUaLoaded(tabId: number, on: boolean) {
-  const tabs = await uaLoaded();
-  if (tabs.has(tabId) === on) {
-    return;
-  }
-  if (on) {
-    tabs.add(tabId);
-  } else {
-    tabs.delete(tabId);
-  }
-  await chrome.storage.session.set({ [UA_LOADED_KEY]: [...tabs] });
+// One change at a time, so two tabs loading at once cannot drop each other's mark.
+let marking: Promise<void> = Promise.resolve();
+
+function markUaLoaded(tabId: number, on: boolean): Promise<void> {
+  const run = marking.then(async () => {
+    const tabs = await uaLoaded();
+    if (tabs.has(tabId) === on) {
+      return;
+    }
+    if (on) {
+      tabs.add(tabId);
+    } else {
+      tabs.delete(tabId);
+    }
+    await chrome.storage.session.set({ [UA_LOADED_KEY]: [...tabs] });
+  });
+  marking = run.catch(() => {});
+  return run;
 }
 
 chrome.webNavigation.onCommitted.addListener(({ frameId, tabId, url }) => {
@@ -521,6 +528,8 @@ async function setUa(tabId: number, ua: NativeUa | null, url: string | undefined
     return;
   }
   // A frame-only rule leaves the page as the real browser too, so it loads again as one.
+  // After any mark on its way in, so a load that just committed counts.
+  await marking;
   const reload = (!ua || ua.frame === true) && url !== undefined && (await uaLoaded()).has(tabId);
   if (reload) {
     await markUaLoaded(tabId, false);
