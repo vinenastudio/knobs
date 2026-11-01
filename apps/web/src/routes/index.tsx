@@ -110,11 +110,13 @@ const styles = create({
     justifyContent: 'space-between',
   },
   // The studio's row: a centered line of its own under the links, at every width. The row is this
-  // wrapper, so the link itself stays the size of its words.
+  // wrapper, so the link itself stays the size of its words. Its margin plus the footer's row gap
+  // matches the footer's top padding, so it sits as far under the links as they sit under the border.
   credit: {
     display: 'flex',
     flexBasis: '100%',
     justifyContent: 'center',
+    marginTop: spacing.s4,
   },
   // The hero's two ways in, one row of equal height: the extension, then the setup prompt. On a
   // narrow screen the prompt goes under the extension.
