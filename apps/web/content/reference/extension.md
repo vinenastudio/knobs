@@ -67,7 +67,7 @@ the high entropy hints (`-Arch`, `-Bitness`, `-Form-Factors`, `-Full-Version`, `
 - what the page's service worker fetches belongs to no tab and serves every tab of the host, so it keeps Chrome's own, and so do other tabs and other hosts. no rule writes, removes or changes a cookie, `Origin`, `Referer` or a `Sec-Fetch-*` header.
 - while the debugger is on the tab, it sets the same user agent, platform and, for a Chromium preset, its client hint metadata, so dedicated workers read it too. it is cleared before the debugger leaves.
 - the device's frame loads, and loads again on a change, only once the rules are in. the tab's own page does not reload: reload it to send the new user agent with the page's load.
-- the rules go with the tab, or once the page's ua knob goes back to system.
+- the rules go with the tab, or once the page's ua knob goes back to system. a page that loaded while its rule was on loads again then, so it comes back as Chrome.
 
 ## real or in-page
 

@@ -14,7 +14,7 @@ import {
   type TabMessage,
 } from './messages.ts';
 import { FrameLoads } from './refusal.ts';
-import { uaCommand, uaRules } from './ua.ts';
+import { loadsUnder, uaCommand, uaRules } from './ua.ts';
 
 const PROTOCOL_VERSION = '1.3';
 const key = (tabId: number) => `tab:${tabId}`;
@@ -480,6 +480,35 @@ async function detach(tabId: number) {
   await chrome.debugger.detach({ tabId });
 }
 
+// Tabs whose page loaded while their user agent rule was on its host: the server saw that
+// browser, so the page loads again once the rule goes, and comes back as the real one.
+const UA_LOADED_KEY = 'uaLoaded';
+
+async function uaLoaded(): Promise<Set<number>> {
+  const stored = (await chrome.storage.session.get(UA_LOADED_KEY))[UA_LOADED_KEY];
+  return new Set(Array.isArray(stored) ? (stored as Array<number>) : []);
+}
+
+async function markUaLoaded(tabId: number, on: boolean) {
+  const tabs = await uaLoaded();
+  if (tabs.has(tabId) === on) {
+    return;
+  }
+  if (on) {
+    tabs.add(tabId);
+  } else {
+    tabs.delete(tabId);
+  }
+  await chrome.storage.session.set({ [UA_LOADED_KEY]: [...tabs] });
+}
+
+chrome.webNavigation.onCommitted.addListener(({ frameId, tabId, url }) => {
+  if (frameId !== 0) {
+    return;
+  }
+  void uaTabs().then((tabs) => markUaLoaded(tabId, loadsUnder(tabs, tabId, url)));
+});
+
 /** The user agent the tab's requests carry, null for the browser's own, from the page at `url`. */
 async function setUa(tabId: number, ua: NativeUa | null, url: string | undefined) {
   const tabs = await uaTabs();
@@ -487,6 +516,10 @@ async function setUa(tabId: number, ua: NativeUa | null, url: string | undefined
   const host = (url ? URL.parse(url)?.hostname : undefined) ?? null;
   if (JSON.stringify(had ?? null) === JSON.stringify(ua ? { host, ua } : null)) {
     return;
+  }
+  const reload = !ua && url !== undefined && (await uaLoaded()).has(tabId);
+  if (reload) {
+    await markUaLoaded(tabId, false);
   }
   // Last in, so its host's service worker takes it.
   tabs.delete(tabId);
@@ -497,6 +530,9 @@ async function setUa(tabId: number, ua: NativeUa | null, url: string | undefined
   await ruleUas();
   if (ours.has(tabId)) {
     await overrideUa(tabId);
+  }
+  if (reload) {
+    await chrome.tabs.reload(tabId);
   }
 }
 
@@ -582,6 +618,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   setUa(tabId, null, undefined).catch(() => {
     // The debugger went with the tab.
   });
+  void markUaLoaded(tabId, false);
   forgetReopen(tabId);
   bypassing.delete(tabId);
   firstLoads.delete(tabId);

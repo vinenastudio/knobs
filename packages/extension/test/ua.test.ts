@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { type NativeUa, PRESETS } from '@vinena/knobs';
 import {
   CLIENT_HINTS,
+  loadsUnder,
   type HeaderChange,
   RESOURCE_TYPES,
   uaCommand,
@@ -173,5 +174,20 @@ describe('uaRules', () => {
     }
     expect(headers.some((header) => header.startsWith('sec-fetch-'))).toBe(false);
     expect(rules.every(({ action }) => action.responseHeaders === undefined)).toBe(true);
+  });
+});
+
+describe('loadsUnder', () => {
+  const tabs = new Map([[7, { host: 'example.com', ua: uaOf('iphone-safari') }]]);
+
+  test("a page of the rule's host loads under it, so it loads again once the rule goes", () => {
+    expect(loadsUnder(tabs, 7, 'https://example.com/feed')).toBe(true);
+  });
+
+  test('another host, another tab or no rule loads as the real browser', () => {
+    expect(loadsUnder(tabs, 7, 'https://other.com/')).toBe(false);
+    expect(loadsUnder(tabs, 8, 'https://example.com/')).toBe(false);
+    expect(loadsUnder(new Map(), 7, 'https://example.com/')).toBe(false);
+    expect(loadsUnder(tabs, 7, 'not a url')).toBe(false);
   });
 });

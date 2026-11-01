@@ -134,3 +134,9 @@ export function uaRules(
       : [],
   );
 }
+
+/** Does the tab's page at `url` load under its user agent rule, so its server sees that browser? */
+export function loadsUnder(tabs: ReadonlyMap<number, TabUa>, tabId: number, url: string): boolean {
+  const host = URL.parse(url)?.hostname;
+  return host !== undefined && tabs.get(tabId)?.host === host;
+}

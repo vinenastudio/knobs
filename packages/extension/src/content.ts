@@ -7,6 +7,7 @@ import {
   mount,
   type NativeDriver,
   type PreferSetting,
+  reset,
   setNative,
   setPrefer,
   setState,
@@ -384,6 +385,20 @@ function afterYield(message: PageMessage) {
   }
 }
 
+/**
+ * The toolbar button opens the panel, and closing it turns knobs off for the tab: every knob
+ * back to its default, kept so a reload brings no device back, the rows the user pinned kept.
+ */
+function toggle() {
+  const { open, pinned } = getState().panel;
+  if (!open) {
+    setState({ panel: { open: true } });
+    return;
+  }
+  reset();
+  setState({ panel: { open: false, pinned } });
+}
+
 function onMessage(event: Event) {
   const detail = (event as CustomEvent<unknown>).detail;
   if (typeof detail !== 'string') {
@@ -400,7 +415,7 @@ function onMessage(event: Event) {
     prefer.value = message.prefer;
     setPrefer(message.prefer);
   } else if (message.type === 'toggle') {
-    setState({ panel: { open: !getState().panel.open } });
+    toggle();
   } else if (message.type === 'carry') {
     // The tab follows its frame to another origin: the page there takes these knobs.
     void ask({ state: { ...getState() }, type: 'carry' });

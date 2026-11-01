@@ -2242,7 +2242,8 @@ const agentOf = (id: string) => PRESETS.ua.find((preset) => preset.id === id)!.u
  * Chrome's own, with no debugger and in-page too; with the debugger on the tab, its scripts and
  * workers read the same. The page's service worker, another tab and another host keep Chrome's
  * own. A device in the frame sends none: only the frame's page reads its browser. System puts it
- * back, rules gone.
+ * back, rules gone, and a page loaded as another browser loads again as Chrome. Closing the panel
+ * from the toolbar turns knobs off for the tab, and a reload brings none back.
  */
 async function uaRequests() {
   const own = await mkdtemp(join(tmpdir(), 'knobs-smoke-ua-'));
@@ -2484,6 +2485,61 @@ async function uaRequests() {
     await set(tab, { device: 'none', dpr: 'system', height: 'full', mock: false, width: 'full' });
     await tab.waitForFunction(() => document.querySelector('[data-devknobs="viewport"]') === null);
 
+    // A page loaded as another browser loads again as Chrome once that browser goes.
+    const reloadsAsChrome = async (label: string, off: DevknobsStatePatch) => {
+      uaSeen.clear();
+      await set(tab, off);
+      for (let tries = 0; !uaSeen.get('page') && tries < 200; tries++) {
+        await tab.waitForTimeout(25);
+      }
+      await ready(tab);
+      log(`ua: ${label}, then off`, uaSeen.get('page'));
+      assert.equal(
+        uaSeen.get('page')?.['user-agent'],
+        chromeAgent,
+        `${label}: loads again as Chrome`,
+      );
+      assert.deepEqual(await rulesFor(null), []);
+    };
+    await set(tab, { ua: { preset: 'android-chrome' } });
+    await rulesFor(android);
+    assert.equal((await probe(tab))['page']?.['user-agent'], android);
+    await reloadsAsChrome('ua knob', { ua: { preset: 'system' } });
+    // The debugger sizing the whole tab as the phone: the tab is the device, and goes as it.
+    await worker.evaluate(() => chrome.storage.local.set({ native: true }));
+    await set(tab, { browser: 'off', device: 'iphone-17', mock: false });
+    await rulesFor(iphone);
+    assert.equal((await probe(tab))['page']?.['user-agent'], iphone);
+    await reloadsAsChrome('native viewport', {
+      device: 'none',
+      dpr: 'system',
+      height: 'full',
+      width: 'full',
+    });
+
+    // Closed from the toolbar: knobs off for the tab, every rule gone, and a reload brings none back.
+    const toggle = () =>
+      worker.evaluate((tabId) => chrome.tabs.sendMessage(tabId, { type: 'toggle' }), tabId);
+    await toggle();
+    await tab.waitForFunction(() => window.devknobs?.getState().panel.open === true);
+    await set(tab, { device: 'iphone-18-pro', mock: true, ua: { preset: 'android-chrome' } });
+    await rulesFor(android);
+    await toggle();
+    await tab.waitForFunction(() => window.devknobs?.getState().panel.open === false);
+    await tab.waitForFunction(() => document.querySelector('[data-devknobs="viewport"]') === null);
+    let left = await worker.evaluate(() => chrome.declarativeNetRequest.getSessionRules());
+    for (let tries = 0; left.length > 0 && tries < 100; tries++) {
+      await tab.waitForTimeout(20);
+      left = await worker.evaluate(() => chrome.declarativeNetRequest.getSessionRules());
+    }
+    log('ua: closed from the toolbar, rules', left);
+    assert.deepEqual(left, []);
+    await tab.reload();
+    await ready(tab);
+    const after = await tab.evaluate(() => window.devknobs!.getState());
+    log('ua: closed, reloaded', { device: after.device, ua: after.ua.preset });
+    assert.equal(after.device, 'none');
+    assert.equal(after.ua.preset, 'system');
     // System: Chrome's own again, every rule gone.
     await set(tab, { ua: { preset: 'system' } });
     assert.deepEqual(await rulesFor(null), []);
