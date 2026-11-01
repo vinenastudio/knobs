@@ -170,6 +170,9 @@ describe('uaRules', () => {
       { requestDomains: ['m.example.com'], resourceTypes: ['main_frame'], tabIds: [7] },
       { requestDomains: ['m.example.com'], resourceTypes: ['sub_frame'], tabIds: [7] },
     ]);
+    for (const { action } of rules) {
+      expect(action).toEqual({ requestHeaders: uaHeaders(iphone), type: 'modifyHeaders' });
+    }
   });
 
   test('a device in the frame with real phone mode off sets no rule at all', () => {
