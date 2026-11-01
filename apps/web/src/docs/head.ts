@@ -2,13 +2,12 @@ import { notFound } from '@tanstack/react-router';
 import { CANONICAL_ORIGIN, canonicalLink } from '../lib/canonical.ts';
 import { jsonLd, ORGANIZATION } from '../lib/schema.ts';
 import { IMAGE, shareMeta } from '../lib/share.ts';
-import { m } from '../paraglide/messages.js';
 import type { Page } from './pages.ts';
 
 /** The page `/docs` shows. */
 export const FIRST = 'start';
 
-export type DocMeta = Pick<Page, 'description' | 'faq' | 'title' | 'updated'>;
+export type DocMeta = Pick<Page, 'description' | 'faq' | 'metaTitle' | 'title' | 'updated'>;
 
 /**
  * The title and description of a docs page, or a not found for a slug with no
@@ -24,13 +23,14 @@ export async function loadDoc(slug: string): Promise<DocMeta> {
   return {
     description: page.description,
     faq: page.faq,
+    metaTitle: page.metaTitle,
     title: page.title,
     updated: page.updated,
   };
 }
 
 /**
- * The `<head>` of a docs page: its title and its description, from its
+ * The `<head>` of a docs page: its `meta_title` and its description, from its
  * frontmatter, its share card, its canonical address, the text for agents, and
  * its schema: a TechArticle, and a FAQPage built from the questions the page
  * shows. `/docs` shows the first page, so its canonical address is that page's.
@@ -40,7 +40,7 @@ export function docHead(doc: DocMeta | undefined, slug: string) {
     return {};
   }
   const path = `/docs/${slug}`;
-  const title = m.docs_title({ title: doc.title });
+  const title = doc.metaTitle;
   return {
     links: [
       canonicalLink(path),

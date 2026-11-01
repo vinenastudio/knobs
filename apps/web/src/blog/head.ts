@@ -1,7 +1,7 @@
 import { notFound } from '@tanstack/react-router';
 import { CANONICAL_ORIGIN, canonicalLink } from '../lib/canonical.ts';
 import { jsonLd, ORGANIZATION } from '../lib/schema.ts';
-import { IMAGE, shareMeta } from '../lib/share.ts';
+import { postImage, shareMeta } from '../lib/share.ts';
 import { m } from '../paraglide/messages.js';
 import type { Post } from './posts.ts';
 
@@ -32,12 +32,6 @@ const crumb = (position: number, name: string, path: string) => ({
   name,
   position,
 });
-
-/** The share tags of a blog page, as an article where it is one. */
-const articleMeta = (share: Parameters<typeof shareMeta>[0]) =>
-  shareMeta(share).map((tag) =>
-    'property' in tag && tag.property === 'og:type' ? { ...tag, content: 'article' } : tag,
-  );
 
 /** The `<head>` of `/blog`. */
 export function blogIndexHead() {
@@ -70,12 +64,19 @@ export function postHead(post: PostMeta | undefined, slug: string) {
   }
   const path = `/blog/${slug}`;
   const url = `${CANONICAL_ORIGIN}${path}`;
+  const image = postImage(slug);
   return {
     links: [canonicalLink(path)],
     meta: [
       { title: post.title },
       { content: post.description, name: 'description' },
-      ...articleMeta({ description: post.description, path, title: post.title }),
+      ...shareMeta({
+        description: post.description,
+        image: { alt: m.og_post_image_alt({ title: post.title }), url: image },
+        path,
+        title: post.title,
+        type: 'article',
+      }),
       { content: post.date, property: 'article:published_time' },
       { content: post.updated, property: 'article:modified_time' },
     ],
@@ -87,7 +88,7 @@ export function postHead(post: PostMeta | undefined, slug: string) {
         datePublished: post.date,
         description: post.description,
         headline: post.title,
-        image: IMAGE,
+        image,
         inLanguage: 'en',
         mainEntityOfPage: { '@id': url, '@type': 'WebPage' },
         publisher: ORGANIZATION,

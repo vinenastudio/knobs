@@ -1,5 +1,6 @@
 ---
 title: requests and storage
+meta_title: See network requests and edit storage with devknobs
 description: See every request the page makes, laid out like the Chrome DevTools network panel, and read, edit and save local storage, session storage and cookies.
 order: 6
 updated: 2026-10-25

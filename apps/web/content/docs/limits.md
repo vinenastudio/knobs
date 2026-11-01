@@ -1,5 +1,6 @@
 ---
 title: limits and faq
+meta_title: devknobs limits and FAQ: what a page panel cannot fake
 description: What devknobs cannot fake from inside a page, such as cross-origin stylesheets, worker time zones and real touch, and answers to common questions about it.
 order: 9
 updated: 2026-10-29

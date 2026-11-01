@@ -1,5 +1,6 @@
 ---
 title: grab and inspect
+meta_title: Grab and inspect elements for a coding agent with devknobs
 description: Grab any element on the page and copy its html, the components that rendered it and their source files for a coding agent, or inspect its box and css.
 order: 5
 updated: 2026-10-25

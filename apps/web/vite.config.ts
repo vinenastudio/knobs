@@ -1,4 +1,4 @@
-import { resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 import { cloudflare } from '@cloudflare/vite-plugin';
 import { paraglideVitePlugin } from '@inlang/paraglide-js';
 import { unplugin as stylex } from '@stylexjs/unplugin';
@@ -66,7 +66,29 @@ function devknobsSource(): Plugin {
   };
 }
 
+const repoRoot = resolve(import.meta.dirname, '../..');
+
 export default defineConfig({
+  environments: {
+    // Grab reads these maps to name components and their files on knobs.dev.
+    // Browsers fetch a map only for DevTools or grab, so visitors pay only for
+    // the kept names. Paths from the repo root, not this machine's.
+    client: {
+      build: {
+        rolldownOptions: {
+          output: {
+            minify: {
+              compress: { keepNames: { class: false, function: true } },
+              mangle: { keepNames: { class: false, function: true } },
+            },
+            sourcemapPathTransform: (source, map) =>
+              relative(repoRoot, resolve(map, '..', source)).replaceAll('\\', '/'),
+          },
+        },
+        sourcemap: true,
+      },
+    },
+  },
   plugins: [
     tuneEndpoint(resolve(import.meta.dirname, '.tune')),
     devknobsSource(),

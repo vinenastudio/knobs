@@ -54,3 +54,7 @@ minimumReleaseAgeExclude:
   - miniflare@5.20260831.0-alpha
   - wrangler@4.128.0
   - '@testing-library/user-event@14.6.7'
+# StyleX's unplugin drops its Babel source map, which breaks every map after it
+# (knobs.dev's grab lines). Remove once upstream passes `sourceMaps: true`.
+patchedDependencies:
+  '@stylexjs/unplugin@0.19.0': patches/@stylexjs__unplugin@0.19.0.patch

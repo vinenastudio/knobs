@@ -26,6 +26,8 @@ export type Page = {
   faq: Array<Faq>;
   /** The page's h2s, for "on this page". */
   headings: Array<Heading>;
+  /** The page's `<title>`, from its `meta_title`. */
+  metaTitle: string;
   order: number;
   segments: Array<Segment>;
   slug: string;
@@ -242,8 +244,8 @@ export function render(
 }
 
 function parse(slug: string, source: string): Page {
-  const { body, description, order, title, updated } = docFrontmatter(slug, source);
-  return { description, order, slug, title, updated, ...render(body) };
+  const { body, description, metaTitle, order, title, updated } = docFrontmatter(slug, source);
+  return { description, metaTitle, order, slug, title, updated, ...render(body) };
 }
 
 const files = import.meta.glob<string>('../../content/docs/*.md', {

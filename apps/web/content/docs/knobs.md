@@ -1,5 +1,6 @@
 ---
 title: knobs
+meta_title: Every devknobs knob: dark mode, locale, time zone and more
 description: Every knob devknobs has and what it does to the page: color scheme, reduced motion, text size, locale, time zone, clock, geolocation, user agent and viewport.
 order: 3
 updated: 2026-10-29

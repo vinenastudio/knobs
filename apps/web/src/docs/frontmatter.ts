@@ -1,6 +1,8 @@
 export type Frontmatter = {
   body: string;
   description: string;
+  /** The page's `<title>` and share title, 50 to 60 characters; only docs pages have one. */
+  metaTitle: string | undefined;
   order: number;
   title: string;
   /** The day the page's content last changed, `YYYY-MM-DD`, for the sitemap and the page's schema. */
@@ -29,6 +31,7 @@ export function frontmatter(slug: string, source: string): Frontmatter {
   return {
     body: source.slice(match[0].length),
     description,
+    metaTitle: fields.get('meta_title'),
     order,
     title,
     updated: fields.get('updated'),
@@ -36,14 +39,20 @@ export function frontmatter(slug: string, source: string): Frontmatter {
 }
 
 /**
- * A docs page's frontmatter: as above, and `updated` is required and a real
- * day. The reference pages have no `updated`, so they use `frontmatter`.
+ * A docs page's frontmatter: as above, `meta_title` is required, and `updated`
+ * is required and a real day. The reference pages have no `updated`, so they use `frontmatter`.
  * `scripts/docs-check.ts` runs this on every page at build time, so a bad page
  * fails the build instead of the Worker.
  */
-export function docFrontmatter(slug: string, source: string): Frontmatter & { updated: string } {
+export function docFrontmatter(
+  slug: string,
+  source: string,
+): Frontmatter & { metaTitle: string; updated: string } {
   const fields = frontmatter(slug, source);
-  const { updated } = fields;
+  const { metaTitle, updated } = fields;
+  if (metaTitle === undefined) {
+    throw new Error(`docs: ${slug}.md needs meta_title`);
+  }
   if (
     updated === undefined ||
     !/^\d{4}-\d{2}-\d{2}$/.test(updated) ||
@@ -52,7 +61,7 @@ export function docFrontmatter(slug: string, source: string): Frontmatter & { up
   ) {
     throw new Error(`docs: ${slug}.md needs updated: YYYY-MM-DD, a real day`);
   }
-  return { ...fields, updated };
+  return { ...fields, metaTitle, updated };
 }
 
 /** The heading id rule the content's own links are written against. */

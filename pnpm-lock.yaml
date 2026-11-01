@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@stylexjs/unplugin@0.19.0': 8f04196eeb94732165b17a4d16731d8141b88961d0019559cc2e9e10391de7c9
+
 importers:
 
   .:
@@ -104,7 +107,7 @@ importers:
         version: link:../../packages/config
       '@stylexjs/unplugin':
         specifier: ^0.19.0
-        version: 0.19.0(supports-color@10.2.2)(unplugin@2.3.11)
+        version: 0.19.0(patch_hash=8f04196eeb94732165b17a4d16731d8141b88961d0019559cc2e9e10391de7c9)(supports-color@10.2.2)(unplugin@2.3.11)
       '@types/react':
         specifier: ^19.2.18
         version: 19.2.18
@@ -217,7 +220,7 @@ importers:
         version: 10.5.10(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(esbuild@0.28.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(storybook@10.5.10(@types/react@19.2.18)(prettier@3.9.6)(react@19.2.8))(supports-color@10.2.2)(typescript@7.0.2)(vite@8.2.2(@types/node@26.4.0)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
       '@stylexjs/unplugin':
         specifier: ^0.19.0
-        version: 0.19.0(supports-color@10.2.2)(unplugin@2.3.11)
+        version: 0.19.0(patch_hash=8f04196eeb94732165b17a4d16731d8141b88961d0019559cc2e9e10391de7c9)(supports-color@10.2.2)(unplugin@2.3.11)
       '@types/react':
         specifier: ^19.2.18
         version: 19.2.18
@@ -5974,7 +5977,7 @@ snapshots:
       invariant: 2.2.4
       styleq: 0.2.1
 
-  '@stylexjs/unplugin@0.19.0(supports-color@10.2.2)(unplugin@2.3.11)':
+  '@stylexjs/unplugin@0.19.0(patch_hash=8f04196eeb94732165b17a4d16731d8141b88961d0019559cc2e9e10391de7c9)(supports-color@10.2.2)(unplugin@2.3.11)':
     dependencies:
       '@babel/core': 7.29.7(supports-color@10.2.2)
       '@babel/plugin-syntax-flow': 7.29.7(@babel/core@7.29.7(supports-color@10.2.2))

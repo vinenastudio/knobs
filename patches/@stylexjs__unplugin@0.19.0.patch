@@ -1,0 +1,24 @@
+diff --git a/lib/core.js b/lib/core.js
+index 96e685e7c3a51dd4e8e18b4e869576f95131017a..a70e5059e498ebda862a6be973727cb4bbdd1057 100644
+--- a/lib/core.js
++++ b/lib/core.js
+@@ -237,6 +237,7 @@ const unpluginFactory = (userOptions = {}, metaOptions) => {
+   async function runBabelTransform(inputCode, filename, callerName) {
+     const result = await (0, _core.transformAsync)(inputCode, {
+       babelrc: false,
++      sourceMaps: true,
+       filename,
+       presets,
+       plugins: [...plugins, /\.jsx?/.test(_nodePath.default.extname(filename)) ? _pluginSyntaxFlow.default : [_pluginSyntaxTypescript.default, {
+diff --git a/lib/es/core.mjs b/lib/es/core.mjs
+index ab666ee586474155be07c94d6839f30fbf7bc194..8091ae67beeb4dc5bdf87dae01089c0373db8136 100644
+--- a/lib/es/core.mjs
++++ b/lib/es/core.mjs
+@@ -228,6 +228,7 @@ export const unpluginFactory = (userOptions = {}, metaOptions) => {
+   async function runBabelTransform(inputCode, filename, callerName) {
+     const result = await transformAsync(inputCode, {
+       babelrc: false,
++      sourceMaps: true,
+       filename,
+       presets,
+       plugins: [...plugins, /\.jsx?/.test(path.extname(filename)) ? flowSyntaxPlugin : [typescriptSyntaxPlugin, {

@@ -109,12 +109,14 @@ const styles = create({
     display: 'flex',
     justifyContent: 'space-between',
   },
-  // The studio, at the footer's right end, also on a line of its own where the links fill the width.
-  // On a phone it takes a centered line of its own under the centered links.
+  // The studio's row: a centered line of its own under the links, at every width. The row is this
+  // wrapper, so the link itself stays the size of its words. Its margin plus the footer's row gap
+  // matches the footer's top padding, so it sits as far under the links as they sit under the border.
   credit: {
-    flexBasis: { default: '100%', [WIDE]: 'auto' },
-    justifyContent: { default: 'center', [WIDE]: 'flex-start' },
-    marginInlineStart: { default: 0, [WIDE]: 'auto' },
+    display: 'flex',
+    flexBasis: '100%',
+    justifyContent: 'center',
+    marginTop: spacing.s4,
   },
   // The hero's two ways in, one row of equal height: the extension, then the setup prompt. On a
   // narrow screen the prompt goes under the extension.
@@ -375,7 +377,9 @@ function Landing() {
         <a href={NOTICES} rel="noreferrer" target="_blank" {...props(styles.link)}>
           {m.link_notices()}
         </a>
-        <CraftedAtVinena style={[styles.link, styles.credit]} />
+        <div {...props(styles.credit)}>
+          <CraftedAtVinena style={styles.link} />
+        </div>
       </footer>
     </main>
   );

@@ -1,5 +1,6 @@
 ---
 title: start
+meta_title: Install devknobs: set up the knobs dev panel in your app
 description: Install @vinena/knobs from npm, mount the devknobs panel in development only, and load the early script for pages that read media queries or the time on load.
 order: 1
 updated: 2026-10-25

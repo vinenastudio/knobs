@@ -9,10 +9,12 @@
  *
  * Run with `pnpm --filter @knobs/web og` after a copy or look change and
  * commit the PNG. `--out <file>` and `--angle <0..1>` (shut to open flat)
- * draw other takes of the same scene, to compare.
+ * draw other takes of the same scene, to compare. `--posts` draws each blog
+ * post's image instead, `public/og/blog/<slug>.png`: the same scene with the
+ * post's title as the headline, wrapped to at most three lines.
  */
 import { type ChildProcess, spawn } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -20,6 +22,7 @@ import { crc32 } from 'node:zlib';
 import type {} from '@vinena/knobs';
 import { chromium, type Browser, type Page } from 'playwright-core';
 import messages from '../messages/en.json' with { type: 'json' };
+import { postFrontmatter } from '../src/blog/frontmatter.ts';
 
 const root = path.resolve(import.meta.dirname, '..');
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -32,12 +35,27 @@ const { values: args } = parseArgs({
   options: {
     angle: { default: '0.72', type: 'string' },
     out: { default: path.join(root, 'public/og.png'), type: 'string' },
+    posts: { default: false, type: 'boolean' },
   },
 });
 
 const mark = `data:image/svg+xml;base64,${readFileSync(path.join(root, 'public/favicon.svg')).toString('base64')}`;
 // Two lines, broken by hand, so "design engineers" stays together.
 const HEADLINE = ['devtools for', 'design engineers'];
+
+/** An image to draw: its headline, as lines broken by hand or as one text to wrap, and its file. */
+type Take = { headline: Array<string> | string; out: string };
+
+const blog = path.join(root, 'content/blog');
+const takes: Array<Take> = args.posts
+  ? readdirSync(blog)
+      .filter((name) => name.endsWith('.md'))
+      .map((name) => {
+        const slug = name.slice(0, -'.md'.length);
+        const { title } = postFrontmatter(slug, readFileSync(path.join(blog, name), 'utf8'));
+        return { headline: title, out: path.join(root, `public/og/blog/${slug}.png`) };
+      })
+  : [{ headline: HEADLINE, out: args.out }];
 
 // The window is wider than the image, so devknobs centers the device right of
 // the image's middle and the left of the mat is free for the words. The panel,
@@ -111,9 +129,14 @@ const QUIET = `
 `;
 
 // The words, over the mat on the left, in the site's system stack, all in the
-// upper two thirds: X lays the site's name over the bottom left corner. A popover,
+// upper two thirds: X lays the site's name over the bottom left corner.
+// A wrapped headline stays clear of the device's edge. A popover,
 // so it sits in the top layer with devknobs' own layers.
-const OVERLAY = `
+/** A post title as html text. */
+const escape = (text: string) =>
+  text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+
+const overlay = (headline: Take['headline']) => `
 <style>
   .og {
     position: fixed; inset: 0 auto 0 0; margin: 0; border: 0; background: none; overflow: visible;
@@ -125,11 +148,11 @@ const OVERLAY = `
   }
   .og .brand { display: flex; align-items: center; gap: 18px; font-size: 44px; font-weight: 500; letter-spacing: -0.01em; }
   .og .brand img { width: 56px; height: 56px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0, 8, 30, 0.45); }
-  .og h1 { margin: 0; font-size: 60px; line-height: 1.06; font-weight: 500; letter-spacing: -0.035em; text-shadow: 0 2px 24px rgba(0, 10, 40, 0.35); }
+  .og h1 { margin: 0; font-size: 60px; line-height: 1.06; font-weight: 500; letter-spacing: -0.035em; text-shadow: 0 2px 24px rgba(0, 10, 40, 0.35); text-wrap: balance; max-width: 440px; }
 </style>
 <div class="og" data-devknobs="og" popover="manual">
   <div class="brand"><img alt="" src="${mark}">${messages['app_name']}</div>
-  <h1>${HEADLINE.map((line) => `<span style="display: block; white-space: nowrap">${line}</span>`).join('')}</h1>
+  <h1>${typeof headline === 'string' ? escape(headline) : headline.map((line) => `<span style="display: block; white-space: nowrap">${line}</span>`).join('')}</h1>
 </div>`;
 
 /** Every open shadow root on the page, for the style that quiets devknobs' own strip. */
@@ -161,7 +184,7 @@ async function quiet(page: Page) {
   }, QUIET);
 }
 
-async function shoot(page: Page, url: string) {
+async function shoot(page: Page, url: string, headline: Take['headline']) {
   await page.addInitScript(() => {
     try {
       // The tour's first bubble would sit over the page: it counts as seen.
@@ -224,8 +247,25 @@ async function shoot(page: Page, url: string) {
   await page.evaluate((html) => {
     document.documentElement.insertAdjacentHTML('beforeend', html);
     document.querySelector<HTMLElement>('.og')?.showPopover();
-  }, OVERLAY);
+  }, overlay(headline));
   await page.evaluate(() => document.fonts.ready);
+  // A long title steps down in size until it fits three lines and its width.
+  await page.evaluate(() => {
+    const h1 = document.querySelector<HTMLElement>('.og h1');
+    if (h1 === null) {
+      throw new Error('og: no headline');
+    }
+    for (let size = 60; size >= 36; size -= 2) {
+      h1.style.fontSize = `${size}px`;
+      if (
+        h1.getBoundingClientRect().height <= size * 1.06 * 3 + 1 &&
+        h1.scrollWidth <= h1.clientWidth
+      ) {
+        return;
+      }
+    }
+    throw new Error(`og: "${h1.textContent}" does not fit three lines`);
+  });
   await page.waitForTimeout(300);
   return page.screenshot({ clip: { height: HEIGHT, width: WIDTH, x: 0, y: 0 }, type: 'png' });
 }
@@ -292,14 +332,17 @@ try {
     deviceScaleFactor: SCALE,
     viewport: { height: view.height, width: view.width },
   });
-  const page = await context.newPage();
-  const shot = await shoot(page, url);
   const small = await browser.newPage();
-  const png = await downscale(small, shot);
-  writeFileSync(args.out, png);
-  process.stdout.write(
-    `${path.relative(process.cwd(), args.out)} ${Math.round(png.length / 1024)} KB\n`,
-  );
+  for (const { headline, out } of takes) {
+    const page = await context.newPage();
+    const png = await downscale(small, await shoot(page, url, headline));
+    await page.close();
+    mkdirSync(path.dirname(out), { recursive: true });
+    writeFileSync(out, png);
+    process.stdout.write(
+      `${path.relative(process.cwd(), out)} ${Math.round(png.length / 1024)} KB\n`,
+    );
+  }
 } finally {
   await browser?.close();
   if (server !== null) {
