@@ -2430,9 +2430,17 @@ async function uaRequests() {
     await androidChrome('in-page');
 
     // A device drawn around the page: nothing goes to servers as its iPhone, the frame's page
-    // reads it, and the page around the frame stays Chrome.
+    // reads it, and the page around the frame stays Chrome. The page loaded as Android loads
+    // again as Chrome first.
+    uaSeen.clear();
     await set(tab, { ua: { preset: 'system' } });
     await rulesFor(null);
+    for (let tries = 0; !uaSeen.get('page') && tries < 200; tries++) {
+      await tab.waitForTimeout(25);
+    }
+    assert.equal(uaSeen.get('page')?.['user-agent'], chromeAgent, 'loads again as Chrome');
+    await tab.waitForLoadState('load');
+    await ready(tab);
     uaSeen.delete('frame');
     await set(tab, { device: 'iphone-18-pro', mock: true });
     await tab.waitForFunction(`(${frameOf.toString()})()?.contentWindow?.devknobs !== undefined`);
