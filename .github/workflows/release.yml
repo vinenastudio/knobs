@@ -2,6 +2,9 @@ name: Release
 
 # Publishes @vinena/knobs to npm through trusted publishing (OIDC): no npm token, and npm adds
 # provenance on its own. Push a tag like `knobs@0.5.0` that matches packages/devknobs.
+# The build job runs installs, tests and third-party actions without id-token, so only the
+# publish job (first-party actions only, no install, no lifecycle scripts) can mint an npm token.
+# Provenance attests this whole workflow; the split only keeps the publish token away from build and dependency code.
 
 on:
   push:
@@ -9,33 +12,37 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
-  group: release-knobs
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 # No turbo remote cache here: a release always builds dist from source.
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.version.outputs.publish }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check tag is on main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag $GITHUB_REF_NAME points to a commit that is not on main."
+            exit 1
+          fi
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
-      # Trusted publishing needs npm 11.5.1 or later.
-      - name: Check npm version
-        run: |
-          if ! node -e 'const [a, b, c] = process.argv[1].split(".").map(Number); process.exit(a > 11 || (a === 11 && (b > 5 || (b === 5 && c >= 1))) ? 0 : 1)' "$(npm --version)"; then
-            npm install -g npm@^11.5.1
-          fi
-          npm --version
       - name: Check tag matches package version
         id: version
         run: |
@@ -57,13 +64,56 @@ jobs:
         run: pnpm install --frozen-lockfile
       - if: steps.version.outputs.publish == 'true'
         run: pnpm exec turbo run test typecheck build --filter=@vinena/knobs
-      - name: Publish to npm
+      - name: Pack
         if: steps.version.outputs.publish == 'true'
         working-directory: packages/devknobs
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
         run: |
+          mkdir -p "$RUNNER_TEMP/pack"
+          npm pack --pack-destination "$RUNNER_TEMP/pack"
+      - if: steps.version.outputs.publish == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: knobs-tarball
+          path: ${{ runner.temp }}/pack/*.tgz
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: build
+    if: needs.build.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          sparse-checkout: .nvmrc
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: knobs-tarball
+          path: ${{ runner.temp }}/pack
+      # Trusted publishing needs npm 11.5.1 or later. Node 24 bundles it (v24.22.2 ships npm 11.19.1).
+      # No npm self-update here: that would run registry code in the job that holds id-token.
+      - name: Check npm version
+        run: |
+          npm --version
+          if ! node -e 'const [a, b, c] = process.argv[1].split(".").map(Number); process.exit(a > 11 || (a === 11 && (b > 5 || (b === 5 && c >= 1))) ? 0 : 1)' "$(npm --version)"; then
+            echo "::error::npm $(npm --version) is older than 11.5.1, which trusted publishing needs."
+            exit 1
+          fi
+      # Publishing a tarball runs no lifecycle scripts.
+      - name: Publish to npm
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          tarball="$(ls "$RUNNER_TEMP"/pack/*.tgz)"
           case "$VERSION" in
-            *-*) npm publish --tag next ;;
-            *) npm publish ;;
+            *-*) npm publish "$tarball" --tag next ;;
+            *) npm publish "$tarball" ;;
           esac
