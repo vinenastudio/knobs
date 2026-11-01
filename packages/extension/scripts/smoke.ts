@@ -2508,8 +2508,20 @@ async function uaRequests() {
         `${kind} of a second tab goes as Chrome`,
       );
     }
+    uaSeen.clear();
     await set(tab, { panel: { realPhone: false } });
     await rulesFor(null);
+    // The frame loads again as Chrome; the next change waits for it.
+    for (
+      let tries = 0;
+      uaSeen.get('frame')?.['user-agent'] !== chromeAgent && tries < 200;
+      tries++
+    ) {
+      await tab.waitForTimeout(25);
+    }
+    assert.equal(uaSeen.get('frame')?.['user-agent'], chromeAgent);
+    await tab.waitForFunction(`(${frameOf.toString()})()?.contentWindow?.devknobs !== undefined`);
+    await tab.evaluate(`(${frameOf.toString()})().contentWindow.devknobs.ready()`);
     await second.close();
     // A browser the ua knob picks itself goes to the frame's load.
     await set(tab, { ua: { preset: 'android-chrome' } });
