@@ -107,6 +107,12 @@ describe("the kept drawing", () => {
     expect(readSnapshot(PHONE, VIEW)).toBeNull();
   });
 
+  test("is not shown when kept before the header was read, which its colors cannot tell", () => {
+    const { header: _, ...before } = LOOK;
+    items.set(SNAPSHOT_KEY, JSON.stringify({ ...kept(), look: before }));
+    expect(readSnapshot(PHONE, VIEW)).toBeNull();
+  });
+
   test("is kept with its version, read from before versions, and left alone from a newer devknobs", () => {
     writeSnapshot(kept());
     expect(JSON.parse(items.get(SNAPSHOT_KEY) ?? "").v).toBe(SNAPSHOT_VERSION);
