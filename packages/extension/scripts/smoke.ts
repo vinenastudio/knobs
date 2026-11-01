@@ -562,6 +562,22 @@ const set = (tab: Page, patch: DevknobsStatePatch) =>
     window.devknobs!.setState(patch);
   }, patch);
 
+/**
+ * Set knobs that make the extension load the page again, and wait for that load and its
+ * devknobs. The reload comes once the extension has taken its rule off, after `set` returns,
+ * or while it runs, which takes its page away from under it.
+ */
+async function setAndReload(tab: Page, patch: DevknobsStatePatch) {
+  const loaded = tab.waitForEvent('load', { timeout: 15_000 });
+  await set(tab, patch).catch((error: unknown) => {
+    if (!String(error).includes('Execution context was destroyed')) {
+      throw error;
+    }
+  });
+  await loaded;
+  await ready(tab);
+}
+
 /** Does the closed panel's handle show on the page's edge? */
 const handleShown = (tab: Page) =>
   tab.evaluate(() => {
@@ -2436,14 +2452,9 @@ async function uaRequests() {
     // reads it, and the page around the frame stays Chrome. The page loaded as Android loads
     // again as Chrome first.
     uaSeen.clear();
-    await set(tab, { ua: { preset: 'system' } });
+    await setAndReload(tab, { ua: { preset: 'system' } });
     await rulesFor(null);
-    for (let tries = 0; !uaSeen.get('page') && tries < 200; tries++) {
-      await tab.waitForTimeout(25);
-    }
     assert.equal(uaSeen.get('page')?.['user-agent'], chromeAgent, 'loads again as Chrome');
-    await tab.waitForLoadState('load');
-    await ready(tab);
     uaSeen.delete('frame');
     await set(tab, { device: 'iphone-18-pro', mock: true });
     await tab.waitForFunction(`(${frameOf.toString()})()?.contentWindow?.devknobs !== undefined`);
@@ -2555,11 +2566,7 @@ async function uaRequests() {
     // A page loaded as another browser loads again as Chrome once that browser goes.
     const reloadsAsChrome = async (label: string, off: DevknobsStatePatch) => {
       uaSeen.clear();
-      await set(tab, off);
-      for (let tries = 0; !uaSeen.get('page') && tries < 200; tries++) {
-        await tab.waitForTimeout(25);
-      }
-      await ready(tab);
+      await setAndReload(tab, off);
       log(`ua: ${label}, then off`, uaSeen.get('page'));
       assert.equal(
         uaSeen.get('page')?.['user-agent'],
@@ -2577,14 +2584,9 @@ async function uaRequests() {
     await rulesFor(android);
     assert.equal((await probe(tab))['page']?.['user-agent'], android);
     uaSeen.clear();
-    await set(tab, { device: 'iphone-18-pro', mock: true, panel: { realPhone: true } });
-    for (let tries = 0; !uaSeen.get('page') && tries < 200; tries++) {
-      await tab.waitForTimeout(25);
-    }
+    await setAndReload(tab, { device: 'iphone-18-pro', mock: true, panel: { realPhone: true } });
     log('ua: whole tab, then real phone mode', uaSeen.get('page'));
     assert.equal(uaSeen.get('page')?.['user-agent'], chromeAgent, 'loads again as Chrome');
-    await tab.waitForLoadState('load');
-    await ready(tab);
     await set(tab, {
       device: 'none',
       dpr: 'system',
