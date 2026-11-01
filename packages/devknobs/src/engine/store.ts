@@ -388,7 +388,7 @@ export function merge(state: DevknobsState, patch: DevknobsStatePatch): Devknobs
     network: { ...state.network, ...held.network },
     ua: { ...state.ua, ...held.ua },
     panel: { ...state.panel, ...held.panel },
-  });
+  }, patch.ua === undefined);
 }
 
 /** Either storage's value under a key, or null where it cannot be read. */

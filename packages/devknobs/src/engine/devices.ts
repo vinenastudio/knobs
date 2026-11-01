@@ -471,10 +471,10 @@ export function hold(state: DevknobsState, patch: DevknobsStatePatch): DevknobsS
  * Keep the device fields true to the size: the orientation is the way the
  * frame stands, portrait while it has no width or height to turn, and a size
  * that is no longer the device's leaves no device behind, nor the browser it
- * brought. Without a foldable,
+ * brought, unless the change named a browser itself (`dropUa` false). Without a foldable,
  * the posture is the first, so one picked next comes up in it.
  */
-export function settle(state: DevknobsState): DevknobsState {
+export function settle(state: DevknobsState, dropUa = true): DevknobsState {
   const { width, height } = state;
   const sized = typeof width === "number" && typeof height === "number";
   const orientation: OrientationValue = sized && width > height ? "landscape" : "portrait";
@@ -489,7 +489,7 @@ export function settle(state: DevknobsState): DevknobsState {
   const same = orientation === state.orientation && posture === state.posture;
   if (same && id === state.device) return state;
   // A device dropped for its size takes the browser it brought along, as one taken away does.
-  const dropped = id !== state.device && device !== undefined && state.ua.preset === device.ua;
+  const dropped = dropUa && id !== state.device && device !== undefined && state.ua.preset === device.ua;
   const ua = dropped ? { ...state.ua, preset: "system" } : state.ua;
   return { ...state, orientation, posture, device: id, ua };
 }

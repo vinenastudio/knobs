@@ -425,6 +425,12 @@ describe("settle", () => {
     expect(dropped.ua.preset).toBe("system");
   });
 
+  test("a browser the same change names stays", () => {
+    const phone = merge(DEFAULT_STATE, { device: "iphone-16" });
+    expect(merge(phone, { width: 500, ua: { preset: "iphone-safari" } }).ua.preset).toBe("iphone-safari");
+    expect(merge(phone, { width: 500 }).ua.preset).toBe("system");
+  });
+
   test("a browser picked apart from the device stays", () => {
     const phone = merge(DEFAULT_STATE, { device: "iphone-18-pro", ua: { preset: "android-chrome" } });
     expect(settle({ ...phone, width: 500 }).ua.preset).toBe("android-chrome");
