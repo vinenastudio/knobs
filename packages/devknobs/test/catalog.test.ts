@@ -304,9 +304,7 @@ describe("summary", () => {
     expect(says("viewport", { width: 390, height: 844 })).toBe("");
     expect(says("viewport", { width: 390, height: 844, dpr: 2 })).toBe("dpr 2");
     expect(says("device", { height: 700 })).toBe("full × 700");
-    expect(says("device", { device: "iphone-se", width: 500 })).toBe(
-      "500 × 667 · iphone safari",
-    );
+    expect(says("device", { device: "iphone-se", width: 500 })).toBe("500 × 667");
     expect(says("viewport", { device: "iphone-se", width: 500 })).toBe("dpr 2");
   });
 

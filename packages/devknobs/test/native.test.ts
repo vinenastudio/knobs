@@ -343,6 +343,14 @@ describe("hostUa", () => {
     expect(hostUa(phone({ mock: true, panel: { realPhone: true }, ua: { preset: "android-chrome" } }), false)?.frame).toBeUndefined();
   });
 
+  test("a device dropped by a new size sends nothing, nor keeps its browser", () => {
+    const resized = merge(phone(), { width: 500 });
+    expect(resized.device).toBe("none");
+    expect(resized.ua.preset).toBe("system");
+    expect(hostUa(resized, false)).toBeNull();
+    expect(hostUa(merge(phone(), { width: "full", height: "full" }), false)).toBeNull();
+  });
+
   test("a driver with no viewport part sends none for a device in the frame", () => {
     const calls: (NativeUa | null)[] = [];
     drive({ ua: (value) => void calls.push(value) }, phone());
