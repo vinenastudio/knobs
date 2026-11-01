@@ -119,21 +119,42 @@ export interface TabUa {
 export function uaRules(
   tabs: ReadonlyMap<number, TabUa>,
   free: () => number,
+  navigations: ReadonlyMap<number, TabUa> = new Map(),
 ): Array<chrome.declarativeNetRequest.Rule> {
-  return [...tabs].flatMap(([tabId, { host, ua }]) =>
-    host
-      ? [
-          {
-            action: { requestHeaders: uaHeaders(ua), type: 'modifyHeaders' as const },
-            condition: {
-              requestDomains: [host],
-              resourceTypes: ua.frame ? ['sub_frame' as const] : [...RESOURCE_TYPES],
-              tabIds: [tabId],
+  // The tab following real phone mode's frame to another origin of its site: that one load of
+  // the page there goes as the device, as the frame's did, so the server sends the same page.
+  const following: Array<chrome.declarativeNetRequest.Rule> = [...navigations].flatMap(
+    ([tabId, { host, ua }]) =>
+      host
+        ? [
+            {
+              action: { requestHeaders: uaHeaders(ua), type: 'modifyHeaders' as const },
+              condition: {
+                requestDomains: [host],
+                resourceTypes: ['main_frame' as const],
+                tabIds: [tabId],
+              },
+              id: free(),
             },
-            id: free(),
-          },
-        ]
-      : [],
+          ]
+        : [],
+  );
+  return following.concat(
+    [...tabs].flatMap(([tabId, { host, ua }]) =>
+      host
+        ? [
+            {
+              action: { requestHeaders: uaHeaders(ua), type: 'modifyHeaders' as const },
+              condition: {
+                requestDomains: [host],
+                resourceTypes: ua.frame ? ['sub_frame' as const] : [...RESOURCE_TYPES],
+                tabIds: [tabId],
+              },
+              id: free(),
+            },
+          ]
+        : [],
+    ),
   );
 }
 

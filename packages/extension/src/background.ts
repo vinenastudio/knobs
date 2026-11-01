@@ -421,6 +421,9 @@ async function pageLoads(tabId: number, url: string) {
 // of the host: a session seen as two browsers at once gets signed out. A device in devknobs'
 // frame sends nothing; the frame emulates its browser in the page. The ids are any free ones,
 // since the framing rules take tab ids and free ids too: these are told apart by their request headers.
+// Tabs following real phone mode's frame to another origin: the host and browser of that one
+// page load, whose rule goes once it commits.
+const followUas = new Map<number, { host: string; ua: NativeUa }>();
 const UA_KEY = 'ua';
 let uaTabsKept: Promise<Map<number, { host: string | null; ua: NativeUa }>> | null = null;
 
@@ -456,7 +459,7 @@ function ruleUas(): Promise<void> {
         return last;
       };
       await chrome.declarativeNetRequest.updateSessionRules({
-        addRules: uaRules(tabs, free),
+        addRules: uaRules(tabs, free, followUas),
         removeRuleIds: rules.filter(isUaRule).map(({ id }) => id),
       });
     });
@@ -512,8 +515,21 @@ function markUaLoaded(tabId: number, on: boolean): Promise<void> {
   return run;
 }
 
+function unfollowUa(tabId: number) {
+  if (followUas.delete(tabId)) {
+    void ruleUas();
+  }
+}
+
 chrome.webNavigation.onCommitted.addListener(({ frameId, tabId, url }) => {
   if (frameId !== 0) {
+    return;
+  }
+  const followed = followUas.get(tabId);
+  if (followed) {
+    unfollowUa(tabId);
+    // Served to the device, so the page loads again once real phone mode or the device goes.
+    void markUaLoaded(tabId, URL.parse(url)?.hostname === followed.host);
     return;
   }
   void uaTabs().then((tabs) => markUaLoaded(tabId, loadsUnder(tabs, tabId, url)));
@@ -527,10 +543,15 @@ async function setUa(tabId: number, ua: NativeUa | null, url: string | undefined
   if (JSON.stringify(had ?? null) === JSON.stringify(ua ? { host, ua } : null)) {
     return;
   }
-  // A frame-only rule leaves the page as the real browser too, so it loads again as one.
-  // After any mark on its way in, so a load that just committed counts.
+  // A frame-only rule in place of the whole tab's leaves the page as the real browser too, so
+  // it loads again as one. A page real phone mode's tab followed to stays, its frame's rule
+  // the same. After any mark on its way in, so a load that just committed counts.
   await marking;
-  const reload = (!ua || ua.frame === true) && url !== undefined && (await uaLoaded()).has(tabId);
+  const shrinks = ua?.frame === true && had !== undefined && had.ua.frame !== true;
+  // Only the rule for this page's own host: a page the tab just followed to, which hands its
+  // knobs a moment after it starts, is not one the old host's rule served.
+  const own = had !== undefined && had.host === host;
+  const reload = (!ua || shrinks) && own && url !== undefined && (await uaLoaded()).has(tabId);
   if (reload) {
     await markUaLoaded(tabId, false);
   }
@@ -581,6 +602,13 @@ async function follow(tabId: number, state: Carry) {
     return;
   }
   handoffs.set(tabId, { origin: to.origin, state, until: Date.now() + HANDOFF_MS, url: to.href });
+  const frameUa = (await uaTabs()).get(tabId)?.ua;
+  if (frameUa?.frame) {
+    followUas.set(tabId, { host: to.hostname, ua: frameUa });
+    await ruleUas();
+    // One that never commits leaves no rule behind.
+    setTimeout(() => unfollowUa(tabId), HANDOFF_MS);
+  }
   await chrome.tabs.update(tabId, { url: to.href });
 }
 
@@ -632,6 +660,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     // The debugger went with the tab.
   });
   void markUaLoaded(tabId, false);
+  unfollowUa(tabId);
   forgetReopen(tabId);
   bypassing.delete(tabId);
   firstLoads.delete(tabId);

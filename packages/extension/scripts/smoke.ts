@@ -110,6 +110,8 @@ addEventListener('message', (event) => {
 </script>`;
 // How many times the server sent each next page of the frame-src pages.
 const nextLoads = new Map<string, number>();
+// The user agent of the last page load of /phone on each host, as the tab's own.
+const phoneLoads = new Map<string, string>();
 // How many times the server sent each kind's page.
 const workerLoads = new Map<string, number>();
 // The user agent and client hints of the last request of each kind under /ua/: the page as a
@@ -306,6 +308,9 @@ self.addEventListener('fetch', (event) => {
   // request that comes as an iPhone goes to the same page on m.knobs.localhost, which only its
   // own origin may frame. A device's frame sends its browser in real phone mode alone.
   if (path === '/phone') {
+    if (request.headers['sec-fetch-dest'] === 'document') {
+      phoneLoads.set(request.headers.host ?? '', request.headers['user-agent'] ?? '');
+    }
     if (
       request.headers.host?.startsWith('www.knobs.localhost:') &&
       request.headers['user-agent']?.includes('iPhone')
@@ -1670,10 +1675,17 @@ async function firstOpen() {
     await ready(tab);
     const followed = await opens('devknobs smoke');
     const device = await tab.evaluate(() => window.devknobs!.getState().device);
-    log('first open followed', { ...followed, device, url: tab.url() });
+    const followedAs = phoneLoads.get(`m.knobs.localhost:${port}`) ?? '';
+    log('first open followed', { ...followed, device, followedAs, url: tab.url() });
     assert.equal(device, 'iphone-18-pro');
+    // The tab's own load of the mobile host went as the iPhone, as the frame's did.
+    assert.match(followedAs, /iPhone/);
     assert.equal(followed.text, 'devknobs smoke');
-    await unframe();
+    // The mobile host served this page to the iPhone, so it loads again as Chrome once the
+    // device goes.
+    phoneLoads.delete(`m.knobs.localhost:${port}`);
+    await setAndReload(tab, { device: 'none', frame: false, width: 'full' });
+    assert.doesNotMatch(phoneLoads.get(`m.knobs.localhost:${port}`) ?? '', /iPhone/);
   } finally {
     await first.close();
     await rm(own, { force: true, recursive: true });

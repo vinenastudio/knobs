@@ -159,6 +159,19 @@ describe('uaRules', () => {
     });
   });
 
+  test("following real phone mode's frame, the tab's one load of the new host goes as the device", () => {
+    const iphone = { ...uaOf('iphone-safari'), frame: true as const };
+    const rules = uaRules(
+      new Map([[7, { host: 'm.example.com', ua: iphone }]]),
+      counter(),
+      new Map([[7, { host: 'm.example.com', ua: iphone }]]),
+    );
+    expect(rules.map(({ condition }) => condition)).toEqual([
+      { requestDomains: ['m.example.com'], resourceTypes: ['main_frame'], tabIds: [7] },
+      { requestDomains: ['m.example.com'], resourceTypes: ['sub_frame'], tabIds: [7] },
+    ]);
+  });
+
   test('a device in the frame with real phone mode off sets no rule at all', () => {
     expect(uaRules(new Map(), counter())).toEqual([]);
   });
