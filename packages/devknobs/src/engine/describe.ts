@@ -242,7 +242,7 @@ function knobs(): { [K in Exclude<keyof DevknobsState, Skipped>]: Spec } {
             oneOf(DEV_ICONS),
           ),
           realPhone: field(
-            "Real phone mode. true has a host that sends requests as another browser, the extension, send the device's user agent to servers for the frame's page loads, so a site serves its mobile site; some sites may sign you out. false sends none for a device in the frame. The extension keeps it as one setting for every tab and site, from the user's click on the panel's switch only; set here, it holds for this tab alone.",
+            "Real phone mode. true has a host that sends requests as another browser, the extension, send the device's user agent to servers for the frame's page loads, so a site serves its mobile site; some sites may sign you out. false sends none for a device in the frame. The extension saves a change made during a user gesture, such as a click (the panel's switch included), for every tab and site; a change a script makes without one stays in this tab.",
             flag,
           ),
         },
