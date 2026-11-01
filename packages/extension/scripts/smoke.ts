@@ -302,13 +302,13 @@ self.addEventListener('fetch', (event) => {
     response.end();
     return;
   }
-  // As a site that sends a phone's browser to its mobile host: on www.knobs.localhost, a
-  // request that comes as an iPhone goes to the same page on m.knobs.localhost, which only its
-  // own origin may frame.
+  // As a site that sends a phone to its mobile host: on www.knobs.localhost, a frame's load
+  // goes to the same page on m.knobs.localhost, which only its own origin may frame. A device's
+  // frame sends no phone user agent now, so this one goes by the load being a frame's.
   if (path === '/phone') {
     if (
       request.headers.host?.startsWith('www.knobs.localhost:') &&
-      request.headers['user-agent']?.includes('iPhone')
+      request.headers['sec-fetch-dest'] === 'iframe'
     ) {
       response.statusCode = 302;
       response.setHeader('location', `http://m.knobs.localhost:${port}/phone`);
@@ -1645,7 +1645,7 @@ async function firstOpen() {
     assert.equal(debuggerOn, false, 'no debugger');
     await unframe();
 
-    // (d) As an iPhone, the frame's page on www.knobs.localhost is sent to m.knobs.localhost,
+    // (d) The frame's page on www.knobs.localhost is sent to m.knobs.localhost,
     // of the same site: the tab follows.
     await tab.goto(`http://www.knobs.localhost:${port}/phone`);
     await ready(tab);
@@ -2224,17 +2224,25 @@ async function preferPage() {
   }
 }
 
+// devknobs' frame on the page, as a page script reads it.
+const frameOf = () =>
+  document
+    .querySelector('[data-devknobs="viewport"]')
+    ?.shadowRoot?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]');
 const UA_KINDS = ['page', 'fetch', 'image', 'worker-fetch'];
+// What the tab itself requests: a service worker's fetches belong to no tab, and keep Chrome's own.
+const TAB_KINDS = ['page', 'fetch', 'image'];
 const hints = (headers: Record<string, string> | undefined) =>
   Object.keys(headers ?? {}).filter((name) => name.startsWith('sec-ch-ua'));
 const agentOf = (id: string) => PRESETS.ua.find((preset) => preset.id === id)!.userAgent;
 
 /**
- * The user agent sent to servers. With the ua knob on, the tab's requests (its page, a fetch, an
- * image, its frame) and what the page's service worker fetches carry the preset's user agent and
- * client hints, in place of Chrome's own, with no debugger and in-page too; with the debugger on
- * the tab, its scripts and workers read the same. Another tab keeps Chrome's own, and system puts
- * it back, rules gone.
+ * The user agent sent to servers. With the ua knob on, the tab's requests to its own host (its
+ * page, a fetch, an image, its frame) carry the preset's user agent and client hints, in place of
+ * Chrome's own, with no debugger and in-page too; with the debugger on the tab, its scripts and
+ * workers read the same. The page's service worker, another tab and another host keep Chrome's
+ * own. A device in the frame sends none: only the frame's page reads its browser. System puts it
+ * back, rules gone.
  */
 async function uaRequests() {
   const own = await mkdtemp(join(tmpdir(), 'knobs-smoke-ua-'));
@@ -2324,24 +2332,31 @@ async function uaRequests() {
       log(`ua: rules, ${mode}`, rules);
       assert.deepEqual(
         rules.map(({ host, tabIds }) => ({ host, tabIds })),
-        [
-          { host: undefined, tabIds: [tabId] },
-          { host: ['127.0.0.1'], tabIds: [-1] },
-        ],
+        [{ host: ['127.0.0.1'], tabIds: [tabId] }],
       );
       const seen = await probe(tab);
       log(`ua: iphone safari, ${mode}`, seen);
-      for (const kind of UA_KINDS) {
+      for (const kind of TAB_KINDS) {
         assert.equal(seen[kind]?.['user-agent'], iphone, `${kind} goes as an iPhone, ${mode}`);
         assert.deepEqual(hints(seen[kind]), [], `${kind} has no client hints, ${mode}`);
       }
+      assert.equal(
+        seen['worker-fetch']?.['user-agent'],
+        chromeAgent,
+        `the worker goes as Chrome, ${mode}`,
+      );
     };
     const androidChrome = async (mode: string) => {
       await set(tab, { ua: { preset: 'android-chrome' } });
       await rulesFor(android);
       const seen = await probe(tab);
       log(`ua: android chrome, ${mode}`, seen);
-      for (const kind of UA_KINDS) {
+      assert.equal(
+        seen['worker-fetch']?.['user-agent'],
+        chromeAgent,
+        `the worker goes as Chrome, ${mode}`,
+      );
+      for (const kind of TAB_KINDS) {
         assert.equal(seen[kind]?.['user-agent'], android, `${kind} goes as Android, ${mode}`);
         assert.equal(seen[kind]?.['sec-ch-ua-mobile'], '?1');
         assert.equal(seen[kind]?.['sec-ch-ua-platform'], '"Android"');
@@ -2413,27 +2428,59 @@ async function uaRequests() {
     await iphoneSafari('in-page');
     await androidChrome('in-page');
 
-    // A device drawn around the page: the frame's load goes as its iPhone.
+    // A device drawn around the page: nothing goes to servers as its iPhone, the frame's page
+    // reads it, and the page around the frame stays Chrome.
+    await set(tab, { ua: { preset: 'system' } });
+    await rulesFor(null);
     uaSeen.delete('frame');
     await set(tab, { device: 'iphone-18-pro', mock: true });
-    await tab.waitForFunction(
-      () =>
-        document
-          .querySelector('[data-devknobs="viewport"]')
-          ?.shadowRoot?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')
-          ?.contentWindow?.devknobs !== undefined,
-    );
+    await tab.waitForFunction(`(${frameOf.toString()})()?.contentWindow?.devknobs !== undefined`);
     await tab.evaluate(() => window.devknobs!.ready());
+    assert.equal(await tab.evaluate(() => window.devknobs!.getState().ua.preset), 'iphone-safari');
+    assert.deepEqual(await uaRules(), [], 'a device in the frame sets no rule');
     log('ua: frame of an iPhone 18 Pro', uaSeen.get('frame'));
-    assert.equal(uaSeen.get('frame')?.['user-agent'], iphone);
-    assert.deepEqual(hints(uaSeen.get('frame')), []);
-    // Its browser changed with the frame up: the frame loads again as the new one.
+    assert.equal(uaSeen.get('frame')?.['user-agent'], chromeAgent);
+    const reads = await tab.evaluate(
+      `({ top: navigator.userAgent, frame: (${frameOf.toString()})().contentWindow.navigator.userAgent })`,
+    );
+    log('ua: framed, read', reads);
+    assert.deepEqual(reads, { frame: iphone, top: chromeAgent });
+    uaSeen.clear();
+    await tab.evaluate(async () => {
+      await fetch('/ua/fetch', { cache: 'no-store' });
+      await fetch('/ua/via-worker', { cache: 'no-store' });
+    });
+    log('ua: framed, top page', Object.fromEntries(uaSeen));
+    assert.equal(uaSeen.get('fetch')?.['user-agent'], chromeAgent);
+    assert.equal(uaSeen.get('worker-fetch')?.['user-agent'], chromeAgent);
+    const second = await browser.newPage();
+    await second.goto(`${url}ua/page`);
+    await ready(second);
+    const secondSeen = await probe(second);
+    log('ua: framed, second tab', secondSeen);
+    for (const kind of UA_KINDS) {
+      assert.equal(
+        secondSeen[kind]?.['user-agent'],
+        chromeAgent,
+        `${kind} of a second tab goes as Chrome`,
+      );
+    }
+    await second.close();
+    // A browser the ua knob picks itself goes to the frame's load.
     await set(tab, { ua: { preset: 'android-chrome' } });
     for (let tries = 0; uaSeen.get('frame')?.['user-agent'] !== android && tries < 100; tries++) {
       await tab.waitForTimeout(20);
     }
     log('ua: frame after a change', uaSeen.get('frame'));
     assert.equal(uaSeen.get('frame')?.['user-agent'], android);
+    // Another host keeps Chrome's own.
+    uaSeen.clear();
+    await tab.goto(`${otherOrigin}ua/page`);
+    await ready(tab);
+    log('ua: another host', uaSeen.get('page'));
+    assert.equal(uaSeen.get('page')?.['user-agent'], chromeAgent);
+    await tab.goto(pageUrl);
+    await ready(tab);
     await set(tab, { device: 'none', dpr: 'system', height: 'full', mock: false, width: 'full' });
     await tab.waitForFunction(() => document.querySelector('[data-devknobs="viewport"]') === null);
 

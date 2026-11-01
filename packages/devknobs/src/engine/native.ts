@@ -8,7 +8,7 @@ import type {
   UaValue,
 } from "../types";
 import { layoutOf } from "./browserui";
-import { deviceOf, formId } from "./devices";
+import { deviceOf, formId, formOf } from "./devices";
 import { knobFrame } from "./frame";
 import { mockOf } from "./mock";
 import { type UaPreset, uaPreset, userAgentOf } from "./ua";
@@ -249,12 +249,24 @@ export function drive(driver: NativeDriver, state: DevknobsState): void {
   const { scheme, motion, contrast, transparency } = state;
   hand(driver, "media", { scheme, motion, contrast, transparency });
   if (driver.viewport) hand(driver, "viewport", nativeViewport(state));
-  driveUa(driver, state);
+  driveUa(driver, state, driver.viewport !== undefined && nativeViewport(state) !== null);
+}
+
+/**
+ * The browser a host sends requests as: the ua knob, unless it is the one the
+ * device brought and the device stays in the frame. The frame emulates that
+ * browser in its page alone, so a site's session never meets two browsers at
+ * once. A host sizing the whole tab as the device (`sized`) sends it too.
+ */
+export function hostUa(state: DevknobsState, sized: boolean): NativeUa | null {
+  const brought = [deviceOf(state.device)?.ua, formOf(state.device, state.posture)?.ua];
+  if (!sized && brought.includes(state.ua.preset)) return null;
+  return nativeUa(state.ua);
 }
 
 /** Hand the driver the ua knob, which it takes with its switch off too. */
-export function driveUa(driver: NativeDriver, state: DevknobsState): void {
-  if (driver.ua) hand(driver, "ua", nativeUa(state.ua));
+export function driveUa(driver: NativeDriver, state: DevknobsState, sized = false): void {
+  if (driver.ua) hand(driver, "ua", hostUa(state, sized));
 }
 
 /**

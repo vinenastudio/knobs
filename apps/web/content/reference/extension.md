@@ -42,7 +42,7 @@ the npm package emulates every knob inside the page: it patches `matchMedia`, re
 - **offline** (the network knob's `online` field): `Network.emulateNetworkConditions` with `offline: true`. requests fail and `navigator.onLine` is false. the connection type and save data stay in the page.
 - **preferences**: color scheme, contrast, reduced motion and reduced transparency, through `Emulation.setEmulatedMedia`.
 - **viewport**: a plain width, height or ratio, or a device with nothing drawn around the page (mock off, browser off, not a foldable, no vision filter, zoom at fit, frame knob off, not docked), is the tab's own viewport with no frame: `Emulation.setDeviceMetricsOverride` (the size, the ratio, `mobile` for a phone or tablet, whose screen is its viewport), touch emulation with 5 touch points, and touch events from the mouse for the touch pointer knob. the page keeps its state: nothing reloads. one bigger than the tab is scaled down to fit it, and redrawn when the window resizes. anything drawn around the page keeps devknobs' frame exactly as before, and the override is cleared meanwhile, so the two never stack.
-- **user agent** (the ua knob, a device's browser too): what servers see, with no debugger, in in-page mode too. see [what servers see](#what-servers-see). the page's `navigator` keeps devknobs' patches as with the npm package.
+- **user agent** (the ua knob, and a device that is the whole tab): what servers see, with no debugger, in in-page mode too. see [what servers see](#what-servers-see). the page's `navigator` keeps devknobs' patches as with the npm package.
 
 the debugger attaches to a tab when text size, offline, the preferences or the viewport leaves its default and detaches when all are back (reset in the panel does that). overrides survive navigation in the tab while attached, so a reload paints with them from the first frame. should a command fail, the tab goes back to its own settings and the debugger leaves, so the next change starts clean.
 
@@ -50,7 +50,9 @@ a tab's knobs win over the page's stored ones, so a page on another origin in th
 
 ## what servers see
 
-with the ua knob on a preset or a custom string, every request of the tab carries it: the page, its fetches, images, scripts, websockets and the device's frame. a session rule (`declarativeNetRequest`, for that tab only) sets `User-Agent` and the client hints:
+a device picked in the frame sends nothing to servers: its browser lives in the frame's page alone (`navigator.userAgent`, `userAgentData` and `platform`), the page around the frame stays Chrome, and a responsive site still lays out by the frame's width. so a site never sees one session as two browsers at once, which some sites, LinkedIn among them, answer by signing you out.
+
+servers see another browser only when you pick one in the ua knob yourself, or when the viewport makes the whole tab the device (a device with nothing drawn around it, in real mode). then the tab's requests to its page's own host carry it: the page, its fetches, images, scripts, websockets and the frame. a session rule (`declarativeNetRequest`, for that tab and host only) sets `User-Agent` and the client hints:
 
 | preset                                                        | `Sec-CH-UA`                                                  | `Sec-CH-UA-Mobile` | `Sec-CH-UA-Platform` |
 | ------------------------------------------------------------- | ------------------------------------------------------------ | ------------------ | -------------------- |
@@ -62,7 +64,7 @@ with the ua knob on a preset or a custom string, every request of the tab carrie
 
 the high entropy hints (`-Arch`, `-Bitness`, `-Form-Factors`, `-Full-Version`, `-Full-Version-List`, `-Model`, `-Platform-Version`, `-WoW64`) are always removed: Chrome sends them only to a site that asks, which a rule cannot tell. the page's scripts still read them from devknobs' `navigator.userAgentData`.
 
-- what the page's service worker fetches belongs to no tab, so while a tab has the ua knob on, one more rule does the same for that host's service worker. two tabs on one host with different ones: the last set wins there.
+- what the page's service worker fetches belongs to no tab and serves every tab of the host, so it keeps Chrome's own, and so do other tabs and other hosts. no rule writes, removes or changes a cookie, `Origin`, `Referer` or a `Sec-Fetch-*` header.
 - while the debugger is on the tab, it sets the same user agent, platform and, for a Chromium preset, its client hint metadata, so dedicated workers read it too. it is cleared before the debugger leaves.
 - the device's frame loads, and loads again on a change, only once the rules are in. the tab's own page does not reload: reload it to send the new user agent with the page's load.
 - the rules go with the tab, or once the page's ua knob goes back to system.
@@ -133,7 +135,7 @@ the content scripts run on every page (`<all_urls>`, at `document_start`), so th
 ## limits
 
 - Chrome and Edge only (`chrome.debugger`).
-- the user agent goes to the whole tab, the page under the device's frame too, and to its host's service worker in every tab. servers can still tell Chrome by other means: its TLS and HTTP/2 fingerprints, the order of its headers, and features a script tries. a site that asks for the high entropy client hints gets none. without the debugger, a worker of the page reads Chrome's own `navigator.userAgent`; with it on a Safari preset, a worker still has a `navigator.userAgentData`, empty, where Safari has none.
+- a device in the frame sends no user agent: a site that picks its mobile site by the user agent alone serves its desktop one, laid out at the frame's width. the ua knob, or a device that is the whole tab, sends one to the tab's own host, never to its service worker or other tabs. servers can still tell Chrome by other means: its TLS and HTTP/2 fingerprints, the order of its headers, and features a script tries. a site that asks for the high entropy client hints gets none. without the debugger, a worker of the page reads Chrome's own `navigator.userAgent`; with it on a Safari preset, a worker still has a `navigator.userAgentData`, empty, where Safari has none.
 - while a knob is on in real mode, Chrome shows its "started debugging this browser" bar. in-page mode has none, unless you press "load past the service worker", which turns the debugger on until the frame closes.
 - while devknobs' frame is open in a tab, every frame of the page's own host in that tab loses `X-Frame-Options`, and its CSP where its `frame-ancestors` refuses the page, not only devknobs' frame: a rule cannot tell them apart. a frame the page sandboxes through its CSP is not sandboxed then. with no frame of devknobs open, nothing is removed.
 - where its `frame-ancestors` refuses the page, the framed copy of a page loses its whole Content Security Policy, not only `frame-ancestors`: a rule cannot edit part of a header. a policy with `frame-ancestors 'self'`, or with no `frame-ancestors`, stays; one that lists hosts but not `'self'` goes. the page in the tab itself keeps it.

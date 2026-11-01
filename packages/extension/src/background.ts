@@ -14,7 +14,7 @@ import {
   type TabMessage,
 } from './messages.ts';
 import { FrameLoads } from './refusal.ts';
-import { RESOURCE_TYPES, uaCommand, uaHeaders } from './ua.ts';
+import { uaCommand, uaRules } from './ua.ts';
 
 const PROTOCOL_VERSION = '1.3';
 const key = (tabId: number) => `tab:${tabId}`;
@@ -414,10 +414,12 @@ async function pageLoads(tabId: number, url: string) {
   );
 }
 
-// The user agent the ua knob, or a device's browser, sends to servers, with no debugger: a rule
-// per tab sets it and its client hints on every request of the tab, and one per host on what
-// that host's service worker fetches, which belongs to no tab. The ids are any free ones, since
-// the framing rules take tab ids and free ids too: these are told apart by their request headers.
+// The user agent the ua knob, or a device sizing the whole tab, sends to servers, with no
+// debugger: a rule per tab sets it and its client hints on the tab's requests to its own host
+// only. No rule touches a service worker's fetches, which belong to no tab and serve every tab
+// of the host: a session seen as two browsers at once gets signed out. A device in devknobs'
+// frame sends nothing; the frame emulates its browser in the page. The ids are any free ones,
+// since the framing rules take tab ids and free ids too: these are told apart by their request headers.
 const UA_KEY = 'ua';
 let uaTabsKept: Promise<Map<number, { host: string | null; ua: NativeUa }>> | null = null;
 
@@ -432,21 +434,6 @@ function uaTabs(): Promise<Map<number, { host: string | null; ua: NativeUa }>> {
 
 function isUaRule({ action }: Pick<chrome.declarativeNetRequest.Rule, 'action'>): boolean {
   return action.requestHeaders !== undefined;
-}
-
-function uaRule(
-  ua: NativeUa,
-  condition: chrome.declarativeNetRequest.RuleCondition,
-  id: number,
-): chrome.declarativeNetRequest.Rule {
-  return {
-    action: {
-      requestHeaders: uaHeaders(ua),
-      type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
-    },
-    condition: { ...condition, resourceTypes: [...RESOURCE_TYPES] },
-    id,
-  };
 }
 
 /** Put every tab's user agent rules in place of the last ones. Resolves once they are in. */
@@ -467,28 +454,8 @@ function ruleUas(): Promise<void> {
         } while (taken.has(last));
         return last;
       };
-      // Two tabs on one host with different ones: the last set wins on its service worker.
-      const hosts = new Map<string, NativeUa>();
-      for (const { host, ua } of tabs.values()) {
-        if (host) {
-          hosts.set(host, ua);
-        }
-      }
       await chrome.declarativeNetRequest.updateSessionRules({
-        addRules: [
-          ...[...tabs].map(([tabId, { ua }]) => uaRule(ua, { tabIds: [tabId] }, free())),
-          ...[...hosts].map(([host, ua]) =>
-            uaRule(
-              ua,
-              {
-                initiatorDomains: [host],
-                requestDomains: [host],
-                tabIds: [chrome.tabs.TAB_ID_NONE],
-              },
-              free(),
-            ),
-          ),
-        ],
+        addRules: uaRules(tabs, free),
         removeRuleIds: rules.filter(isUaRule).map(({ id }) => id),
       });
     });

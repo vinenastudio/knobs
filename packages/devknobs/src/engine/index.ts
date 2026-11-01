@@ -132,9 +132,10 @@ export function applyState(next: DevknobsState): void {
   if (active && !inFrame) drive(active, state);
   else if (native && !inFrame) driveUa(native, state);
   spacing.apply(state.spacing);
-  ua.apply(state.ua);
   // A size the driver sets brings no frame up.
   const sized = inFrame ? state : framing(state, active);
+  // The page around the frame stays the real browser: the copy inside is the device.
+  ua.apply(!inFrame && needsFrame(sized) ? DEFAULT_STATE.ua : state.ua);
   width.apply(sized);
   // While the frame is up, the copy inside it looks at the page at that width.
   overflow.apply(state.overflow && !needsFrame(sized));

@@ -103,3 +103,34 @@ export function uaCommand(ua: NativeUa | null): Command {
     },
   };
 }
+
+/** A tab's user agent, as the background keeps it, with the host of its page. */
+export interface TabUa {
+  host: string | null;
+  ua: NativeUa;
+}
+
+/**
+ * The rules that send each tab's user agent: on that tab's requests to its page's own host
+ * alone, never on a service worker's, which no tab owns. A tab with no host gets none.
+ */
+export function uaRules(
+  tabs: ReadonlyMap<number, TabUa>,
+  free: () => number,
+): Array<chrome.declarativeNetRequest.Rule> {
+  return [...tabs].flatMap(([tabId, { host, ua }]) =>
+    host
+      ? [
+          {
+            action: { requestHeaders: uaHeaders(ua), type: 'modifyHeaders' as const },
+            condition: {
+              requestDomains: [host],
+              resourceTypes: [...RESOURCE_TYPES],
+              tabIds: [tabId],
+            },
+            id: free(),
+          },
+        ]
+      : [],
+  );
+}

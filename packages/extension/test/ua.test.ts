@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import { type NativeUa, PRESETS } from '@vinena/knobs';
-import { CLIENT_HINTS, type HeaderChange, uaCommand, uaHeaders } from '../src/ua.ts';
+import {
+  CLIENT_HINTS,
+  type HeaderChange,
+  RESOURCE_TYPES,
+  uaCommand,
+  uaHeaders,
+  uaRules,
+} from '../src/ua.ts';
 
 const UA_PRESETS = PRESETS.ua;
 
@@ -116,5 +123,55 @@ describe('uaCommand', () => {
         wow64: false,
       },
     });
+  });
+});
+
+const counter = () => {
+  let id = 100;
+  return () => (id += 1);
+};
+
+describe('uaRules', () => {
+  test("a tab's rule takes only that tab's requests to its page's own host", () => {
+    const iphone = uaOf('iphone-safari');
+    const rules = uaRules(new Map([[7, { host: 'example.com', ua: iphone }]]), counter());
+    expect(rules).toEqual([
+      {
+        action: { requestHeaders: uaHeaders(iphone), type: 'modifyHeaders' },
+        condition: {
+          requestDomains: ['example.com'],
+          resourceTypes: [...RESOURCE_TYPES],
+          tabIds: [7],
+        },
+        id: 101,
+      },
+    ]);
+  });
+
+  test("no rule reaches a service worker's requests, nor a tab with no host", () => {
+    const rules = uaRules(
+      new Map([
+        [7, { host: 'example.com', ua: uaOf('iphone-safari') }],
+        [8, { host: null, ua: uaOf('android-chrome') }],
+      ]),
+      counter(),
+    );
+    expect(rules.map(({ condition }) => condition.tabIds)).toEqual([[7]]);
+    expect(rules.every(({ condition }) => !condition.tabIds?.includes(-1))).toBe(true);
+  });
+
+  test('no header a session rides on is touched', () => {
+    const rules = uaRules(
+      new Map([[7, { host: 'example.com', ua: uaOf('iphone-safari') }]]),
+      counter(),
+    );
+    const headers = rules
+      .flatMap(({ action }) => action.requestHeaders ?? [])
+      .map(({ header }) => header);
+    for (const header of ['cookie', 'set-cookie', 'origin', 'referer']) {
+      expect(headers).not.toContain(header);
+    }
+    expect(headers.some((header) => header.startsWith('sec-fetch-'))).toBe(false);
+    expect(rules.every(({ action }) => action.responseHeaders === undefined)).toBe(true);
   });
 });
