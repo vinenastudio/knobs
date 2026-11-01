@@ -2224,6 +2224,9 @@ async function preferPage() {
   }
 }
 
+// Real phone mode as a tab's devknobs has it, once it is `on`.
+const realPhoneIn = (page: Page, on: boolean) =>
+  page.waitForFunction((on) => window.devknobs?.getState().panel.realPhone === on, on);
 // devknobs' frame on the page, as a page script reads it.
 const frameOf = () =>
   document
@@ -2474,9 +2477,15 @@ async function uaRequests() {
         `${kind} of a second tab goes as Chrome`,
       );
     }
-    // Real phone mode: the frame's page loads go as the iPhone, nothing else does.
+    // Real phone mode: the frame's page loads go as the iPhone, nothing else does. It is one
+    // setting for every tab: a tab on another host turns with it.
+    const elsewhere = await browser.newPage();
+    await elsewhere.goto(`${otherOrigin}ua/page`);
+    await ready(elsewhere);
     uaSeen.delete('frame');
     await set(tab, { panel: { realPhone: true } });
+    await realPhoneIn(elsewhere, true);
+    log('ua: real phone mode, another host', 'on there too');
     for (let tries = 0; uaSeen.get('frame')?.['user-agent'] !== iphone && tries < 200; tries++) {
       await tab.waitForTimeout(25);
     }
@@ -2509,7 +2518,9 @@ async function uaRequests() {
       );
     }
     uaSeen.clear();
-    await set(tab, { panel: { realPhone: false } });
+    await set(elsewhere, { panel: { realPhone: false } });
+    await realPhoneIn(tab, false);
+    await elsewhere.close();
     await rulesFor(null);
     // The frame loads again as Chrome; the next change waits for it.
     for (

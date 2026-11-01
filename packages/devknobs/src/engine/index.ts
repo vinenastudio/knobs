@@ -93,7 +93,10 @@ function driver(): NativeDriver | null {
 }
 
 export function applyState(next: DevknobsState): void {
+  const before = state.panel.realPhone;
   state = inFrame ? framed(next) : next;
+  // The host keeps real phone mode for every tab: it hears each turn the page makes.
+  if (running && !inFrame && native?.realPhone && before !== state.panel.realPhone) native.realPhone(state.panel.realPhone);
   const active = driver();
   // What a native driver takes stays out of the page.
   const page = inPage(state, active);
@@ -161,7 +164,7 @@ export function setNative(on: boolean, note?: string | null): void {
 
 /** Can the host send requests as another browser, so real phone mode does something? */
 export function hostSendsUa(): boolean {
-  return native?.ua !== undefined;
+  return native?.ua !== undefined && native.realPhone !== undefined;
 }
 
 /** The driver's switch for the panel: null where the host gives none. */

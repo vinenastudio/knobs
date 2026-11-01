@@ -258,6 +258,11 @@ const driver: NativeDriver = {
     knobs = { ...knobs, offline };
     send();
   },
+  realPhone: (on) => {
+    if (top) {
+      void ask({ on, type: 'realPhone' });
+    }
+  },
   refused,
   setting: {
     change: (on) => toBridge({ on, type: 'native' }),
@@ -416,6 +421,10 @@ function onMessage(event: Event) {
     setPrefer(message.prefer);
   } else if (message.type === 'toggle') {
     toggle();
+  } else if (message.type === 'realPhone') {
+    if (getState().panel.realPhone !== message.on) {
+      setState({ panel: { realPhone: message.on } });
+    }
   } else if (message.type === 'carry') {
     // The tab follows its frame to another origin: the page there takes these knobs.
     void ask({ state: { ...getState() }, type: 'carry' });

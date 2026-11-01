@@ -5,6 +5,7 @@ import {
   LOAD_FRAME,
   type PageMessage,
   PREFER_KEY,
+  REAL_PHONE_KEY,
   type Question,
   readPageMessage,
   readPrefer,
@@ -173,5 +174,16 @@ chrome.storage.onChanged.addListener((changes, area) => {
   const change = changes[PREFER_KEY];
   if (area === 'local' && change) {
     toPage({ prefer: readPrefer(change.newValue), type: 'prefer' });
+  }
+});
+
+// Real phone mode, the same way: one setting for every tab and site.
+chrome.storage.local.get(REAL_PHONE_KEY, (stored) =>
+  toPage({ on: stored[REAL_PHONE_KEY] === true, type: 'realPhone' }),
+);
+chrome.storage.onChanged.addListener((changes, area) => {
+  const change = changes[REAL_PHONE_KEY];
+  if (area === 'local' && change) {
+    toPage({ on: change.newValue === true, type: 'realPhone' });
   }
 });

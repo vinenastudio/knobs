@@ -481,7 +481,6 @@ describe("the place kept across sessions", () => {
       edge: "bottom",
       tab: "none",
       docked: false,
-      realPhone: false,
     });
     expect(parse(null, text).panel).toEqual({
       ...DEFAULT_STATE.panel,
@@ -491,6 +490,9 @@ describe("the place kept across sessions", () => {
       edge: "bottom",
       tab: "none",
     });
+    // Real phone mode is the host's to keep, never the place's, and an old place's is ignored.
+    const old = JSON.stringify({ ...JSON.parse(text), realPhone: true });
+    expect(parse(null, old).panel.realPhone).toBe(false);
   });
 
   test("keeps the pin with the place, for a new session to start pinned", () => {

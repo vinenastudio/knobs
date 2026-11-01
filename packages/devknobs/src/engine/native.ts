@@ -106,6 +106,13 @@ export interface NativeDriver {
    * reach. False leaves it to devknobs.
    */
   load?: (frame: HTMLIFrameElement, url: string) => boolean;
+  /**
+   * Told each time real phone mode (`panel.realPhone`) turns, from the panel
+   * or `setState()`, for the host to keep as one setting for every tab and
+   * site; the host hands it back with `setState`. Real phone mode is offered
+   * only where the host has this and `ua`.
+   */
+  realPhone?: (on: boolean) => void;
 }
 
 /** Why the frame's page was refused, as the host knows it. */

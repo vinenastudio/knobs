@@ -200,7 +200,8 @@ export interface PanelValue {
   /**
    * Real phone mode: a host that sends requests as another browser sends the
    * device's to servers for the frame's page loads, so a site serves its
-   * mobile site. Off, a device in the frame sends none. Kept across sessions.
+   * mobile site. Off, a device in the frame sends none. The host keeps it as
+   * one setting for every tab and site.
    */
   realPhone: boolean;
   /**

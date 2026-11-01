@@ -261,10 +261,7 @@ export function createPanel(options: PanelOptions = {}): Panel {
     setDevIcon: (on) =>
       engine.setState({ panel: { devIcon: devIconFor(on, window.location.hostname) } }),
     realPhone: engine.hostSendsUa(),
-    setRealPhone: (on) => {
-      engine.setState({ panel: { realPhone: on } });
-      engine.keepPlace();
-    },
+    setRealPhone: (on) => engine.setState({ panel: { realPhone: on } }),
     native: engine.nativeSwitch()?.setting ?? null,
     setNative: (on) => {
       // The host hears it first, so it is ready for what the driver hands it next.

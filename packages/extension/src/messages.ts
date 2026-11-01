@@ -33,7 +33,8 @@ export type Response = {
  * see the next one, `frame` says the frame opened or went, `bypass` has the
  * tab's loads skip service workers while it stays open, and `ua` is the user
  * agent the tab's requests carry, null for the browser's own. `prefer` keeps
- * whose copy of devknobs runs the panel on a page with its own, for every site.
+ * whose copy of devknobs runs the panel on a page with its own, for every site,
+ * and `realPhone` keeps real phone mode, for every tab and site.
  * `carry` hands the page's knobs on, as the tab follows its frame to another
  * origin the service worker saw it land on. `id` pairs the answer.
  */
@@ -44,6 +45,7 @@ export type Ask =
   | { type: 'bypass' }
   | { type: 'ua'; ua: NativeUa | null }
   | { prefer: PreferValue; type: 'prefer' }
+  | { on: boolean; type: 'realPhone' }
   | { state: Carry; type: 'carry' };
 export type Question = Ask & { id: number };
 
@@ -88,6 +90,12 @@ export type SystemMessage = { type: 'read-system' } | { media: SystemMedia; type
  */
 export const PREFER_KEY = 'prefer';
 
+/**
+ * In `chrome.storage.local`: real phone mode, one setting for every tab and site. The bridge
+ * reads it as the page starts and hands it on as it changes, in any tab.
+ */
+export const REAL_PHONE_KEY = 'realPhone';
+
 /** The preference as stored, the extension's copy where none is. */
 export function readPrefer(value: unknown): PreferValue {
   return value === 'page' ? 'page' : 'extension';
@@ -97,6 +105,7 @@ export function readPrefer(value: unknown): PreferValue {
 export type PageMessage =
   | TabMessage
   | { prefer: PreferValue; type: 'prefer' }
+  | { on: boolean; type: 'realPhone' }
   | (Answer & { id: number; type: 'answer' })
   | {
       base: string;
@@ -323,6 +332,9 @@ export function readPageMessage(value: unknown): PageRequest | null {
       return value.prefer === 'extension' || value.prefer === 'page'
         ? { id, prefer: value.prefer, type: 'prefer' }
         : null;
+    }
+    case 'realPhone': {
+      return typeof value.on === 'boolean' ? { id, on: value.on, type: 'realPhone' } : null;
     }
     case 'carry': {
       const state = readCarry(value.state);

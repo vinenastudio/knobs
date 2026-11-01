@@ -26,6 +26,15 @@ describe('detachMessage', () => {
 });
 
 describe('readPageMessage', () => {
+  test("passes real phone mode's turn, one setting for every tab", () => {
+    expect(readPageMessage({ id: 3, on: true, type: 'realPhone' })).toEqual({
+      id: 3,
+      on: true,
+      type: 'realPhone',
+    });
+    expect(readPageMessage({ id: 3, on: 'yes', type: 'realPhone' })).toBeNull();
+  });
+
   test('passes what devknobs sends', () => {
     expect(readPageMessage({ state: DEFAULT_STATE, type: 'set' })).toEqual({
       state: DEFAULT_STATE,

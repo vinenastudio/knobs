@@ -46,7 +46,7 @@ function recorder() {
     viewport: [] as (NativeViewport | null)[],
     ua: [] as (NativeUa | null)[],
   };
-  const driver: Required<Omit<NativeDriver, "setting" | "refused" | "framed" | "load">> = {
+  const driver: Required<Omit<NativeDriver, "setting" | "refused" | "framed" | "load" | "realPhone">> = {
     text: (value) => calls.text.push(value),
     offline: (value) => calls.offline.push(value),
     media: (value) => calls.media.push(value),
@@ -573,6 +573,16 @@ describe("the engine with a native driver", () => {
     expect(calls.ua.at(-1)?.uaPlatform).toBe("iOS");
     engine.stop();
     expect(calls.ua.at(-1)).toBeNull();
+  });
+
+  test("tells the host each turn of real phone mode, from the panel or setState, never on mount", () => {
+    const turns: boolean[] = [];
+    engine.start({ persist: false, native: { ...recorder().driver, realPhone: (on) => void turns.push(on) } });
+    expect(turns).toEqual([]);
+    engine.setState({ panel: { realPhone: true } });
+    engine.setState({ text: 20 });
+    engine.setState({ panel: { realPhone: false } });
+    expect(turns).toEqual([true, false]);
   });
 
   test("leaves the top page's navigator alone while a device's frame is up", () => {

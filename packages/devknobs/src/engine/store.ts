@@ -46,7 +46,7 @@ export const PLACE_KEY = "devknobs:place";
 export const PLACE_VERSION = 2;
 
 /** What of the panel outlives the session: its side, where it sits on it, and whether it is pinned there. */
-export type PanelPlace = Pick<PanelValue, "side" | "y" | "top" | "edge" | "tab" | "docked" | "realPhone">;
+export type PanelPlace = Pick<PanelValue, "side" | "y" | "top" | "edge" | "tab" | "docked">;
 
 /**
  * The rows a fresh panel lists, in the order they stand: the device, the
@@ -251,14 +251,13 @@ function placeOf(value: unknown, fallback: PanelPlace): PanelPlace {
     edge: oneOf(panel.edge, EDGES, own ? "none" : fallback.edge),
     tab: oneOf(panel.tab, EDGES, own ? "none" : fallback.tab),
     docked: bool(panel.docked, fallback.docked),
-    realPhone: bool(panel.realPhone, fallback.realPhone),
   };
 }
 
 /** The place of a state's panel, as `PLACE_KEY` keeps it. */
 export function placeText(state: DevknobsState): string {
-  const { side, y, top, edge, tab, docked, realPhone } = state.panel;
-  return JSON.stringify(stamped({ side, y, top, edge, tab, docked, realPhone }, PLACE_VERSION));
+  const { side, y, top, edge, tab, docked } = state.panel;
+  return JSON.stringify(stamped({ side, y, top, edge, tab, docked }, PLACE_VERSION));
 }
 
 /**
@@ -355,6 +354,8 @@ export function parse(json: string | null | undefined, place?: string | null): D
       handle: bool(panel.handle, DEFAULT_STATE.panel.handle),
       // A session stored before the ribbon shows it on a local host.
       devIcon: oneOf(panel.devIcon, DEV_ICONS, DEFAULT_STATE.panel.devIcon),
+      // The host hands the setting it keeps for every tab as the page loads.
+      realPhone: bool(panel.realPhone, DEFAULT_STATE.panel.realPhone),
       // A stored panel keeps its list as it is, an empty one too, and one stored
       // before rows stayed listed has none pinned. With no panel stored, a
       // fresh session, the default rows are listed.
