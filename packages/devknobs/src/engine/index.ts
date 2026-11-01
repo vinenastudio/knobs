@@ -68,6 +68,8 @@ let running = false;
 let native: NativeDriver | null = null;
 /** Why the driver last went off or on, for the panel, null with nothing to say. */
 let nativeNote: string | null = null;
+/** Real phone mode as the host last heard it, or the page started with it. */
+let toldRealPhone = false;
 /** Running inside the width knob's frame, where the page above drives the knobs. */
 let inFrame = false;
 let stopRelay: (() => void) | null = null;
@@ -93,10 +95,12 @@ function driver(): NativeDriver | null {
 }
 
 export function applyState(next: DevknobsState): void {
-  const before = state.panel.realPhone;
   state = inFrame ? framed(next) : next;
-  // The host keeps real phone mode for every tab: it hears each turn the page makes.
-  if (running && !inFrame && native?.realPhone && before !== state.panel.realPhone) native.realPhone(state.panel.realPhone);
+  // The host keeps real phone mode for every tab: it hears each turn made after the start.
+  if (running && !inFrame && native?.realPhone && toldRealPhone !== state.panel.realPhone) {
+    toldRealPhone = state.panel.realPhone;
+    native.realPhone(toldRealPhone);
+  }
   const active = driver();
   // What a native driver takes stays out of the page.
   const page = inPage(state, active);
@@ -279,7 +283,10 @@ export function start(options: EngineOptions = {}): void {
   width.onRefused(native?.refused ?? null);
   width.onFramed(native?.framed ?? null);
   width.onLoader(native?.load ?? null);
-  applyState(merge(stored ? load() : { ...DEFAULT_STATE }, options.state ?? {}));
+  const first = merge(stored ? load() : { ...DEFAULT_STATE }, options.state ?? {});
+  // What the page starts with is no turn of the host's setting.
+  toldRealPhone = first.panel.realPhone;
+  applyState(first);
   if (!inFrame) return;
   relay(overflow.overflowCount());
   stopRelay = overflow.onCount(relay);

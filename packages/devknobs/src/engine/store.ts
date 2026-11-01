@@ -354,8 +354,8 @@ export function parse(json: string | null | undefined, place?: string | null): D
       handle: bool(panel.handle, DEFAULT_STATE.panel.handle),
       // A session stored before the ribbon shows it on a local host.
       devIcon: oneOf(panel.devIcon, DEV_ICONS, DEFAULT_STATE.panel.devIcon),
-      // The host hands the setting it keeps for every tab as the page loads.
-      realPhone: bool(panel.realPhone, DEFAULT_STATE.panel.realPhone),
+      // The host keeps it for every tab and hands it over as the page loads: a stored one is ignored.
+      realPhone: DEFAULT_STATE.panel.realPhone,
       // A stored panel keeps its list as it is, an empty one too, and one stored
       // before rows stayed listed has none pinned. With no panel stored, a
       // fresh session, the default rows are listed.
@@ -406,7 +406,9 @@ export function load(): DevknobsState {
 
 export function save(state: DevknobsState): void {
   try {
-    webStorage("session")?.setItem(STORAGE_KEY, JSON.stringify(stamped(state, STATE_VERSION)));
+    // Real phone mode is the host's, for every tab: the session keeps none.
+    const { realPhone: _, ...panel } = state.panel;
+    webStorage("session")?.setItem(STORAGE_KEY, JSON.stringify(stamped({ ...state, panel }, STATE_VERSION)));
   } catch {
     // Private mode, disabled storage: knobs still work, they just do not stick.
   }

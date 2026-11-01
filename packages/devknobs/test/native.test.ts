@@ -585,6 +585,20 @@ describe("the engine with a native driver", () => {
     expect(turns).toEqual([true, false]);
   });
 
+  test("never tells the host the setting a page starts with", () => {
+    const turns: boolean[] = [];
+    engine.start({
+      persist: false,
+      state: { panel: { realPhone: true } },
+      native: { ...recorder().driver, realPhone: (on) => void turns.push(on) },
+    });
+    expect(turns).toEqual([]);
+    engine.setState({ panel: { realPhone: true } });
+    expect(turns).toEqual([]);
+    engine.setState({ panel: { realPhone: false } });
+    expect(turns).toEqual([false]);
+  });
+
   test("leaves the top page's navigator alone while a device's frame is up", () => {
     engine.start({ persist: false });
     engine.setState({ device: "iphone-17" });

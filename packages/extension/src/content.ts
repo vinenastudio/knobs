@@ -247,6 +247,9 @@ function load(frame: HTMLIFrameElement, url: string): boolean {
   );
 }
 
+/** Real phone mode as the extension keeps it, for every tab: the last word either way. */
+let hostRealPhone = false;
+
 const driver: NativeDriver = {
   framed,
   load,
@@ -259,7 +262,9 @@ const driver: NativeDriver = {
     send();
   },
   realPhone: (on) => {
-    if (top) {
+    // What the extension just handed over goes back to it never, so tabs cannot fight over it.
+    if (top && on !== hostRealPhone) {
+      hostRealPhone = on;
       void ask({ on, type: 'realPhone' });
     }
   },
@@ -422,6 +427,7 @@ function onMessage(event: Event) {
   } else if (message.type === 'toggle') {
     toggle();
   } else if (message.type === 'realPhone') {
+    hostRealPhone = message.on;
     if (getState().panel.realPhone !== message.on) {
       setState({ panel: { realPhone: message.on } });
     }

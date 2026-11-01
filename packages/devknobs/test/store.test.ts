@@ -490,7 +490,8 @@ describe("the place kept across sessions", () => {
       edge: "bottom",
       tab: "none",
     });
-    // Real phone mode is the host's to keep, never the place's, and an old place's is ignored.
+    // Real phone mode is the host's to keep, never the session's or the place's.
+    expect(parse(JSON.stringify({ v: STATE_VERSION, panel: { realPhone: true } })).panel.realPhone).toBe(false);
     const old = JSON.stringify({ ...JSON.parse(text), realPhone: true });
     expect(parse(null, old).panel.realPhone).toBe(false);
   });
