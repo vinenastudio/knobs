@@ -337,13 +337,14 @@ export function start(scene: Scene, target: "open" | "closed"): void {
   if (!clipped) {
     // From the frame as it stays: the opening is its screen, and nothing changes to see yet.
     seen = { veil: 1, content: 1, hole: evenHole(scene.screenRect()) };
-    if (target === "open") paintCover(scene);
-    else paintVeil(scene.veil);
+    if (target === "closed") paintVeil(scene.veil);
     scene.veil.style.opacity = "1";
     cut = "";
     placeHole(scene, seen.hole);
     clipped = true;
   }
+  // Every way to a device, from one or from none, shows the cover in the opening.
+  if (target === "open") paintCover(scene);
   const shown = { ...seen, covered: scene.covered(), open: sameHole(seen.hole, scene.fullRect()) };
   const next = sequence(plan(shown, target), target);
   run = next;

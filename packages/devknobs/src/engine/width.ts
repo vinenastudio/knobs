@@ -805,6 +805,8 @@ function resize(): void {
   if (native) frame.style.colorScheme = current.scheme;
   else frame.style.removeProperty("color-scheme");
   if (loadCover) loadCover.style.colorScheme = coverScheme();
+  // The veil in a device change wears the cover too, and follows its scheme on the way.
+  if (veil?.className === "veil loading") veil.style.colorScheme = coverScheme();
   frame.style.filter = visionFilter(current.vision);
   checkZoom();
   warmFold();

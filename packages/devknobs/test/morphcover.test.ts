@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Hole } from "../src/engine/morph";
-import { evenHole, forget, halt, type Scene, start } from "../src/engine/morphrun";
+import { evenHole, forget, halt, openVeiled, type Scene, start } from "../src/engine/morphrun";
 
 /** A node with just the style a device change writes. */
 function node(className: string) {
@@ -9,7 +9,8 @@ function node(className: string) {
     Object.create(null) as Record<string, string>,
     { setProperty: (name: string, value: string) => void vars.set(name, value) },
   );
-  return { className, style, vars };
+  const animate = () => ({ finished: Promise.resolve(), cancel: () => {} });
+  return { className, style, vars, animate };
 }
 
 const SCREEN: Hole = { x: 100, y: 40, width: 300, height: 600, radius: [8, 58, 58, 8] };
@@ -75,6 +76,15 @@ describe("a device change from one device to another", () => {
     const radii = [...String(back.style["clipPath"]).matchAll(/A([\d.]+) /g)].map((match) => match[1]);
     expect(radii).toEqual(["58", "58", "58", "58"]);
     expect(evenHole(SCREEN).radius).toEqual([58, 58, 58, 58]);
+  });
+
+  test("coming up from no device, the veil over the page turns into the cover", () => {
+    const { value, veil } = scene("dark");
+    openVeiled(value, 0.5);
+    expect(veil.className).toBe("veil");
+    start(value, "open");
+    expect(veil.className).toBe("veil loading");
+    expect(veil.style["colorScheme"]).toBe("dark");
   });
 
   test("going to no device, the veil takes the page's color again", () => {
