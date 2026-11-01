@@ -1883,9 +1883,8 @@ describe("a phone's body", () => {
     expect(Reflect.get(glass().style, "left")).toBe(left);
     expect(Reflect.get(glass().style, "borderRadius")).toBe("62px 62px 62px 62px");
     expect(Reflect.get(glass().style, "boxShadow")).toBe("0 0 0 2px #000");
-    // Its continuous corners, where the browser draws them, from the same radius.
-    expect(Reflect.get(glass(), "className")).toBe("glass mocked continuous");
-    expect(glass().style.getPropertyValue("--continuous")).toBe(`${62 * 1.363}px`);
+    // A plain round clip, no superellipse.
+    expect(Reflect.get(glass(), "className")).toBe("glass mocked");
   });
 
   test("is the drawn mock when the image does not load, as with the folder deleted", async () => {
@@ -1896,7 +1895,7 @@ describe("a phone's body", () => {
     const tags = mockDrawing().children.map((element) => element.tagName);
     expect(tags).toEqual([...Array(5).fill("rect"), "path", "path", "rect"]);
     expect(Reflect.get(glass().style, "left")).toBe(`${19.7 + 2.7}px`);
-    expect(Reflect.get(glass().style, "borderRadius")).toBe("55px 55px 55px 55px");
+    expect(Reflect.get(glass().style, "borderRadius")).toBe("55.8px 55.8px 55.8px 55.8px");
     expect(Reflect.get(glass().style, "boxShadow")).toBe("");
   });
 

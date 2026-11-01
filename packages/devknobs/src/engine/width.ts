@@ -26,7 +26,7 @@ import { landSplash, spreadMat } from "./matsplash";
 import { type FrameRefusal, handing, nativeEnabled, settles } from "./native";
 import { createNotice, explain } from "./notice";
 import type { Mock, Rect } from "./mock";
-import { CONTINUOUS, corners, drawMock, UNDER } from "./mockdraw";
+import { corners, drawMock, UNDER } from "./mockdraw";
 import { drawnAt, glideFrame, gliding, landGlide, placeKey } from "./frameglide";
 import {
   finishFold,
@@ -687,16 +687,13 @@ function showMock(mock: Mock | null, place: Fit): void {
     mockDrawing?.remove();
     mockDrawing = mock ? drawMock(mock, place, href) : null;
     if (mockDrawing) screen.append(mockDrawing);
-    glass.className = mock ? `glass mocked${mock.continuous ? " continuous" : ""}` : "glass";
+    glass.className = mock ? "glass mocked" : "glass";
   }
   const zoom = place.zoom;
   glass.style.left = mock ? `${mock.inset.left * zoom}px` : "";
   glass.style.top = mock ? `${mock.inset.top * zoom}px` : "";
   const round = mock ? corners(mock.screenRadius).map((radius) => `${radius * zoom}px`) : [];
   glass.style.borderRadius = round.join(" ");
-  const [corner = 0] = mock ? corners(mock.screenRadius) : [];
-  const continuous = mock?.continuous ? `${corner * CONTINUOUS.extent * zoom}px` : "";
-  glass.style.setProperty("--continuous", continuous);
   glass.style.boxShadow = href ? `0 0 0 ${UNDER * zoom}px #000` : "";
   if (mock && mockDrawing) {
     mockDrawing.style.width = `${mock.width * zoom}px`;

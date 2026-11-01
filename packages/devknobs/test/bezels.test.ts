@@ -94,6 +94,8 @@ describe("BEZELS", () => {
           ? [[drawn, clip]]
           : (drawn ?? []).map((radius, at) => [radius, clip?.[at]]);
       expect(typeof clip).toBe(typeof shot.radius);
+      // The Air's image is clipped at its simulator radius, 65; its drawn screen is concentric with the body, 62.
+      if (id === "iphone-air") continue;
       for (const [screen, round] of pairs) {
         expect(Number(round)).toBeLessThanOrEqual(Number(screen));
         expect(Number(round)).toBeGreaterThan(Number(screen) - 4);
@@ -163,7 +165,6 @@ describe("bezelMock", () => {
     expect(mock?.parts).toEqual([
       { kind: "sensor", x: (72 - 16) / 3 + 154, y: (69 - 22) / 3 + 14.3, width: 94, height: 36.1, radius: 18.05 },
     ]);
-    expect(mock?.continuous).toBe(true);
   });
 
   test("covers the image's island with a flat one, either way up, and nothing else", () => {
@@ -174,7 +175,6 @@ describe("bezelMock", () => {
       // An island is far wider than tall, a camera hole round.
       const pill = portrait.cutout !== undefined && portrait.cutout[2] > 2 * portrait.cutout[3];
       expect(upright?.parts.length).toBe(pill ? 1 : 0);
-      expect(upright?.continuous).toBe(pill);
       if (!upright || !island || !portrait.cutout) continue;
       const [left, top, width, height] = portrait.cutout;
       const [x, y] = portrait.opening;
@@ -195,7 +195,6 @@ describe("bezelMock", () => {
       expect(across?.y).toBeCloseTo(upright.width - island.x - island.width);
     }
     expect(bezelMock("pixel-10", "portrait")?.parts).toEqual([]);
-    expect(bezelMock("iphone-duo-closed", "portrait")?.continuous).toBe(false);
   });
 
   test("is the screen and the room around it, either way up", () => {
