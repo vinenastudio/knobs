@@ -2494,8 +2494,34 @@ async function uaRequests() {
     const elsewhere = await browser.newPage();
     await elsewhere.goto(`${otherOrigin}ua/page`);
     await ready(elsewhere);
+    // A script's turn stays in its own tab: the setting for every tab is the user's to turn.
+    // Playwright's evaluate counts as a user's gesture, which lasts 5 seconds: the script runs past it.
+    const scripted = await elsewhere.evaluate(
+      () =>
+        new Promise<boolean>((resolve) => {
+          setTimeout(() => {
+            window.devknobs!.setState({ panel: { realPhone: true } });
+            resolve(navigator.userActivation.isActive);
+          }, 5500);
+        }),
+    );
+    assert.equal(scripted, false, 'no gesture behind the script');
+    await elsewhere.waitForTimeout(300);
+    assert.equal(
+      await worker.evaluate(
+        async () => (await chrome.storage.local.get('realPhone'))['realPhone'] ?? false,
+      ),
+      false,
+      'a script does not turn it for every tab',
+    );
+    assert.equal(await tab.evaluate(() => window.devknobs!.getState().panel.realPhone), false);
+    await set(elsewhere, { panel: { realPhone: false } });
+    log('ua: real phone mode, by a script', 'that tab only');
     uaSeen.delete('frame');
-    await set(tab, { panel: { realPhone: true } });
+    // The panel's switch, clicked: on in every tab.
+    await showSettings(tab);
+    await tab.locator('[aria-label="real phone mode"]').click();
+    await realPhoneIn(tab, true);
     await realPhoneIn(elsewhere, true);
     log('ua: real phone mode, another host', 'on there too');
     for (let tries = 0; uaSeen.get('frame')?.['user-agent'] !== iphone && tries < 200; tries++) {
@@ -2530,7 +2556,8 @@ async function uaRequests() {
       );
     }
     uaSeen.clear();
-    await set(elsewhere, { panel: { realPhone: false } });
+    await showSettings(elsewhere);
+    await elsewhere.locator('[aria-label="real phone mode"]').click();
     await realPhoneIn(tab, false);
     await elsewhere.close();
     await rulesFor(null);
@@ -2613,6 +2640,8 @@ async function uaRequests() {
     // Closed from the toolbar: knobs off for the tab, every rule gone, and a reload brings none back.
     const toggle = () =>
       worker.evaluate((tabId) => chrome.tabs.sendMessage(tabId, { type: 'toggle' }), tabId);
+    // Closed first: the settings were opened for real phone mode's switch.
+    await set(tab, { panel: { open: false } });
     await toggle();
     await tab.waitForFunction(() => window.devknobs?.getState().panel.open === true);
     await set(tab, { device: 'iphone-18-pro', mock: true, ua: { preset: 'android-chrome' } });

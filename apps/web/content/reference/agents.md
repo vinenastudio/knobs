@@ -24,6 +24,7 @@ the page, such as playwright's `page.evaluate` or the chrome devtools mcp's
   that are not elements, such as a `querySelector` that found nothing.
 - `reset()` leaves the panel as it is: open or closed, docked or not, its
   handle shown or hidden, its dev tab icon (`devIcon`) and real phone mode (`realPhone`) as set.
+- `setState({ panel: { realPhone } })` with the extension turns real phone mode for that tab alone: the setting for every tab and site is kept only from the user's own click on the panel's switch, so a page's script cannot turn it.
 
 ```js
 window.devknobs.setState({ scheme: 'dark', panel: { open: false, handle: false } });

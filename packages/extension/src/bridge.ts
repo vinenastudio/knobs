@@ -39,6 +39,11 @@ document.addEventListener(TO_BRIDGE, (event) => {
   if (!request) {
     return;
   }
+  // Real phone mode is kept for every tab only from the user's own hand, such as the panel's
+  // switch: a page script cannot fake that, and its turn stays in its own tab.
+  if (request.type === 'realPhone' && !navigator.userActivation.isActive) {
+    return;
+  }
   if (request.type !== 'set' && request.type !== 'native') {
     const fail = (error: unknown) =>
       toPage({ error: String(error), id: request.id, type: 'answer' });

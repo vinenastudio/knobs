@@ -263,7 +263,8 @@ const driver: NativeDriver = {
   },
   realPhone: (on) => {
     // What the extension just handed over goes back to it never, so tabs cannot fight over it.
-    if (top && on !== hostRealPhone) {
+    // Only a turn of the user's own hand is kept for every tab: a script's stays in this tab.
+    if (top && on !== hostRealPhone && navigator.userActivation.isActive) {
       hostRealPhone = on;
       void ask({ on, type: 'realPhone' });
     }
