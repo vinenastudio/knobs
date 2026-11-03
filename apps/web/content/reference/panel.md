@@ -80,7 +80,7 @@ the real phone mode switch shows only with a host that sends requests as another
 
 the panel, grab, inspect, replay, requests, storage, elements, settings and reset keys above are the defaults, and each can be set from the panel: the settings list them under shortcuts, click one and press the new key, esc to cancel.
 
-- any key or combination works, a key alone too, such as `c`, or `⇧C`. a key alone acts only when no field has the focus, the panel's search included, so it never takes what is typed.
+- any key or combination works, a key alone too, such as `c`, or `⇧C`. a key alone acts only when no field has the focus, the panel's search included, so it never takes what is typed. F1 to F12 type nothing, so they act in fields too.
 - where the `hotkey` or `grabKey` option takes `⇧E` or `⇧O`, the elements view takes `⇧L` (then `⇧D`) and the settings `⇧U` (then `⇧P`), as inspect takes `⇧I` where `⇧C` is taken.
 - the browser's own keys (meta or ctrl with c, v, x, z, a, w, r, t, q, l, n, f, p, s, h, m, a digit or the zoom keys, F5, F11, F12), `/` and a key another shortcut has are refused, with the reason under the row.
 - a key with shift alone, like the defaults, is the panel's in its search and the page's in a field of the page, and so is one with alt, ctrl or meta; a function key works in fields too.

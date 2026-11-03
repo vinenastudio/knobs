@@ -110,7 +110,8 @@ rows, as the back button on top does. going back ends the picking and keeps
 the element: inspect's row says its name, and opens the view on it again
 without picking. with no element, the row starts the picking. `⇧E` opens the
 view without picking too, on the element held, else on the page's body, and
-opens the panel for it where it is closed. the row says
+opens the panel for it where it is closed. pressed again while the view shows,
+it closes the view. the row says
 `picking` while the mode is on, and `off` with nothing picked.
 
 the view points at the page only while the pointer is on what stands for an
