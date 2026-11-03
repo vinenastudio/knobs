@@ -1631,15 +1631,21 @@ s.css-decl, s.css-decl .css-var, s.css-decl .css-name { color: var(--faint); tex
 /* The field's ring, as a chip's field has it while focused, in place of the browser's border. */
 .inline-field { border: 0; box-shadow: inset 0 0 0 1px var(--faint); }
 .css-add, .css-adding { padding-left: 12px; }
-.css-add {
+.css-add, .css-new-rule {
   display: block;
   font: 11px/1.5 var(--mono);
   color: var(--faint);
   border-radius: 2px;
   transition: color 120ms ease-out;
 }
-.css-add:hover { color: var(--fg); }
+.css-add:hover, .css-new-rule:hover { color: var(--fg); }
 .css-adding { text-indent: 0; }
+/* The line that adds a rule stands under the blocks, as the start of one. */
+.css-new-rule { justify-self: start; padding: 2px var(--view-end) 2px var(--view-start); }
+.css-rule-adding { padding: 2px var(--view-end) 2px var(--view-start); }
+/* The states a chip forces, in the editors' chips, the selector's font. */
+.force-states { padding: 0 var(--view-end) 4px var(--view-start); }
+.force-states .chip { font: 11px/22px var(--mono); }
 
 /* The changes at the foot of the Elements view, which stay in sight while
    the styles scroll: a quiet head, each edit as diff lines tinted for what

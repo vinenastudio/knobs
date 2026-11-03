@@ -289,11 +289,26 @@ modes, and each edit goes on the page at once:
   then a value. `element.style` shows even with no `style` attribute, so a
   property can be added to the element itself. in `simple` mode the line is
   under the list and adds to the element's own style
+- `+ new rule` under the element's rules, in both modes, adds a rule. its
+  selector starts as the element's classes (`.cta.cta-lg`), or a short
+  selector that finds it where it has none, then the states forced on it
+  (`.cta:hover`), and can be changed first. enter adds the rule, escape
+  leaves none, and a selector the browser does not take turns red and stays
+  open. a click or tab elsewhere adds the rule where the selector was
+  changed, and none where it was left as it opened. the rule goes in a
+  stylesheet of devknobs' own in the element's document, the width knob's
+  frame's too, and its `+ add property` opens at once, unless it was added
+  by a click elsewhere or the filter hides it. it is listed with the element's rules, from `new rule`, also while it
+  does not match the element (its selector quiet, its lines struck through),
+  so a `:hover` rule can be written without the state forced. undo takes it
+  off the page
 
 the changes at the foot of the view count the edits and list them as diff
 lines, `-` the value before and `+` the value after, under the rule, what
 it sits in (`@media`, `@layer`, the rule a nested `&` is in) and its
-stylesheet, or `style=""` and the element for its own style. an element's
+stylesheet, or `style=""` and the element for its own style. a new rule is
+under `new rule for` and the element's selector: `+ .cta:hover { }`, then its
+declarations. an element's
 html edits are under `html of` and its selector: `- text: "Start now"`,
 `+ class: "cta cta-lg"`, the markup an element had and has, `+ hidden`, and
 the markup of a node deleted.
@@ -303,7 +318,8 @@ a Mac) does it again, while the focus is in the view and not in a field. `copy p
 agent` copies a prompt that asks a coding agent to put the edits in the
 code: each element's selector, its file and line where grab finds them, the
 rule and its stylesheet, and each property from its value before to its
-value after, and for the html each text, attribute and markup from before
+value after, a new rule with its selector to add where the element's styles
+are written, and for the html each text, attribute and markup from before
 to after, a hide and a delete. with html edits it ends by asking the agent
 to change the component or template that renders the element, not the DOM,
 as the framework's next render may undo an edit of the DOM. `copy diff` copies the diff lines alone, and `undo all` takes
@@ -314,13 +330,51 @@ out. `window.devknobs.edits()` gives the edits in force as json
 (see [agents](/docs/agents)). the edits are not kept: a reload of the page
 loses them.
 
+### force a state
+
+chips over the rules, `:hover`, `:focus`, `:focus-visible`, `:active` and
+`:focus-within`, force a state on the element: the page draws it as if the
+pointer were on it, it had the focus or it were pressed, and the styles show
+the rules of that state as applying, and those with `:not()` of it as not.
+several can be on at once. forcing is no edit: it is not in the changes, and
+it ends when another element is shown, the view closes, reset in the footer
+is pressed or devknobs unmounts. `:hover` and `:active` reach the element's
+ancestors too, and a focus makes them match `:focus-within`, as with the
+real state.
+
+a page's script cannot set those states, so devknobs emulates them: the
+element and its ancestors carry `data-devknobs-force`, and each rule of the
+page with a forced state in its selector is copied into a stylesheet of
+devknobs' own, the state written `:is(:hover, [data-devknobs-force~="hover"])`,
+as heavy as before, in the same `@media`, `@supports`, `@container`,
+`@layer` and `@scope`. the copies are made again as the stylesheets change.
+where that falls short:
+
+- a stylesheet from another origin cannot be read, so its rules are not
+  copied
+- the page's own rule still applies too, so one with `:not(:hover)` still
+  draws while `:hover` is forced, though the styles show it as not applying
+- a copy comes after the page's rules, so it wins a tie of equal weight that
+  the page's order would have lost
+- `:has()` finds a state only on the element and its ancestors, and an
+  `@scope` with no start is scoped to the whole document
+- a rule in a `@layer` with no name is not copied: a copy would be a layer
+  of its own, in another place in the order
+- only the selectors of a list that have the state are copied, but a rule
+  nested in such a list, as `.a:hover, .b { .icon { } }`, is copied under
+  the whole list, `:is(.a:hover, .b) .icon`, so it comes again after the
+  page's rules for `.b .icon` too
+- `:visited` is not forced: browsers hide it from a page
+
+`devknobs.forceState()` does the same for an agent (see
+[agents](/docs/agents)).
+
 ### what inspect cannot show
 
 - the rules of a stylesheet from another origin. the page may not read them,
   so the view says `rules hidden` with the file's name and guesses nothing,
   and its tooltip says they cannot be edited
 - the browser's own default styles, which cannot be edited either
-- a forced state such as `:hover`: a rule shows while it applies
 - a rule in a `@container` it could not confirm is marked `container`, and
   may not apply
 - an edit made through the CSSOM alone, or to a stylesheet outside the head,

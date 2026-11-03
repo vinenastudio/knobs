@@ -177,8 +177,8 @@ to put them in the code. Read them:
 window.devknobs.edits();
 ```
 
-Each edit is plain json: `kind` (`css-value`, `css-toggle` or `css-add` for
-styles, or one of the html kinds below),
+Each edit is plain json: `kind` (`css-value`, `css-toggle`, `css-add` or
+`css-rule` for styles, or one of the html kinds below),
 `target.selector` (finds the element; see `grab` for `>>>` and `>>iframe>>` steps),
 `target.source` (the file and line where the element is written, when grab
 finds it), `target.rule` (`selectorText`, `sheet`, `owner`, `sheetId`, `path` and `context` of the rule,
@@ -193,6 +193,12 @@ the last `after`. Put the changes where the project writes
 its styles (Tailwind classes, CSS modules, a stylesheet), not as inline
 styles, unless the edit was to the element's own style.
 
+A `css-rule` is a rule the user made in the panel: `property` is `rule`,
+`after` is its selector, `target.rule.sheet` is `new rule`, and the `css-add`
+edits with the same `target.rule` are its declarations. It exists only on the
+page: add it where the element's styles are written (in Tailwind, a variant
+such as `hover:` on the element's classes).
+
 The html edits have `kind` `text`, `attr`, `html`, `hide` or `delete`, and no
 `target.rule`. `property` is `text` (`text 2` and on for an element's later
 texts), the attribute's name, `html`, `hidden` or `node`; a `delete` of an
@@ -205,6 +211,22 @@ shown again. Make each one
 in the component or template that renders the element, never by patching the
 DOM from a script: they were made on the live DOM, and the framework's next
 render may undo them. The edits live only on the page: a reload drops them.
+
+## Check a hover or focus state
+
+To see or screenshot a state the pointer or the keyboard would give, force it:
+
+```js
+window.devknobs.forceState(".cta", ["hover"]); // or "focus", "focus-visible", "active", "focus-within"
+// screenshot, then:
+window.devknobs.forceState(null);
+```
+
+It takes an element or a selector, returns the states forced, and is no edit.
+`reset()` does not clear it: call `forceState(null)` before you go on to the
+next condition and before `reset()` when you finish.
+It is emulated: a stylesheet from another origin is not seen, and a page rule
+with `:not(:hover)` still draws.
 
 ## Loop over conditions
 
@@ -240,6 +262,7 @@ changes data values, such as numbers and names. That is not a bug.
 Put the knobs back, and the panel as you noted it at the start:
 
 ```js
+window.devknobs.forceState(null); // a state you forced; reset() leaves it
 window.devknobs.reset();
 window.devknobs.setState({ panel: NOTED_PANEL }); // the panel json you noted
 await window.devknobs.ready();

@@ -11,6 +11,7 @@ import { keepMounted } from "../engine/remount";
 import { HOST_RESET, holdInTopLayer, LAYER } from "../engine/toplayer";
 import { devIconFor, devIconShown } from "../engine/tabicon";
 import { type EditLog, edits } from "../edit/log";
+import { clearForced } from "../styles/force";
 import { type SystemMedia, watchSystemMedia } from "../engine/system";
 import type { GrabControl } from "../grab/control";
 import type { InspectControl } from "../grab/inspect";
@@ -132,9 +133,10 @@ export function ownCss(media: SystemMedia): string {
   );
 }
 
-/** What reset all does to the page: every edit of inspect's view undone, then every knob to its default. */
+/** What reset all does to the page: every edit of inspect's view undone, the states forced taken off, then every knob to its default. */
 export function resetPage(log: EditLog = edits, reset: () => void = engine.reset): void {
   log.undoAll();
+  clearForced();
   reset();
 }
 

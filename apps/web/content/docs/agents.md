@@ -3,7 +3,7 @@ title: agents
 meta_title: Drive devknobs from a coding agent with Playwright or MCP
 description: Let a coding agent drive devknobs from a browser tool like Playwright or the Chrome DevTools MCP: set knobs, wait for the page, grab what broke and fix it.
 order: 7
-updated: 2026-11-03
+updated: 2026-11-04
 ---
 
 ## drive the knobs
@@ -21,7 +21,9 @@ the page, such as playwright's `page.evaluate` or the chrome devtools mcp's
   timeout never passes for success.
 - [`grab()`](/docs/grab) takes an element, an array or a NodeList of them.
 - `edits()` gives the style and html edits made in inspect's view as json,
-  to put in the code.
+  to put in the code, a new rule (`css-rule`) included.
+- `forceState(element, ['hover'])` makes an element render as hovered,
+  focused or pressed, for a screenshot; `forceState(null)` ends it.
 - `reset()` sets the knobs back and leaves the panel as it is.
 
 ```js

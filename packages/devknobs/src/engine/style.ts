@@ -98,6 +98,62 @@ export function addStyle(root: Root, css: string): OwnStyle {
   return style;
 }
 
+/**
+ * A sheet of devknobs' that goes on and off the page as the same sheet, so
+ * its rules stay the same objects: adopted and let go where the browser
+ * adopts sheets, else a `<style>` that is switched off. It starts off.
+ */
+export interface SwitchedSheet {
+  readonly sheet: CSSStyleSheet;
+  on(): void;
+  off(): void;
+  /** Take it off the page for good. */
+  remove(): void;
+}
+
+export function switchedSheet(root: Root, name: string): SwitchedSheet | null {
+  const Sheet = constructable(root);
+  if (Sheet) {
+    const sheet = new Sheet();
+    Reflect.set(sheet, OWN, true);
+    const off = (): void => {
+      root.adoptedStyleSheets = root.adoptedStyleSheets.filter((other) => other !== sheet);
+    };
+    let gone = false;
+    return {
+      sheet,
+      on() {
+        if (!gone && !root.adoptedStyleSheets.includes(sheet)) root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
+      },
+      off,
+      remove() {
+        gone = true;
+        off();
+      },
+    };
+  }
+  const style = documentOf(root).createElement("style");
+  style.setAttribute("data-devknobs", name);
+  if (isDocument(root)) (root.head ?? root.documentElement).appendChild(style);
+  else root.append(style);
+  const sheet = style.sheet;
+  if (!sheet) {
+    style.remove();
+    return null;
+  }
+  sheet.disabled = true;
+  return {
+    sheet,
+    on() {
+      sheet.disabled = false;
+    },
+    off() {
+      sheet.disabled = true;
+    },
+    remove: () => style.remove(),
+  };
+}
+
 /** The sheet devknobs keeps on the page under `name`, if it has one. */
 export function findStyle(name: string, doc: Document = document): OwnStyle | null {
   const sheet = "adoptedStyleSheets" in doc ? doc.adoptedStyleSheets.find((own) => Reflect.get(own, NAME) === name) : undefined;

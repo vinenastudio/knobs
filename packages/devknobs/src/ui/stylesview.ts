@@ -23,24 +23,35 @@
  * element or an ancestor of it, the stylesheets in the head, the window's
  * size and the knobs, and the box alone when the element's size does. The
  * element may be one of the device frame's page.
+ *
+ * With a log to edit into, chips over the rules force a state on the element,
+ * `:hover` say: the page draws it so and the rules show as they apply then.
+ * That is no edit, and it ends when another element is shown or the view
+ * goes. A line under the element's rules adds a new rule, listed with them
+ * whether or not it matches the element.
  */
 
 import * as engine from "../engine";
 import type { Off } from "../edit/css";
 import type { EditLog } from "../edit/log";
+import { NEW_RULE_SHEET, newRulesFor } from "../edit/rule";
 import type { Locate } from "../edit/source";
 import { inspect, invalidate } from "../styles";
+import { parseDeclarations, variableNames } from "../styles/declarations";
+import { FORCED_STATES, type ForcedState, FORCING, type Forcing } from "../styles/force";
+import { specificity, splitList } from "../styles/selector";
 import { flatParent, label } from "../styles/tree";
 import type {
   Inspection,
   OwnBlock,
+  RuleBlock,
   StyleBlock,
   StyleDeclaration,
 } from "../styles/types";
 import type { BoxRing } from "../grab/boxmodel";
 import type { DevknobsState } from "../types";
 import { type BoxReading, createBoxDiagram, readBox } from "./boxdiagram";
-import { createCssEditor, offDeclaration, type Place, styleOf } from "./cssedit";
+import { createCssEditor, newRuleSelector, offDeclaration, type Place, styleOf } from "./cssedit";
 import { button, el } from "./dom";
 import { emptyAction, emptyLine, type Fold, filterField, sectionFold, segments, toolbar, toolToggle } from "./kit";
 import type { StylesMode } from "./prefs";
@@ -140,6 +151,8 @@ export interface StylesPage {
   box(element: Element): BoxReading | null;
   /** What an element, or one of its pseudo-elements, sees for a custom property now. Empty for one not set. */
   variable(element: Element, pseudo: string | null, name: string): string;
+  /** The states forced on the page's elements. Defaults to the page's own. */
+  force?: Forcing;
 }
 
 /**
@@ -216,11 +229,39 @@ interface Flat {
   /** The box of the own lines, or the line that says there are none. */
   own: HTMLElement;
   sets: LineSet[];
+  /** The new rules made for the element, each a block of its own. */
+  rules: Built[];
   inherited: { fold: Fold; lines: Line[] } | null;
 }
 
 /** The id of the element's own style drawn empty, which no inspection gives a block. */
 const BLANK = -1;
+
+/** The ids of new rules that do not match the element, which no inspection gives a block, counting down. */
+const UNMATCHED = -2;
+
+/** What the chips that force a state are called, as a group. */
+export const FORCE_LABEL = "force a state";
+
+/** A new rule that does not match the element, as a block: its selector off, its declarations struck through. */
+function unmatched(rule: CSSStyleRule, id: number): RuleBlock {
+  return {
+    kind: "rule",
+    id,
+    selectorText: rule.selectorText,
+    selector: splitList(rule.selectorText).map((text) => ({ text, matches: false })),
+    specificity: specificity(rule.selectorText),
+    origin: { sheet: NEW_RULE_SHEET, owner: null, path: [0] },
+    context: [],
+    declarations: parseDeclarations(rule.style.cssText).map((written) => ({
+      ...written,
+      longhands: [written.name],
+      overridden: true,
+      variables: variableNames(written.value),
+    })),
+    rule,
+  };
+}
 
 function isElement(node: Node): node is Element {
   return node.nodeType === 1;
@@ -242,6 +283,7 @@ function knobsOf(state: DevknobsState): string {
 
 export function createStylesView(context: StylesContext, page: StylesPage = PAGE): StylesView {
   const { tips } = context;
+  const force = page.force ?? FORCING;
   const node = el("div", "styles");
   // Takes the focus from script only, and the tab key goes on to its controls.
   node.tabIndex = -1;
@@ -293,7 +335,22 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
   diagram.node.addEventListener("pointerleave", () => point(null));
   const blocks = el("div", "css-blocks");
   const note = emptyLine(EMPTY);
-  node.append(crumbs, bar, box.node, blocks, note);
+  const log = context.edits ?? null;
+  /** The chips that force a state on the element, while the view can edit. */
+  const chips = log ? el("div", "chips force-states") : null;
+  const stateChips = new Map<ForcedState, HTMLButtonElement>();
+  if (chips) {
+    chips.setAttribute("role", "group");
+    chips.setAttribute("aria-label", FORCE_LABEL);
+    for (const state of FORCED_STATES) {
+      const chip = button("chip", `:${state}`);
+      chip.setAttribute("aria-pressed", "false");
+      chip.addEventListener("click", () => toggleState(state));
+      stateChips.set(state, chip);
+      chips.append(chip);
+    }
+  }
+  node.append(...[crumbs, bar, box.node, chips, blocks, note].filter((part) => part !== null));
   if (again) node.append(again);
   /** Tells the diagram how wide it is, so it knows whether its lengths fit in it. */
   const fitter =
@@ -341,7 +398,6 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
       picker?.set(select.on());
       drawSaid();
     }) ?? null;
-  const log = context.edits ?? null;
   /** The styles were to be read again while the editor was busy. */
   let waiting = false;
   const editor = log
@@ -360,6 +416,38 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
   let pointed: HTMLElement | null = null;
   /** Whether the view has an element boxed on the page. */
   let pointing = false;
+
+  /** The states forced on the element shown, none where another is forced. */
+  function statesHere(): ForcedState[] {
+    const forced = force.state();
+    return target && forced?.element === target ? forced.states : [];
+  }
+
+  /** Show which states are forced, the chips only with an element shown. */
+  function drawChips(): void {
+    if (!chips) return;
+    chips.hidden = target === null || bar.hidden;
+    const states = statesHere();
+    for (const [state, chip] of stateChips) {
+      const on = states.includes(state);
+      chip.classList.toggle("on", on);
+      chip.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+  }
+
+  /** Force a state on the element, or take it off. */
+  function toggleState(state: ForcedState): void {
+    if (!target) return;
+    const states = statesHere();
+    force.set(target, states.includes(state) ? states.filter((one) => one !== state) : [...states, state]);
+    drawChips();
+    refresh();
+  }
+
+  /** Take off the states forced on an element the view leaves. */
+  function unforce(element: Element | null): void {
+    if (element && force.state()?.element === element) force.clear();
+  }
 
   /** Box an element on the page while the pointer is on what stands for it, or with null take the box off. */
   function point(element: Element | null): void {
@@ -470,6 +558,7 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
     crumbs.replaceChildren();
     crumbs.hidden = true;
     bar.hidden = true;
+    drawChips();
     drawBox();
     say(text, press);
   }
@@ -718,7 +807,19 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
       built.push(made);
       nodes.push(made.node);
     };
+    let placed = false;
+    // The new rules and the line that adds one come after the element's own rules.
+    const placeNew = () => {
+      if (placed || !editor || pseudo !== null) return;
+      placed = true;
+      const listed = new Set(found.blocks.flatMap((block) => (block.kind === "rule" ? [block.rule] : [])));
+      newRules(element).forEach((rule, index) => {
+        if (!listed.has(rule)) add(unmatched(rule, UNMATCHED - index), null);
+      });
+      nodes.push(editor.newRuleLine(element, newRuleSelector(element, statesHere())));
+    };
     const each = (block: StyleBlock) => {
+      if (block.kind === "inherited" || block.kind === "pseudo") placeNew();
       if (block.kind === "inherited") {
         const from = block.element;
         const head = link("css-group", `inherited from ${crumbText(block.from)}`, () => show(from));
@@ -736,6 +837,7 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
       add({ kind: "inline", id: BLANK, declarations: [], element }, null);
     }
     found.blocks.forEach(each);
+    placeNew();
     for (const hidden of found.hidden) nodes.push(readOnly(el("div", "css-hidden", hiddenLine(hidden))));
     blocks.replaceChildren(...nodes);
   }
@@ -760,6 +862,11 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
     return { node: row, declaration };
   }
 
+  /** The new rules made for the element that are in force. */
+  function newRules(element: Element): CSSStyleRule[] {
+    return log ? newRulesFor(log.recorded(), element) : [];
+  }
+
   /** Where a hidden stylesheet is named: why none of its rules can be edited. */
   function readOnly(line: HTMLElement): HTMLElement {
     if (log) tip(line, READ_ONLY);
@@ -775,13 +882,15 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
     /** Where each line's edits go, and the lines an edit turned off, by their declaration. */
     const places = new Map<StyleDeclaration, Place | null>();
     const offs = new Map<StyleDeclaration, Off>();
-    const applied = appliedOwn(found);
+    // The new rules show as blocks of their own, under the list.
+    const mine = new Set<CSSStyleRule | CSSNestedDeclarations>(editor && pseudo === null ? newRules(element) : []);
+    const applied = appliedOwn(found).filter((one) => one.block.kind !== "rule" || !mine.has(one.block.rule));
     for (const one of applied) places.set(one.declaration, editor?.placeOf(one.block, element) ?? null);
     // The element's own style, empty too, takes the properties added here.
     let inline: OwnBlock | undefined = found.blocks.find((block) => block.kind === "inline");
     if (log && pseudo === null && !inline && styleOf(element)) inline = { kind: "inline", id: BLANK, declarations: [], element };
     if (log) {
-      const owned = found.blocks.filter((block) => block.kind === "rule");
+      const owned = found.blocks.filter((block): block is RuleBlock => block.kind === "rule" && !mine.has(block.rule));
       for (const block of inline ? [inline, ...owned] : owned) {
         const place = editor?.placeOf(block, element);
         if (!place || !editor) continue;
@@ -812,8 +921,18 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
     });
     if (addTo && editor) own.append(editor.addLine(addTo));
     const nodes = [own];
+    const rules: Built[] = [];
+    if (editor && pseudo === null) {
+      newRules(element).forEach((rule, index) => {
+        const block = found.blocks.find((one): one is RuleBlock => one.kind === "rule" && one.rule === rule);
+        const made = blockNode(block ?? unmatched(rule, UNMATCHED - index), found, null, element);
+        rules.push(made);
+        nodes.push(made.node);
+      });
+      nodes.push(editor.newRuleLine(element, newRuleSelector(element, statesHere())));
+    }
     const handed = appliedInherited(found);
-    flat = { own, sets, inherited: null };
+    flat = { own, sets, rules, inherited: null };
     if (handed.length > 0) {
       const fold = sectionFold({
         label: "inherited",
@@ -858,10 +977,16 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
     for (const set of view.sets) if (set.label) set.label.hidden = shown < 2;
     // The line that says the element sets nothing is no answer to a filter.
     view.own.hidden = view.sets.length === 0 ? filtering : shown === 0;
+    let ruled = false;
+    for (const block of view.rules) {
+      const kept = keeps(block.lines) || !filtering;
+      block.node.hidden = !kept;
+      if (kept) ruled = true;
+    }
     const inherited = view.inherited;
     const handed = inherited ? keeps(inherited.lines) : false;
     if (inherited) inherited.fold.node.hidden = !handed;
-    say(filtering && shown === 0 && !handed ? NO_MATCH : null);
+    say(filtering && shown === 0 && !handed && !ruled ? NO_MATCH : null);
   }
 
   /** Hide the declarations the filter leaves out, and the blocks and headings left with none. */
@@ -910,6 +1035,7 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
       page.invalidate();
     }
     if (!element.isConnected || !element.ownerDocument.defaultView) {
+      unforce(element);
       target = null;
       unwatch();
       point(null);
@@ -917,12 +1043,15 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
       clear(GONE, GONE_PICK);
       return;
     }
+    // The copies of the rules a forced state needs, as the stylesheets are now.
+    if (force.on()) force.sync();
     const found = page.inspect(element, pseudo ?? undefined);
     if (pseudo === null) {
       pseudos = found.blocks.flatMap((block) => (block.kind === "pseudo" ? [block.pseudo] : []));
     }
     crumbs.hidden = false;
     bar.hidden = false;
+    drawChips();
     context.title(middle(`${found.target.label}${found.target.pseudo ?? ""}`, TITLE_MAX));
     drawCrumbs(element);
     drawBox();
@@ -956,7 +1085,10 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
   function show(element: Element | null, name?: string): void {
     waiting = false;
     editor?.close(false);
-    if (element !== target) pseudos = [];
+    if (element !== target) {
+      pseudos = [];
+      unforce(target);
+    }
     target = element;
     pseudo = name ?? null;
     if (pseudo !== null && !pseudos.includes(pseudo)) pseudos = [...pseudos, pseudo];
@@ -1001,6 +1133,7 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
     focus: () => node.focus({ preventScroll: true }),
     destroy(): void {
       waiting = false;
+      unforce(target);
       editor?.destroy();
       unlog?.();
       clearTimeout(timer);

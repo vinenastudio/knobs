@@ -24,8 +24,8 @@ the page, such as playwright's `page.evaluate` or the chrome devtools mcp's
   that are not elements, such as a `querySelector` that found nothing.
 - `edits()` gives the style and html edits made in inspect's view that are in force,
   oldest first, as json: each one's `kind` (`css-value`, `css-toggle` or
-  `css-add` for styles; `text`, `attr`, `html`, `hide` or `delete` for the
-  html), its `target` (the element's `selector`, its `source` file and
+  `css-add` for styles, `css-rule` for a new rule; `text`, `attr`, `html`,
+  `hide` or `delete` for the html), its `target` (the element's `selector`, its `source` file and
   line where grab finds it, and the `rule`'s `selectorText`, `sheet`,
   `owner` (the element that brought the stylesheet in), `sheetId` (tells
   two stylesheets with the same address apart), `path` and `context`, the
@@ -39,7 +39,20 @@ the page, such as playwright's `page.evaluate` or the chrome devtools mcp's
   element's later texts), `html`, `hidden` or `node`; `before` and `after`
   are the text, the value or the markup, and `hide` has `after: "hidden"`.
   put those in the component or template that renders the element, as the
-  framework's next render may undo an edit of the DOM.
+  framework's next render may undo an edit of the DOM. a `css-rule` is a
+  rule made in the panel: `property` is `rule`, `after` its selector, and
+  its `target.rule.sheet` is `new rule`; the `css-add` edits with the same
+  `target.rule` are its declarations. add it where the element's styles are
+  written.
+- `forceState(element, states)` forces states on an element, so it renders
+  as if hovered, focused or pressed, for a screenshot of that state. it takes
+  the element or a selector for it, and `hover`, `focus`, `focus-visible`,
+  `active` or `focus-within`, with or without the colon, and returns the
+  states forced. one element at a time: forcing another, or no states, takes
+  them off the first. a forced state is no edit and is not in `edits()`;
+  the panel's reset and `unmount()` take it off, `reset()` leaves it. it is
+  emulated, so a `:not(:hover)` rule of the page still draws (see
+  [grab and inspect](/docs/grab)).
 - `reset()` leaves the panel as it is: open or closed, docked or not, its
   handle shown or hidden, its dev tab icon (`devIcon`) and real phone mode (`realPhone`) as set.
 - `setState({ panel: { realPhone } })` with the extension: a change made during a user gesture, such as a click (the panel's switch included), is saved for every tab and site; a change a script makes without one stays in that tab, so a page's script cannot turn it for the others.

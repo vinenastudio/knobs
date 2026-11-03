@@ -100,6 +100,22 @@ function insertAt(style: CSSStyleDeclaration, element: Element, property: string
   return style.getPropertyValue(property) !== "";
 }
 
+/** The ids stylesheets are told apart by, by the sheet, or the rule where it has none. */
+const sheetIds = new WeakMap<object, number>();
+let sheetsSeen = 0;
+
+/** A number for a rule's stylesheet, the same for every rule of it while it is up. */
+export function sheetIdOf(rule: CSSRule | CSSNestedDeclarations): number {
+  const sheet: unknown = Reflect.get(rule, "parentStyleSheet");
+  const key = typeof sheet === "object" && sheet !== null ? sheet : rule;
+  let id = sheetIds.get(key);
+  if (id === undefined) {
+    id = ++sheetsSeen;
+    sheetIds.set(key, id);
+  }
+  return id;
+}
+
 /** The block each css change is in, and for a toggle where its declaration stands among all of the block's, off ones too. */
 const places = new WeakMap<Change, { style: CSSStyleDeclaration; index: number }>();
 

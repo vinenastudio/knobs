@@ -4,11 +4,13 @@
  * property in one place come to one change, from the first value to the last,
  * and one that came back to where it started is no change. An element's html
  * edits are one place, apart from its style, and an html edit adds to the one
- * before only where it goes on from its value; deletes never merge. Nothing
- * here touches the page.
+ * before only where it goes on from its value; deletes never merge. A new
+ * rule and the declarations added to it are one place. Nothing here touches
+ * the page.
  */
 
 import type { Edit, EditKind, EditTarget } from "./log";
+import { NEW_RULE_SHEET } from "./rule";
 
 /** One property's change in one place, from its first value to its last. */
 export interface NetChange {
@@ -29,6 +31,11 @@ export interface ChangeGroup {
 }
 
 const MARKUP_KINDS: ReadonlySet<EditKind> = new Set<EditKind>(["text", "attr", "html", "hide", "delete"]);
+
+/** Whether a target is in a rule added from the styles view. */
+export function isNewRuleTarget(target: EditTarget): boolean {
+  return target.rule?.sheet === NEW_RULE_SHEET;
+}
 
 /** Whether an edit is of the html, and not of css. */
 export function isMarkupKind(kind: EditKind): boolean {
@@ -103,9 +110,10 @@ function quoted(text: string): string {
   return JSON.stringify(text).replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
 }
 
-/** What a group's head says: the element's html, the rule and its stylesheet, or the element's own style. */
+/** What a group's head says: the element's html, a new rule, the rule and its stylesheet, or the element's own style. */
 export function placeLine(target: EditTarget, markup = false): string {
   if (markup) return `html of ${data(target.selector)}`;
+  if (isNewRuleTarget(target)) return `new rule for ${data(target.selector)}`;
   const rule = target.rule;
   if (rule) return `${ruleChain(rule, "")} { } in ${sheetName(rule)}`;
   return `style="" on ${data(target.selector)}`;
@@ -124,10 +132,18 @@ function markupDiff(change: Pick<NetChange, "kind" | "property" | "before" | "af
   return lines;
 }
 
-/** A change as diff lines: `- name: before;` and `+ name: after;`, either left out where it is not set. */
+/**
+ * A change as diff lines: `- name: before;` and `+ name: after;`, either left
+ * out where it is not set. A new rule is its selector: `+ .cta:hover { }`.
+ */
 export function diffLines(change: Pick<NetChange, "property" | "before" | "after"> & { kind?: EditKind }): string[] {
   if (change.kind && isMarkupKind(change.kind)) return markupDiff({ ...change, kind: change.kind });
   const lines: string[] = [];
+  if (change.kind === "css-rule") {
+    if (change.before !== null) lines.push(`- ${data(change.before)} { }`);
+    if (change.after !== null) lines.push(`+ ${data(change.after)} { }`);
+    return lines;
+  }
   if (change.before !== null) lines.push(`- ${data(change.property)}: ${data(change.before)};`);
   if (change.after !== null) lines.push(`+ ${data(change.property)}: ${data(change.after)};`);
   return lines;
@@ -153,6 +169,10 @@ export const RERENDER_NOTE =
 /** The instruction an agent gets after style changes. */
 export const KEEP_APPROACH =
   "Keep the project's styling approach (Tailwind classes, CSS modules, styled components or plain CSS): change the styles where they are written, and do not add inline styles unless the change was made to one.";
+
+/** The instruction an agent gets after a new rule. */
+export const NEW_RULE_NOTE =
+  "A new rule was made in the panel and is only on the page: add it where the element's styles are written, the project's way (in Tailwind a variant such as hover: is one).";
 
 /** A value in the prompt, or what its absence means. */
 function said(value: string | null, absent: string): string {
@@ -190,10 +210,13 @@ export function promptText(edits: readonly Edit[]): string {
     const rule = target.rule;
     const lines = [`${index + 1}. Element \`${data(target.selector)}\``];
     if (target.source) lines.push(`   Source: ${data(target.source)}`);
+    const added = !group.markup && isNewRuleTarget(target);
     if (group.markup) lines.push("   In the element's html");
+    else if (added && rule) lines.push(`   New rule: \`${data(rule.selectorText)}\`, to add in the source`);
     else if (rule) lines.push(`   Rule: ${ruleChain(rule, "`")} in ${sheetName(rule)}`);
     else lines.push("   In the element's inline style");
     for (const change of group.changes) {
+      if (change.kind === "css-rule") continue;
       if (group.markup) lines.push(`   ${markupLine(change)}`);
       else lines.push(`   ${data(change.property)}: ${said(change.before, "(not set)")} -> ${said(change.after, "(removed)")}`);
     }
@@ -201,6 +224,7 @@ export function promptText(edits: readonly Edit[]): string {
   });
   const markup = groups.some((group) => group.markup);
   const style = groups.some((group) => !group.markup);
-  const notes = [style ? KEEP_APPROACH : null, markup ? RERENDER_NOTE : null].filter((one) => one !== null);
+  const added = groups.some((group) => !group.markup && isNewRuleTarget(group.target));
+  const notes = [style ? KEEP_APPROACH : null, added ? NEW_RULE_NOTE : null, markup ? RERENDER_NOTE : null].filter((one) => one !== null);
   return [markup ? CHANGES_HEAD : PROMPT_HEAD, "", parts.join("\n\n"), "", ...notes].join("\n");
 }
