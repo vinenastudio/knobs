@@ -275,7 +275,16 @@ let timers: Timer[];
 let frames: Map<number, () => void>;
 let cleared: number[];
 let clearSpy: { mockRestore(): void } | null = null;
-const saved = { window: globalThis.window, document: globalThis.document };
+const saved = {
+  window: Object.getOwnPropertyDescriptor(globalThis, "window"),
+  document: Object.getOwnPropertyDescriptor(globalThis, "document"),
+};
+
+/** Puts `name` back on the global as it was before the test, or takes it off if it was not there. */
+function restore(name: "window" | "document", descriptor: PropertyDescriptor | undefined): void {
+  if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+  else Reflect.deleteProperty(globalThis, name);
+}
 
 beforeEach(() => {
   timers = [];
@@ -314,8 +323,8 @@ beforeEach(() => {
 
 afterEach(() => {
   clearSpy?.mockRestore();
-  Object.defineProperty(globalThis, "window", { configurable: true, value: saved.window });
-  Object.defineProperty(globalThis, "document", { configurable: true, value: saved.document });
+  restore("window", saved.window);
+  restore("document", saved.document);
 });
 
 /** The bars over a page that changes color as it scrolls, the frame's box each time it is given one. */

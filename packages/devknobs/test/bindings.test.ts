@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   comboOf,
   comboProblem,
@@ -444,8 +444,13 @@ function fakeStore(initial: unknown = null) {
 }
 
 describe("createKeys with a store", () => {
+  let window: PropertyDescriptor | undefined;
+  beforeEach(() => {
+    window = Object.getOwnPropertyDescriptor(globalThis, "window");
+  });
   afterEach(() => {
-    Reflect.deleteProperty(globalThis, "window");
+    if (window) Object.defineProperty(globalThis, "window", window);
+    else Reflect.deleteProperty(globalThis, "window");
   });
 
   test("starts from the store, not the origin's storage, and keeps a key set there with its version", () => {

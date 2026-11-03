@@ -327,8 +327,13 @@ describe("the select button", () => {
 });
 
 describe("the elements view's key", () => {
+  let document: PropertyDescriptor | undefined;
+  beforeEach(() => {
+    document = Object.getOwnPropertyDescriptor(globalThis, "document");
+  });
   afterEach(() => {
-    Reflect.deleteProperty(globalThis, "document");
+    if (document) Object.defineProperty(globalThis, "document", document);
+    else Reflect.deleteProperty(globalThis, "document");
   });
 
   test("with nothing held opens the view on the page's body, and picks nothing", async () => {
