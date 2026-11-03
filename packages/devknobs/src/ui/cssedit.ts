@@ -139,9 +139,9 @@ function escaped(element: Element, name: string): string {
  */
 export function newRuleSelector(element: Element, states: readonly string[] = []): string {
   const classes = (element.getAttribute("class") ?? "").split(/\s+/).filter(Boolean);
+  let base = classes.map((name) => `.${escaped(element, name)}`).join("");
   // Grab's selector goes through shadow roots and frames: the rule's own tree takes its last step alone.
-  const local = selectorOf(element).split(/>>>|>>iframe>>/).pop()?.trim() || element.tagName.toLowerCase();
-  const base = classes.length > 0 ? classes.map((name) => `.${escaped(element, name)}`).join("") : local;
+  if (base === "") base = selectorOf(element).split(/>>>|>>iframe>>/).pop()?.trim() || element.tagName.toLowerCase();
   return `${base}${states.map((state) => `:${state}`).join("")}`;
 }
 
