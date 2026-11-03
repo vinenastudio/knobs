@@ -230,8 +230,25 @@ describe("the edit log", () => {
     log.undo();
     expect(log.list()).toEqual([]);
     expect(at.style.cssText).toBe("color: blue;");
-    expect(log.redo()?.property).toBe("color");
+    // Redo cannot put it on a page that went: it says so, and the edit is dropped.
+    expect(log.redo()).toBeNull();
+    expect(log.redo()).toBeNull();
     expect(log.list()).toEqual([]);
+  });
+
+  test("redo of an edit the page no longer takes is null, tells, and drops it", () => {
+    const log = createEditLog();
+    let takes = true;
+    const told: number[] = [];
+    log.subscribe(() => told.push(log.list().length));
+    log.record({ edit: { kind: "attr", target: { selector: "a" }, property: "class", before: "a", after: "b" }, apply: () => takes, revert: () => undefined });
+    log.undo();
+    takes = false;
+    expect(log.redo()).toBeNull();
+    expect(log.list()).toEqual([]);
+    expect(told).toEqual([1, 0, 0]);
+    takes = true;
+    expect(log.redo()).toBeNull();
   });
 
   test("keeps edits live through a page kept for back and forward", () => {

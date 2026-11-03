@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { attrEdit, deleteEdit, HIDE_ATTRIBUTE, hideEdit, htmlEdit, successor, textEdit } from "../src/edit/html";
+import { attrEdit, deleteEdit, HIDE_ATTRIBUTE, HIDE_CSS, hideEdit, htmlEdit, successor, textEdit } from "../src/edit/html";
 import { type Change, createEditLog, type Edit } from "../src/edit/log";
 import { CHANGES_HEAD, diffText, KEEP_APPROACH, netChanges, promptText, RERENDER_NOTE } from "../src/edit/text";
 import { actionsFor, applyHint, commitsHtml, textOf, textProperty, treeEditKey } from "../src/ui/domedit";
 import type { Row } from "../src/ui/domtree";
-import { as, elem, page, type PageNode, text } from "./dom-page";
+import { as, comment, elem, page, type PageNode, shadow, text } from "./dom-page";
 
 const AT = { selector: "a.cta" };
 
@@ -71,8 +71,8 @@ describe("a text edit", () => {
     log.undo();
     expect(words.nodeValue).toBe("Rendered");
     expect(log.list()).toEqual([]);
-    // Redo finds the page changed, and does nothing.
-    expect(log.redo()).not.toBeNull();
+    // Redo finds the page changed, does nothing and says so.
+    expect(log.redo()).toBeNull();
     expect(words.nodeValue).toBe("Rendered");
     expect(log.list()).toEqual([]);
   });
@@ -245,6 +245,32 @@ describe("html edits as text", () => {
     ]);
   });
 
+  test("never merge two deletes, as a selector after a node taken out names the next one", () => {
+    const deletes: Edit[] = [
+      { id: 1, kind: "delete", target: { selector: "ul > li:nth-child(2)" }, property: "node", before: "<li>two</li>", after: null },
+      { id: 2, kind: "delete", target: { selector: "ul > li:nth-child(2)" }, property: "node", before: "<li>three</li>", after: null },
+    ];
+    expect(diffText(deletes)).toBe(["html of ul > li:nth-child(2)", "- <li>two</li>", "- <li>three</li>"].join("\n"));
+    expect(promptText(deletes)).toContain("   delete: <li>two</li>\n   delete: <li>three</li>");
+  });
+
+  test("merge an html edit into the one before only where it goes on from its value", () => {
+    const texts: Edit[] = [
+      { id: 1, kind: "text", target: { selector: "p" }, property: "text 2", before: "b", after: "B" },
+      { id: 2, kind: "delete", target: { selector: "p" }, property: "text", before: "a", after: null },
+      // Now the first text: the one edited before, which a `text 2` no longer names.
+      { id: 3, kind: "text", target: { selector: "p" }, property: "text", before: "B", after: "C" },
+      { id: 4, kind: "text", target: { selector: "p" }, property: "text 2", before: "c", after: "D" },
+      { id: 5, kind: "text", target: { selector: "p" }, property: "text 2", before: "D", after: "E" },
+    ];
+    expect(netChanges(texts)[0]?.changes.map((one) => [one.kind, one.property, one.before, one.after])).toEqual([
+      ["text", "text 2", "b", "B"],
+      ["delete", "text", "a", null],
+      ["text", "text", "B", "C"],
+      ["text", "text 2", "c", "E"],
+    ]);
+  });
+
   test("diff as quoted values, markup as data, and a hide", () => {
     expect(diffText(html)).toBe(
       [
@@ -311,6 +337,11 @@ describe("the tree's edit keys", () => {
   const key = (name: string, more: Partial<KeyboardEvent> = {}, target: unknown = null) =>
     ({ key: name, metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, isComposing: false, target, composedPath: () => [target], ...more }) as unknown as KeyboardEvent;
 
+  test("take the letter's key on a layout that is not latin", () => {
+    expect(treeEditKey(key("ф", { code: "KeyA" }))).toBe("attr");
+    expect(treeEditKey(key("р", { code: "KeyH" }))).toBe("hide");
+  });
+
   test("are plain keys", () => {
     expect(treeEditKey(key("Enter"))).toBe("text");
     expect(treeEditKey(key("a"))).toBe("attr");
@@ -358,5 +389,23 @@ describe("the tree's edit keys", () => {
     expect(actionsFor(line(html, "open"))).toEqual(["attr"]);
     expect(actionsFor(line(button, "pseudo", "::before"))).toEqual([]);
     expect(actionsFor(null)).toEqual([]);
+  });
+
+  test("leave out what would take the panel with it, and a text or comment not in an element", () => {
+    const panel = elem("div", { "data-devknobs": "panel" });
+    const host = elem("x-card");
+    const loose = text("in the root");
+    const body = elem("body", {}, host, panel);
+    const doc = page(() => [elem("head", {}, elem("style", { "data-devknobs": "styles" })), body]);
+    shadow(host, loose, comment("note"));
+    const head = (doc.documentElement as PageNode).childNodes[0] as PageNode;
+    const line = (node: PageNode, kind: Row["kind"]): Row => ({ kind, node: as(node), pseudo: null, depth: 0, more: 0 });
+    expect(actionsFor(line(body, "open"))).toEqual(["attr"]);
+    expect(actionsFor(line(head, "open"))).toEqual(["attr"]);
+    expect(actionsFor(line(host, "open"))).toEqual(["attr", "html", "hide", "delete"]);
+    expect(actionsFor(line(loose, "text"))).toEqual([]);
+    expect(textOf(line(loose, "text"))).toBeNull();
+    expect(actionsFor(line((host.shadowRoot as PageNode).childNodes[1] as PageNode, "comment"))).toEqual([]);
+    expect(HIDE_CSS).toContain(`[${HIDE_ATTRIBUTE}] *`);
   });
 });

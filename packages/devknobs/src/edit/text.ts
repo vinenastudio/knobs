@@ -3,7 +3,9 @@
  * the prompt that asks an agent to put them in the code. Several edits of one
  * property in one place come to one change, from the first value to the last,
  * and one that came back to where it started is no change. An element's html
- * edits are one place, apart from its style. Nothing here touches the page.
+ * edits are one place, apart from its style, and an html edit adds to the one
+ * before only where it goes on from its value; deletes never merge. Nothing
+ * here touches the page.
  */
 
 import type { Edit, EditKind, EditTarget } from "./log";
@@ -53,9 +55,11 @@ export function netChanges(edits: readonly Edit[]): ChangeGroup[] {
     }
     // One element's selector and source, together: the last that knows where it is written.
     if (edit.target.source) group.target = edit.target;
-    const at = `${key}\n${edit.property}`;
+    // A delete is never one with another: the selectors after a node taken out shift.
+    const at = edit.kind === "delete" ? `#${edit.id}` : `${key}\n${edit.property}`;
     const known = byProperty.get(at);
-    if (known) known.after = edit.after;
+    // An html edit goes on from the last only where it starts from that one's value: a selector or a `text 2` that shifted is another node.
+    if (known && (!isMarkupKind(edit.kind) || known.after === edit.before)) known.after = edit.after;
     else {
       const change: NetChange = { target: edit.target, kind: edit.kind, property: edit.property, before: edit.before, after: edit.after };
       byProperty.set(at, change);

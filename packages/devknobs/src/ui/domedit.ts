@@ -9,10 +9,13 @@
  *   F2       edit as html            h    hide, or show again
  *   Delete   delete the node
  *
- * A one-line field puts its edit on with Enter and leaves with esc; the html
- * field takes line breaks with Enter, and puts its edit on with ⇧↩ (Shift
- * Enter elsewhere), its apply button, or as the focus leaves it. ⌘↩ and Ctrl
- * Enter put it on too. To use it, as the tree does:
+ * A one-line field puts its edit on with Enter and leaves with esc. The html
+ * field, and the field of a text or a value with line breaks in it, takes
+ * line breaks with Enter, and puts its edit on with ⇧↩ (Shift Enter
+ * elsewhere), its apply button, or as the focus leaves it; ⌘↩ and Ctrl Enter
+ * put it on too. A field closed as it was opened makes no edit. An element
+ * that holds devknobs' own nodes, as the body holds the panel, is not
+ * replaced, hidden or deleted. To use it, as the tree does:
  *
  *   const editor = createDomEditor(hooks, { log });
  *   editor.dblclick(row, target); editor.key(event, row); editor.selected(row);
@@ -25,7 +28,7 @@ import { isMac } from "../engine/ua";
 import { editField, selectorOf } from "./cssedit";
 import { button, el } from "./dom";
 import { type Entry, isElement, markupOf, parentOf, type Row } from "./domtree";
-import { comboLabel, typesInField, withShift } from "./keys";
+import { comboLabel, letterMatches, typesInField, withShift } from "./keys";
 
 /** What a key on the selected line does. */
 export type TreeEditAction = "text" | "attr" | "html" | "hide" | "delete";
@@ -57,6 +60,8 @@ export interface DomEditorOptions {
   log: EditLog;
   /** Where an edited element is written. Defaults to grab's lookup. */
   locate?: Locate;
+  /** Parses html in a document. Defaults to the page's own parser. */
+  parse?: typeof parseHtml;
 }
 
 export interface DomEditor {
@@ -98,15 +103,20 @@ export function treeEditKey(event: KeyboardEvent): TreeEditAction | null {
       return "delete";
   }
   if (event.shiftKey) return null;
-  const key = event.key.toLowerCase();
-  if (key === "a") return "attr";
-  if (key === "h") return "hide";
+  if (letterMatches(event, "a")) return "attr";
+  if (letterMatches(event, "h")) return "hide";
   return null;
 }
 
-/** The text a line edits: a text line's own, or the one text that stands in an element's line. */
+/** Whether a node is in an element, and not straight in a document or a shadow root. */
+function inElement(node: Node): boolean {
+  const parent = node.parentNode;
+  return parent !== null && isElement(parent);
+}
+
+/** The text a line edits: a text line's own, in an element, or the one text that stands in an element's line. */
 export function textOf(row: Row): Node | null {
-  if (row.kind === "text") return row.node;
+  if (row.kind === "text") return inElement(row.node) ? row.node : null;
   if (row.kind !== "open" || !isElement(row.node)) return null;
   const nodes = row.node.childNodes;
   const only = nodes[0];
@@ -118,7 +128,7 @@ export function textProperty(node: Node): string {
   const parent = node.parentNode;
   if (!parent) return "text";
   const texts = Array.from(parent.childNodes).filter((one) => one.nodeType === 3 && (one.nodeValue ?? "").trim() !== "");
-  const at = texts.indexOf(node as ChildNode) + 1;
+  const at = texts.findIndex((one) => one === node) + 1;
   return at > 1 ? `text ${at}` : "text";
 }
 
@@ -127,12 +137,17 @@ export function textProperty(node: Node): string {
  * page's own parser, in an svg tag for an svg element's, so `viewBox` keeps
  * its case. Null where it writes none.
  */
-export function parseAttributes(doc: Document, text: string, svg = false): [string, string][] | null {
+export function parseAttributes(doc: Document, text: string, svg = false, parse = parseHtml): [string, string][] | null {
   const tag = svg ? "svg" : "div";
-  const holder = parseHtml(doc, `<${tag} ${text}></${tag}>`).find(isElement);
+  const holder = parse(doc, `<${tag} ${text}></${tag}>`).find(isElement);
   if (!holder) return null;
   const found = Array.from(holder.attributes).map((attr): [string, string] => [attr.name, attr.value]);
   return found.length > 0 ? found : null;
+}
+
+/** Whether an element holds devknobs' own nodes, as the body holds the panel and the head its styles. */
+export function holdsOwn(element: Element): boolean {
+  return element.querySelector("[data-devknobs]") !== null;
 }
 
 /** The actions a line can take. */
@@ -143,14 +158,27 @@ export function actionsFor(row: Row | null): TreeEditAction[] {
   if (textOf(row)) out.push("text");
   if (row.kind === "open" && isElement(node)) {
     out.push("attr");
-    // The root element goes only with its document.
-    if (node.parentNode?.nodeType !== 9) out.push("html", "hide", "delete");
-  } else if (row.kind === "text" || row.kind === "comment") out.push("delete");
+    // The root element goes only with its document, and one with the panel in it stays.
+    if (node.parentNode?.nodeType !== 9 && !holdsOwn(node)) out.push("html", "hide", "delete");
+  } else if ((row.kind === "text" || row.kind === "comment") && inElement(node)) out.push("delete");
   return out;
+}
+
+/** An attribute's value as a tag writes it in quotes: `&` and `"` as references, which the parser reads back. */
+export function quotedValue(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
 }
 
 function hasTag(node: EventTarget | null): node is HTMLElement {
   return node !== null && typeof Reflect.get(node, "getAttribute") === "function";
+}
+
+/** The piece of a line a double-click is on, from where it landed up to the line's text: an attribute's, or the text. */
+function pieceAt(at: EventTarget | null, code: HTMLElement | null): HTMLElement | null {
+  for (let up = hasTag(at) ? at : null; up && up !== code; up = up.parentNode && hasTag(up.parentNode) ? up.parentNode : null) {
+    if (up.getAttribute("data-attr") !== null || up.classList.contains("tok-text")) return up;
+  }
+  return null;
 }
 
 /** A one-line field of the tree. */
@@ -174,9 +202,31 @@ interface FieldOptions {
   closed?(): void;
 }
 
+/** A field that keeps line breaks, with its apply button, as tall as what it holds. */
+function boxField(value: string, label: string, className = ""): Pick<FieldOptions, "input" | "multiline" | "apply"> {
+  const area = document.createElement("textarea");
+  area.className = `css-edit inline-field dom-edit ${className}`.trim();
+  area.value = value;
+  area.spellcheck = false;
+  const fit = (): void => {
+    area.rows = Math.min(12, Math.max(2, area.value.split("\n").length + 1));
+  };
+  fit();
+  area.addEventListener("input", fit);
+  const hint = applyHint(isMac());
+  area.setAttribute("aria-label", `${label}, ${hint} to apply, esc to leave`);
+  return { input: area, multiline: true, apply: button("chip dom-apply", `apply ${hint}`) };
+}
+
+/** The field for a value: one line, or a box where the value has line breaks, so an edit keeps them. */
+function valueField(value: string, label: string): Pick<FieldOptions, "input" | "multiline" | "apply"> {
+  return value.includes("\n") ? boxField(value, label) : { input: field(value, label) };
+}
+
 export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): DomEditor {
   const { log } = options;
   const locate = options.locate ?? locateSource;
+  const parse = options.parse ?? parseHtml;
   const bar = el("div", "dom-acts");
   bar.setAttribute("role", "toolbar");
   bar.setAttribute("aria-label", "edit the selected node");
@@ -208,12 +258,14 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
     parent.insertBefore(input, first);
     if (applies) parent.insertBefore(applies, first);
     for (const piece of pieces) parent.removeChild(piece);
+    // As the field holds it: a field drops what it cannot hold, so an edit is told from this, not the page's text.
+    const opened = input.value;
     let shown = true;
     const close = (apply: boolean, away = false): void => {
       if (!shown) return;
       shown = false;
       open = null;
-      if (apply && !commit(input.value) && !away) {
+      if (apply && input.value !== opened && !commit(input.value) && !away) {
         shown = true;
         open = self;
         input.classList.add("bad");
@@ -232,8 +284,8 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
     };
     const self = { close: (apply: boolean) => close(apply) };
     open = self;
-    input.addEventListener("keydown", (event: Event) => {
-      const key = event as KeyboardEvent;
+    const box: HTMLElement = input;
+    box.addEventListener("keydown", (key) => {
       if (key.isComposing) return;
       // The tree's keys stay out of the field.
       key.stopPropagation();
@@ -266,8 +318,12 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
     if (!node || !code || !element || !isElement(element)) return;
     const piece = Array.from(code.childNodes).find((one) => hasTag(one) && one.classList.contains("tok-text"));
     if (!piece) return;
-    const input = field((node.nodeValue ?? "").trim(), "text");
-    openField({ pieces: [piece], input, commit: (text) => record(textEdit(target(element), node, text, textProperty(node)), element) });
+    openField({
+      pieces: [piece],
+      ...valueField((node.nodeValue ?? "").trim(), "text"),
+      // An empty text is refused: a delete takes a text out.
+      commit: (text) => text.trim() !== "" && record(textEdit(target(element), node, text, textProperty(node)), element),
+    });
   }
 
   /** Edit an attribute as `name="value"`, or add one with `name` null. Clearing the field takes the attribute out. */
@@ -287,15 +343,15 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
       at = [slot];
     } else at = pieces.filter((one) => hasTag(one) && one.getAttribute("data-attr") === name);
     if (at.length === 0) return;
-    const value = name === null ? "" : `${name}="${element.getAttribute(name) ?? ""}"`;
+    const value = name === null ? "" : `${name}="${quotedValue(element.getAttribute(name) ?? "")}"`;
     const svg = element.namespaceURI === "http://www.w3.org/2000/svg";
     openField({
       pieces: at,
-      input: field(value, name === null ? "new attribute" : `attribute ${name}`),
+      ...valueField(value, name === null ? "new attribute" : `attribute ${name}`),
       commit(text) {
         const trimmed = text.trim();
         if (trimmed === value) return true;
-        const parsed = trimmed === "" ? [] : parseAttributes(element.ownerDocument, trimmed, svg);
+        const parsed = trimmed === "" ? [] : parseAttributes(element.ownerDocument, trimmed, svg, parse);
         if (parsed === null) return false;
         const names = new Set(parsed.map(([one]) => attributeName(element, one)));
         const changes: (Change | null)[] = [];
@@ -312,26 +368,12 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
     const code = hooks.code(row);
     if (!isElement(element) || !code) return;
     const before = markupOf(element);
-    const area = document.createElement("textarea");
-    area.className = "css-edit inline-field dom-edit dom-html";
-    area.value = before;
-    area.spellcheck = false;
-    const fit = (): void => {
-      area.rows = Math.min(12, Math.max(2, area.value.split("\n").length + 1));
-    };
-    fit();
-    area.addEventListener("input", fit);
-    const hint = applyHint(isMac());
-    area.setAttribute("aria-label", `edit as html, ${hint} to apply, esc to leave`);
-    const apply = button("chip dom-apply", `apply ${hint}`);
     openField({
       pieces: Array.from(code.childNodes),
-      input: area,
-      multiline: true,
-      apply,
+      ...boxField(before, "edit as html", "dom-html"),
       commit(text) {
         if (text.trim() === before.trim()) return true;
-        const nodes = parseHtml(element.ownerDocument, text);
+        const nodes = parse(element.ownerDocument, text);
         const change = htmlEdit(target(element), element, before, nodes, text);
         if (!change || !record(change, element)) return false;
         const made = nodes.find(isElement);
@@ -390,8 +432,7 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
   return {
     bar,
     dblclick(row, at) {
-      if (!hasTag(at)) return false;
-      const piece = at.closest?.("[data-attr], .tok-text");
+      const piece = pieceAt(at, hooks.code(row));
       const name = piece?.getAttribute("data-attr");
       if (name) {
         open?.close(true);

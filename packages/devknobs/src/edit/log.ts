@@ -83,7 +83,7 @@ export interface EditLog {
   record(change: Change): Edit | null;
   /** Revert the last edit in force. Null with none. */
   undo(): Edit | null;
-  /** Apply again the last edit undone, until a new one is recorded. Null with none. */
+  /** Apply again the last edit undone, until a new one is recorded. Null with none, or where the page no longer takes it: that edit is dropped. */
   redo(): Edit | null;
   /** Revert every edit, the last first, and forget them. Says how many there were. */
   undoAll(): number;
@@ -180,9 +180,10 @@ export function createEditLog(): EditLog {
     redo() {
       const one = undone.pop();
       if (!one) return null;
-      if (apply(one)) done.push(one);
+      const took = apply(one);
+      if (took) done.push(one);
       tell();
-      return copy(one.edit);
+      return took ? copy(one.edit) : null;
     },
     undoAll() {
       const count = done.length;

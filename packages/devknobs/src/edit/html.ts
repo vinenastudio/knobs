@@ -11,7 +11,7 @@
  *   if (change) edits.record(change);
  */
 
-import { addStyle, ensureStyle, type OwnStyle } from "../engine/style";
+import { addStyle, ensureStyle, isDocument, type OwnStyle } from "../engine/style";
 import type { Change, EditKind, EditTarget } from "./log";
 
 /** The html edits, by their kind. */
@@ -20,8 +20,8 @@ export type HtmlKind = Extract<EditKind, "text" | "attr" | "html" | "hide" | "de
 /** The attribute a hidden element carries. devknobs' own, so the tree and a copy leave it out. */
 export const HIDE_ATTRIBUTE = "data-devknobs-hide";
 
-/** What hides an element, as the browsers' tools hide one: its box keeps its place. */
-export const HIDE_CSS = `[${HIDE_ATTRIBUTE}] { visibility: hidden !important; }`;
+/** What hides an element and all in it, as the browsers' tools hide one: its box keeps its place. */
+export const HIDE_CSS = `[${HIDE_ATTRIBUTE}], [${HIDE_ATTRIBUTE}] * { visibility: hidden !important; }`;
 
 const HTML = "http://www.w3.org/1999/xhtml";
 
@@ -48,6 +48,10 @@ function viewOf(node: Node): Window | null {
 
 function isElement(node: Node): node is Element {
   return node.nodeType === 1;
+}
+
+function isShadowRoot(node: Node): node is ShadowRoot {
+  return node.nodeType === 11 && "host" in node;
 }
 
 /** An attribute devknobs puts on the page's nodes, which no edit sets. */
@@ -161,12 +165,12 @@ const shadowStyles = new WeakMap<Node, OwnStyle>();
 /** Bring the rule that hides into the element's document or shadow root, once. */
 export function hideStyle(element: Element): void {
   const root = element.getRootNode();
-  if (root.nodeType === 9) {
-    const style = ensureStyle("hide", root as Document);
+  if (isDocument(root)) {
+    const style = ensureStyle("hide", root);
     if (!style.textContent) style.textContent = HIDE_CSS;
     return;
   }
-  if (root.nodeType === 11 && !shadowStyles.has(root)) shadowStyles.set(root, addStyle(root as ShadowRoot, HIDE_CSS));
+  if (isShadowRoot(root) && !shadowStyles.has(root)) shadowStyles.set(root, addStyle(root, HIDE_CSS));
 }
 
 /** An element hidden, or shown again where a hide is on it. `style` brings in the rule that hides. */

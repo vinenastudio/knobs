@@ -148,6 +148,28 @@ export class FakeNode {
     this.parentElement = null;
   }
 
+  get parentNode(): FakeNode | null {
+    return this.parentElement;
+  }
+
+  /** The nodes in it, its plain text left out. */
+  get childNodes(): FakeNode[] {
+    return this.children.filter((child): child is FakeNode => typeof child !== "string");
+  }
+
+  insertBefore(node: FakeNode, before: FakeNode | null): FakeNode {
+    node.remove();
+    const at = before ? this.children.indexOf(before) : -1;
+    this.children.splice(at < 0 ? this.children.length : at, 0, node);
+    node.parentElement = this;
+    return node;
+  }
+
+  removeChild(node: FakeNode): FakeNode {
+    node.remove();
+    return node;
+  }
+
   contains(node: unknown): boolean {
     return node instanceof FakeNode && this.all().includes(node);
   }

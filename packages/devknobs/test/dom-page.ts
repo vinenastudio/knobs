@@ -29,6 +29,10 @@ export class PageNode {
     return this.nodeType === 1 ? (this.namespaceURI === HTML ? this.nodeName.toLowerCase() : this.nodeName) : "";
   }
 
+  get tagName(): string {
+    return this.nodeName;
+  }
+
   get firstChild(): PageNode | null {
     return this.childNodes[0] ?? null;
   }
@@ -65,6 +69,39 @@ export class PageNode {
       this.childNodes.push(node);
     }
     return this;
+  }
+
+  /** Every element under this one, for `*`, or with the attribute, for `[name]`. */
+  querySelectorAll(selector: string): PageNode[] {
+    const name = selector === "*" ? null : selector.slice(1, -1);
+    return this.childNodes.flatMap((child) => [...(child.nodeType === 1 && (name === null || child.hasAttribute(name)) ? [child] : []), ...child.querySelectorAll(selector)]);
+  }
+
+  cloneNode(deep = false): PageNode {
+    const copy = new PageNode(this.nodeType, this.nodeName, this.nodeValue);
+    copy.namespaceURI = this.namespaceURI;
+    copy.ownerDocument = this.ownerDocument;
+    copy.attributes = this.attributes.map((attr) => ({ ...attr }));
+    if (deep) copy.append(...this.childNodes.map((child) => child.cloneNode(true)));
+    return copy;
+  }
+
+  /** The markup of an element, or a text's text. */
+  get outerHTML(): string {
+    if (this.nodeType !== 1) return this.nodeValue ?? "";
+    const attrs = this.attributes.map((attr) => ` ${attr.name}="${attr.value}"`).join("");
+    return `<${this.localName}${attrs}>${this.childNodes.map((child) => child.outerHTML).join("")}</${this.localName}>`;
+  }
+
+  /** The first node under this one with the attribute, for `[name]` alone. */
+  querySelector(selector: string): PageNode | null {
+    const name = selector.slice(1, -1);
+    for (const child of this.childNodes) {
+      if (child.hasAttribute(name)) return child;
+      const found = child.querySelector(selector);
+      if (found) return found;
+    }
+    return null;
   }
 
   removeAttribute(name: string): void {
