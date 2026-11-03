@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import { DEFAULT_STATE } from "../src/engine/store";
 import type { DomTree, DomTreeContext } from "../src/ui/domtree";
-import { createDollar, createElementsView, DOLLAR } from "../src/ui/elementsview";
+import { createEditLog, type EditLog } from "../src/edit/log";
+import { createDollar, createElementsView, DOLLAR, undoKey } from "../src/ui/elementsview";
 import type { StylesPage, StylesView } from "../src/ui/stylesview";
 import type { Tips } from "../src/ui/tooltip";
 import { as, element, type FakeElement, FakeNode, FakeObserver, fake, pageDocument } from "./styles-dom";
@@ -132,7 +133,28 @@ describe("the elements view", () => {
     });
   });
 
+  /** The log the view's keys undo and redo in. */
+  let undid: string[] = [];
+  const log: EditLog = {
+    ...createEditLog(),
+    undo: () => {
+      undid.push("undo");
+      return null;
+    },
+    redo: () => {
+      undid.push("redo");
+      return null;
+    },
+  };
+
+  /** What the tree copied, and whether the clipboard takes it. */
+  let copies: string[] = [];
+  let copyWorks = true;
+
   function start(): FakeNode {
+    undid = [];
+    copies = [];
+    copyWorks = true;
     const stub: DomTree = {
       node: new FakeNode("div") as unknown as HTMLElement,
       reveal: (node) => revealed.push(node),
@@ -145,6 +167,11 @@ describe("the elements view", () => {
       { tips, title: () => undefined, outline: () => undefined },
       {
         page,
+        edits: log,
+        copy: (text) => {
+          copies.push(text);
+          return copyWorks ? true : Promise.reject(new Error("no clipboard"));
+        },
         tree: (context) => {
           tree = context;
           return stub;
@@ -157,10 +184,30 @@ describe("the elements view", () => {
     return fake(view.node);
   }
 
+  test("undoes on Z and redoes on ⇧Z, and leaves a key in a field to it", () => {
+    const node = start();
+    const div = { tagName: "DIV" };
+    const z = node.fire("keydown", { key: "z", target: div });
+    node.fire("keydown", { key: "Z", shiftKey: true, target: div });
+    node.fire("keydown", { key: "z", target: { tagName: "INPUT" } });
+    node.fire("keydown", { key: "я", code: "KeyZ", target: div });
+    expect(undid).toEqual(["undo", "redo", "undo"]);
+    expect(z.prevented).toBe(true);
+  });
+
+  test("copies from the tree at once, and a copy that fails throws nothing", async () => {
+    start();
+    copyWorks = false;
+    tree?.copy("<div></div>");
+    expect(copies).toEqual(["<div></div>"]);
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
   test("is the tree over the styles, the crumbs first under it", () => {
     const node = start();
     expect(node.className).toBe("elements");
-    expect(node.children.map((child) => (typeof child === "string" ? child : child.className))).toEqual(["", "styles"]);
+    expect(node.children.map((child) => (typeof child === "string" ? child : child.className))).toEqual(["", "styles", "changes"]);
     const styles = node.children[1] as FakeNode;
     expect((styles.children[0] as FakeNode).className).toBe("crumbs");
   });
@@ -198,5 +245,24 @@ describe("the elements view", () => {
     view?.destroy();
     view = null;
     expect(DOLLAR in (app.ownerDocument.defaultView as object)).toBe(false);
+  });
+});
+
+describe("the undo keys", () => {
+  /** A keydown, on a node with a tag. */
+  function key(key: string, more: Partial<KeyboardEvent> = {}, tag = "DIV"): KeyboardEvent {
+    const target = { tagName: tag };
+    return { key, shiftKey: false, metaKey: false, ctrlKey: false, altKey: false, isComposing: false, target, composedPath: () => [target], ...more } as unknown as KeyboardEvent;
+  }
+
+  test("are z and shift z, with no other modifier and not in a field", () => {
+    expect(undoKey(key("z"))).toBe("undo");
+    expect(undoKey(key("Z", { shiftKey: true }))).toBe("redo");
+    expect(undoKey(key("z", { metaKey: true }))).toBeNull();
+    expect(undoKey(key("z", { ctrlKey: true }))).toBeNull();
+    expect(undoKey(key("z", { altKey: true }))).toBeNull();
+    expect(undoKey(key("z", {}, "INPUT"))).toBeNull();
+    expect(undoKey(key("y"))).toBeNull();
+    expect(undoKey(key("я", { code: "KeyZ" }))).toBe("undo");
   });
 });

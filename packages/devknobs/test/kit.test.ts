@@ -658,6 +658,9 @@ describe("a view's chrome", () => {
     ".css-decl",
     ".css-swatch",
     ".css-applied .css-decl",
+    // An editable line's hanging indent, with room for its box, and the line that adds a property.
+    ".css-applied .css-decl.can-edit",
+    ".css-add, .css-adding",
     ".bm-name",
     ".bm-v",
     ".bm-content",

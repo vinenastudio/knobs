@@ -21,6 +21,7 @@ import * as width from "../src/engine/frames";
 import * as control from "../src/grab/control";
 import * as inspect from "../src/grab/inspect";
 import { type HostRank, outranks, preferOf, type PreferSetting, rankOf, stepsAside, stoodDownNote, takesBack } from "../src/host";
+import { edits } from "../src/edit/log";
 import * as devknobs from "../src/index";
 import { claim, free, hostOf, owned, type Take } from "../src/instance";
 import * as requests from "../src/requests";
@@ -154,10 +155,52 @@ describe("a page copy under a host", () => {
     expect(devknobs.getState().scheme).toBe("system");
   });
 
+  test("reads the host's edits", () => {
+    const list: devknobs.Edit[] = [{ id: 1, kind: "css-value", target: { selector: "a" }, property: "color", before: "red", after: "blue" }];
+    host({ edits: () => list });
+    devknobs.mount();
+    expect(devknobs.edits()).toBe(list);
+  });
+
   test("with an older host that leaves no api, keeps its own", () => {
     host();
     devknobs.mount();
     expect(devknobs.getState().scheme).toBe("system");
+  });
+});
+
+describe("the edits", () => {
+  /** An edit that notes whether it is on the page. */
+  function onPage(): { on: boolean } {
+    const state = { on: false };
+    edits.record({
+      edit: { kind: "css-value", target: { selector: "a" }, property: "color", before: "red", after: "blue" },
+      apply: () => (state.on = true),
+      revert: () => {
+        state.on = false;
+      },
+    });
+    return state;
+  }
+
+  test("are listed by edits(), stay through reset(), and go back on unmount", () => {
+    devknobs.mount();
+    const state = onPage();
+    expect(devknobs.edits()).toMatchObject([{ property: "color", after: "blue" }]);
+    devknobs.reset();
+    expect(state.on).toBe(true);
+    devknobs.unmount();
+    expect(state.on).toBe(false);
+    expect(devknobs.edits()).toEqual([]);
+  });
+
+  test("go back with the knobs on the panel's reset", () => {
+    const state = onPage();
+    let knobs = 0;
+    panel.resetPage(edits, () => knobs++);
+    expect(state.on).toBe(false);
+    expect(knobs).toBe(1);
+    expect(edits.list()).toEqual([]);
   });
 });
 
@@ -290,6 +333,26 @@ describe("a host that prefers the page's copy", () => {
     devknobs.setPrefer("page");
     expect(page.handed).toHaveLength(1);
     expect(hostOf(window)).toBeNull();
+    page.release();
+  });
+
+  test("leaves the page's edits on it as it steps aside", () => {
+    const prefer = preferring("extension");
+    devknobs.mount({ host: true, prefer: prefer.setting });
+    const page = pageCopy();
+    hostOf(window)?.adopt({}, page.take);
+    let on = false;
+    edits.record({
+      edit: { kind: "css-value", target: { selector: "a" }, property: "color", before: "red", after: "blue" },
+      apply: () => (on = true),
+      revert: () => {
+        on = false;
+      },
+    });
+    devknobs.setPrefer("page");
+    expect(page.handed).toHaveLength(1);
+    expect(on).toBe(true);
+    edits.undoAll();
     page.release();
   });
 

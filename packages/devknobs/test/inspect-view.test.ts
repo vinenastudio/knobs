@@ -24,10 +24,13 @@ let active: PanelNode | null = null;
 
 /** A node of the panel, as far as the view's place in it asks more than the styles view does. */
 class PanelNode extends FakeNode {
-  isConnected = true;
+  override get isConnected(): boolean {
+    return true;
+  }
+
   shadowRoot = null;
 
-  contains(node: FakeNode): boolean {
+  override contains(node: FakeNode): boolean {
     return this.all().includes(node);
   }
 

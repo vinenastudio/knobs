@@ -26,6 +26,9 @@
  */
 
 import * as engine from "../engine";
+import type { Off } from "../edit/css";
+import type { EditLog } from "../edit/log";
+import type { Locate } from "../edit/source";
 import { inspect, invalidate } from "../styles";
 import { flatParent, label } from "../styles/tree";
 import type {
@@ -37,6 +40,7 @@ import type {
 import type { BoxRing } from "../grab/boxmodel";
 import type { DevknobsState } from "../types";
 import { type BoxReading, createBoxDiagram, readBox } from "./boxdiagram";
+import { createCssEditor, offDeclaration, type Place, styleOf } from "./cssedit";
 import { button, el } from "./dom";
 import { emptyAction, emptyLine, type Fold, filterField, sectionFold, segments, toolbar, toolToggle } from "./kit";
 import type { StylesMode } from "./prefs";
@@ -77,6 +81,8 @@ export const PICK = "select an element to see its styles";
 export const GONE_PICK = "the element left the page, select another";
 export const NO_RULES = "no rule reaches this element";
 export const NO_MATCH = "no declaration matches";
+/** What a stylesheet the page may not read says, as none of its rules can be edited. */
+export const READ_ONLY = "read only: the browser does not let a page read or edit a stylesheet from another origin, or its own default styles";
 
 /** What the view needs from the panel. */
 export interface StylesContext {
@@ -113,6 +119,10 @@ export interface StylesContext {
     /** Hear the picking go on or off, however it did. Returns the way to stop. */
     watch(listener: () => void): () => void;
   };
+  /** The log the view's edits go to. Without it the view is read only. */
+  edits?: EditLog;
+  /** Where an edited element is written, for its edit's target. Defaults to grab's lookup. */
+  locate?: Locate;
 }
 
 /** The modes in the order their control has them. */
@@ -190,6 +200,8 @@ interface Built {
   node: HTMLElement;
   lines: Line[];
   group: HTMLElement | null;
+  /** The element's own style drawn empty, to add a property to: no rule, so not one that reaches it. */
+  blank: boolean;
 }
 
 /** A group of the simple mode's lines, with its label where the groups have one. */
@@ -206,6 +218,9 @@ interface Flat {
   sets: LineSet[];
   inherited: { fold: Fold; lines: Line[] } | null;
 }
+
+/** The id of the element's own style drawn empty, which no inspection gives a block. */
+const BLANK = -1;
 
 function isElement(node: Node): node is Element {
   return node.nodeType === 1;
@@ -326,6 +341,21 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
       picker?.set(select.on());
       drawSaid();
     }) ?? null;
+  const log = context.edits ?? null;
+  /** The styles were to be read again while the editor was busy. */
+  let waiting = false;
+  const editor = log
+    ? createCssEditor({
+        log,
+        node,
+        locate: context.locate,
+        settled() {
+          if (!waiting) return;
+          waiting = false;
+          refresh();
+        },
+      })
+    : null;
   /** The crumb the pointer is on, whose element is boxed on the page for as long. */
   let pointed: HTMLElement | null = null;
   /** Whether the view has an element boxed on the page. */
@@ -433,6 +463,7 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
     read = null;
     sources = new Map();
     built = [];
+    editor?.begin();
     flat = null;
     byId = new Map();
     blocks.replaceChildren();
@@ -608,17 +639,35 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
     return value;
   }
 
-  function line(declaration: StyleDeclaration, variables: Inspection["variables"]): Line {
+  function line(
+    declaration: StyleDeclaration,
+    variables: Inspection["variables"],
+    place: Place | null = null,
+    off: Off | null = null,
+  ): Line {
     // Struck through, as a declaration another one overrides is no longer in force.
     const row = el(declaration.overridden ? "s" : "div", "css-decl");
     named(row, declaration, variables);
-    row.append(valueNode(declaration, variables));
+    const value = valueNode(declaration, variables);
+    row.append(value);
     if (declaration.important) row.append(" !important");
     row.append(mark(";"));
+    if (place) editor?.editable(row, value, declaration, place, off);
     return { node: row, declaration };
   }
 
-  function blockNode(block: OwnBlock, found: Inspection, group: HTMLElement | null): Built {
+  /** The lines of a block, with those an edit turned off where they stood. */
+  function blockLines(block: OwnBlock, variables: Inspection["variables"], place: Place | null): Line[] {
+    const lines = block.declarations.map((declaration) => line(declaration, variables, place));
+    if (!place || !editor) return lines;
+    for (const off of editor.offs(place)) {
+      const at = off.index < 0 ? lines.length : Math.min(off.index, lines.length);
+      lines.splice(at, 0, line(offDeclaration(off), variables, place, off));
+    }
+    return lines;
+  }
+
+  function blockNode(block: OwnBlock, found: Inspection, group: HTMLElement | null, owner: Element): Built {
     const section = el("section", "css-block");
     section.setAttribute("role", "region");
     const head = el("div", "css-head");
@@ -649,20 +698,23 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
       head.append(selector, from);
     }
     section.append(head);
-    const lines = block.declarations.map((declaration) => line(declaration, found.variables));
+    const place = editor?.placeOf(block, owner) ?? null;
+    const lines = blockLines(block, found.variables, place);
     section.append(...lines.map((one) => one.node));
+    if (place && editor) section.append(editor.addLine(place));
     byId.set(block.id, section);
-    return { node: section, lines, group };
+    return { node: section, lines, group, blank: block.id === BLANK };
   }
 
   /** The blocks in the engine's order, a heading before each group of them. */
   function drawBlocks(found: Inspection, element: Element): void {
     dropTips();
     built = [];
+    editor?.begin();
     byId = new Map();
     const nodes: HTMLElement[] = [];
-    const add = (block: OwnBlock, group: HTMLElement | null) => {
-      const made = blockNode(block, found, group);
+    const add = (block: OwnBlock, group: HTMLElement | null, owner = element) => {
+      const made = blockNode(block, found, group, owner);
       built.push(made);
       nodes.push(made.node);
     };
@@ -671,7 +723,7 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
         const from = block.element;
         const head = link("css-group", `inherited from ${crumbText(block.from)}`, () => show(from));
         nodes.push(head);
-        for (const own of block.blocks) add(own, head);
+        for (const own of block.blocks) add(own, head, from);
       } else if (block.kind === "pseudo") {
         const name = block.pseudo;
         const head = link("css-group", name, () => show(element, name));
@@ -679,8 +731,12 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
         for (const own of block.blocks) add(own, head);
       } else add(block, null);
     };
+    // The element's own style comes first, empty too, so a property can be added to it.
+    if (log && pseudo === null && styleOf(element) && !found.blocks.some((block) => block.kind === "inline")) {
+      add({ kind: "inline", id: BLANK, declarations: [], element }, null);
+    }
     found.blocks.forEach(each);
-    for (const hidden of found.hidden) nodes.push(el("div", "css-hidden", hiddenLine(hidden)));
+    for (const hidden of found.hidden) nodes.push(readOnly(el("div", "css-hidden", hiddenLine(hidden))));
     blocks.replaceChildren(...nodes);
   }
 
@@ -688,22 +744,58 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
    * A line of the simple mode: the declaration as written, with no word on
    * the cascade, and after a value that reads custom properties what it comes to.
    */
-  function appliedLine({ declaration }: Applied, variables: Inspection["variables"]): Line {
-    const row = el("div", "css-decl");
+  function appliedLine(
+    { declaration }: Applied,
+    variables: Inspection["variables"],
+    place: Place | null = null,
+    off: Off | null = null,
+  ): Line {
+    const row = el(off ? "s" : "div", "css-decl");
     named(row, declaration, variables);
-    row.append(valueNode(declaration));
-    const comes = resolvedValue(declaration.value, variables);
+    const value = valueNode(declaration);
+    row.append(value);
+    const comes = off ? null : resolvedValue(declaration.value, variables);
     if (comes !== null) row.append(el("span", "css-comes", ` → ${comes}`));
+    if (place) editor?.editable(row, value, declaration, place, off);
     return { node: row, declaration };
   }
 
+  /** Where a hidden stylesheet is named: why none of its rules can be edited. */
+  function readOnly(line: HTMLElement): HTMLElement {
+    if (log) tip(line, READ_ONLY);
+    return line;
+  }
+
   /** What applies to the element as one list by group, then what it inherits, folded. */
-  function drawApplied(found: Inspection): void {
+  function drawApplied(found: Inspection, element: Element): void {
     dropTips();
     built = [];
+    editor?.begin();
     byId = new Map();
-    const groups = grouped(appliedOwn(found));
-    const own = groups.length > 0 ? el("div", "css-block css-applied") : emptyLine(NO_STYLES);
+    /** Where each line's edits go, and the lines an edit turned off, by their declaration. */
+    const places = new Map<StyleDeclaration, Place | null>();
+    const offs = new Map<StyleDeclaration, Off>();
+    const applied = appliedOwn(found);
+    for (const one of applied) places.set(one.declaration, editor?.placeOf(one.block, element) ?? null);
+    // The element's own style, empty too, takes the properties added here.
+    let inline: OwnBlock | undefined = found.blocks.find((block) => block.kind === "inline");
+    if (log && pseudo === null && !inline && styleOf(element)) inline = { kind: "inline", id: BLANK, declarations: [], element };
+    if (log) {
+      const owned = found.blocks.filter((block) => block.kind === "rule");
+      for (const block of inline ? [inline, ...owned] : owned) {
+        const place = editor?.placeOf(block, element);
+        if (!place || !editor) continue;
+        for (const off of editor.offs(place)) {
+          const declaration = offDeclaration(off);
+          places.set(declaration, place);
+          offs.set(declaration, off);
+          applied.push({ declaration, block });
+        }
+      }
+    }
+    const addTo = inline && pseudo === null ? (editor?.placeOf(inline, element) ?? null) : null;
+    const groups = grouped(applied);
+    const own = groups.length > 0 || addTo ? el("div", "css-block css-applied") : emptyLine(NO_STYLES);
     const sets = groups.map(({ group, lines }): LineSet => {
       const set = el("div", "css-set");
       set.setAttribute("role", "group");
@@ -711,11 +803,14 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
       // One group alone needs no name.
       const name = groups.length > 1 ? el("div", "css-label", group) : null;
       if (name) name.setAttribute("aria-hidden", "true");
-      const made = lines.map((one) => appliedLine(one, found.variables));
+      const made = lines.map((one) =>
+        appliedLine(one, found.variables, places.get(one.declaration) ?? null, offs.get(one.declaration) ?? null),
+      );
       set.append(...(name ? [name] : []), ...made.map((one) => one.node));
       own.append(set);
       return { node: set, label: name, lines: made };
     });
+    if (addTo && editor) own.append(editor.addLine(addTo));
     const nodes = [own];
     const handed = appliedInherited(found);
     flat = { own, sets, inherited: null };
@@ -737,7 +832,7 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
       nodes.push(fold.node);
     }
     const hidden = hiddenNote(found.hidden);
-    if (hidden !== null) nodes.push(el("div", "css-hidden", hidden));
+    if (hidden !== null) nodes.push(readOnly(el("div", "css-hidden", hidden)));
     blocks.replaceChildren(...nodes);
   }
 
@@ -780,6 +875,10 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
     const groups = new Map<HTMLElement, boolean>();
     let any = false;
     for (const block of built) {
+      if (block.blank && block.lines.length === 0) {
+        block.node.hidden = filtering;
+        continue;
+      }
       let kept = !filtering;
       for (const one of block.lines) {
         const matches = matchesFilter(one.declaration, text);
@@ -791,7 +890,8 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
       if (block.group) groups.set(block.group, (groups.get(block.group) ?? false) || kept);
     }
     for (const [head, kept] of groups) head.hidden = !kept;
-    say(any ? null : built.length === 0 ? NO_RULES : NO_MATCH);
+    const drawn = built.filter((block) => !block.blank || block.lines.length > 0);
+    say(any ? null : drawn.length === 0 ? NO_RULES : NO_MATCH);
   }
 
   /** Read the element's styles and build the view from them, once. */
@@ -800,6 +900,11 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
     timer = 0;
     const element = target;
     if (!element) return;
+    // A field being typed in stays: the styles are read again once it closes.
+    if (editor?.busy()) {
+      waiting = true;
+      return;
+    }
     if (stale) {
       stale = false;
       page.invalidate();
@@ -830,7 +935,7 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
   function draw(): void {
     if (!read) return;
     flat = null;
-    if (mode === "simple") drawApplied(read.found);
+    if (mode === "simple") drawApplied(read.found, read.element);
     else drawBlocks(read.found, read.element);
     applyFilter();
   }
@@ -849,6 +954,8 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
   }
 
   function show(element: Element | null, name?: string): void {
+    waiting = false;
+    editor?.close(false);
     if (element !== target) pseudos = [];
     target = element;
     pseudo = name ?? null;
@@ -877,15 +984,25 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
     if (target) later();
   });
 
+  /** An edit was made, undone or done again: its line shows it at once. */
+  const unlog = log?.subscribe(() => {
+    if (target) refresh();
+  });
+
   clear(EMPTY, PICK);
 
   return {
     node,
     show,
     refresh,
-    escape: filter.clear,
+    escape(): boolean {
+      return editor?.close(false) || filter.clear();
+    },
     focus: () => node.focus({ preventScroll: true }),
     destroy(): void {
+      waiting = false;
+      editor?.destroy();
+      unlog?.();
       clearTimeout(timer);
       clearTimeout(flashTimer);
       unwatch();
