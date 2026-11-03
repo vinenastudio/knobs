@@ -9,6 +9,7 @@ type Listener = (event: FakeEvent) => void;
 export interface FakeEvent {
   key?: string;
   target?: unknown;
+  [name: string]: unknown;
   prevented: boolean;
   preventDefault(): void;
   stopPropagation(): void;
@@ -72,6 +73,11 @@ export class FakeNode {
     }
   }
 
+  prepend(...nodes: (FakeNode | string)[]): void {
+    for (const node of nodes) if (typeof node !== "string") node.parentElement = this;
+    this.children.unshift(...nodes);
+  }
+
   replaceChildren(...nodes: (FakeNode | string)[]): void {
     this.children = [];
     this.append(...nodes);
@@ -95,7 +101,7 @@ export class FakeNode {
     this.listeners.get(type)?.delete(listener);
   }
 
-  fire(type: string, more: { key?: string; target?: unknown } = {}): FakeEvent {
+  fire(type: string, more: { key?: string; target?: unknown; [name: string]: unknown } = {}): FakeEvent {
     const event: FakeEvent = {
       ...more,
       prevented: false,
@@ -119,6 +125,31 @@ export class FakeNode {
 
   focus(): void {
     this.focused = true;
+  }
+
+  select(): void {}
+
+  /** Marks the node a page's own, so it and what is under it are connected. */
+  root = false;
+
+  get isConnected(): boolean {
+    let at: FakeNode = this;
+    while (at.parentElement) at = at.parentElement;
+    return at.root;
+  }
+
+  replaceWith(node: FakeNode): void {
+    const parent = this.parentElement;
+    if (!parent) return;
+    // As in the DOM, a node that is somewhere else leaves there first.
+    if (node !== this) node.remove();
+    parent.children = parent.children.map((child) => (child === this ? node : child));
+    node.parentElement = parent;
+    this.parentElement = null;
+  }
+
+  contains(node: unknown): boolean {
+    return node instanceof FakeNode && this.all().includes(node);
   }
 
   remove(): void {

@@ -168,6 +168,31 @@ is left or the elements give nothing.
 After a fix, reload the page. The knobs stay set across reloads. Call
 `await window.devknobs.ready()` and check again.
 
+## Apply the user's style edits
+
+The user can edit styles in inspect's view (`⇧C`) and ask you to put them in
+the code. Read them:
+
+```js
+window.devknobs.edits();
+```
+
+Each edit is plain json: `kind` (`css-value`, `css-toggle` or `css-add`),
+`target.selector` (finds the element; see `grab` for `>>>` and `>>iframe>>` steps),
+`target.source` (the file and line where the element is written, when grab
+finds it), `target.rule` (`selectorText`, `sheet`, `owner`, `sheetId`, `path` and `context` of the rule,
+`context` being the `@media`, `@layer` or outer rule it sits in, outermost
+first; left out for the element's own `style`), `property`, and `before` and `after` (the
+value, `!important` and all; null where it is not set, so `after: null` means
+the declaration was turned off). `edits()` lists the edits in force, each as
+it was made: an edit undone drops out, and undo all or the panel's reset
+empties the list. Of those,
+for several edits of one property in one rule, take the first `before` and
+the last `after`. Put the changes where the project writes
+its styles (Tailwind classes, CSS modules, a stylesheet), not as inline
+styles, unless the edit was to the element's own style. The edits live only
+on the page: a reload drops them.
+
 ## Loop over conditions
 
 ```js

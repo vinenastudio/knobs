@@ -5,15 +5,20 @@
  * shows its element's styles, and an element the styles show, a pick on the
  * page or a crumb, is revealed in the tree. The node selected is `$0` on its
  * page's window while the view is up, as in the browser's console, unless the
- * page has a `$0` of its own. To use it, as the styles view:
+ * page has a `$0` of its own. The styles can be edited, and the edits are
+ * listed at the foot, with Z to undo and ⇧Z to redo while the focus is
+ * in the view and not in a field. To use it, as the styles view:
  *
  *   const view = createElementsView(context);
  *   body.append(view.node); view.show(element); view.destroy();
  */
 
+import { type EditLog, edits } from "../edit/log";
+import { type Copy, createChanges } from "./changes";
 import { copyText } from "./copytext";
 import { el } from "./dom";
 import { createDomTree, type DomTree, elementOf } from "./domtree";
+import { letterMatches, typesInField } from "./keys";
 import { createStylesView, type StylesContext, type StylesPage, type StylesView } from "./stylesview";
 
 /** The name the console knows the node selected in the Elements panel by. */
@@ -23,7 +28,17 @@ export const DOLLAR = "$0";
 export interface ElementsParts {
   page?: StylesPage;
   tree?: (context: Parameters<typeof createDomTree>[0]) => DomTree;
-  copy?: (text: string) => void;
+  /** Copies a text, and says whether it went. */
+  copy?: Copy;
+  /** The log the edits go to. Defaults to the page's one. */
+  edits?: EditLog;
+}
+
+/** Whether a keydown is the view's undo, z, or its redo, shift z: no other modifier, and not in a field. */
+export function undoKey(event: KeyboardEvent): "undo" | "redo" | null {
+  if (!letterMatches(event, "z") || event.metaKey || event.ctrlKey || event.altKey) return null;
+  if (event.isComposing || typesInField(event)) return null;
+  return event.shiftKey ? "redo" : "undo";
 }
 
 /**
@@ -72,7 +87,8 @@ export function createElementsView(context: StylesContext, parts: ElementsParts 
   const dollar = createDollar();
   /** The styles are shown from the tree, and need not be revealed in it again. */
   let fromTree = false;
-  const copy = parts.copy ?? ((text: string) => void copyText(text));
+  const copy: Copy = parts.copy ?? copyText;
+  const log = parts.edits ?? edits;
   const tree = (parts.tree ?? createDomTree)({
     outline: (element) => context.outline(element),
     select(picked, pseudo) {
@@ -84,11 +100,15 @@ export function createElementsView(context: StylesContext, parts: ElementsParts 
         fromTree = false;
       }
     },
-    copy,
+    // Called at once, inside the click, and a copy that fails says nothing here.
+    copy: (text) => {
+      void Promise.resolve(copy(text)).catch(() => undefined);
+    },
   });
   const styles: StylesView = createStylesView(
     {
       ...context,
+      edits: log,
       held(element) {
         context.held?.(element);
         if (fromTree) return;
@@ -98,7 +118,19 @@ export function createElementsView(context: StylesContext, parts: ElementsParts 
     },
     parts.page,
   );
-  node.append(tree.node, styles.node);
+  const changes = createChanges(log, copy);
+  node.append(tree.node, styles.node, changes.node);
+
+  function onKeydown(event: KeyboardEvent): void {
+    const key = undoKey(event);
+    if (!key) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (key === "undo") log.undo();
+    else log.redo();
+  }
+
+  node.addEventListener("keydown", onKeydown);
 
   return {
     node,
@@ -107,8 +139,10 @@ export function createElementsView(context: StylesContext, parts: ElementsParts 
     escape: () => styles.escape(),
     focus: () => styles.focus(),
     destroy(): void {
+      node.removeEventListener("keydown", onKeydown);
       tree.destroy();
       styles.destroy();
+      changes.destroy();
       dollar.release();
     },
   };
