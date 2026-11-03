@@ -46,7 +46,9 @@ the npm package emulates every knob inside the page: it patches `matchMedia`, re
 
 the debugger attaches to a tab when text size, offline, the preferences or the viewport leaves its default and detaches when all are back (reset in the panel does that). overrides survive navigation in the tab while attached, so a reload paints with them from the first frame. should a command fail, the tab goes back to its own settings and the debugger leaves, so the next change starts clean.
 
-a tab's knobs win over the page's stored ones, so a page on another origin in the same tab shows what the tab has. the panel keeps your own scheme and motion: the extension reads them outside every tab and hands them to the panel.
+a tab's knobs win over the page's stored ones, so a page on another origin in the same tab shows what the tab has.
+
+the shortcuts you set in the panel's settings are kept in the extension's storage, not in the page's `localStorage`, so a key set on one site is the same on every other, in every open tab at once and after Chrome restarts. a page script can change them only right after you click or press a key on that page; otherwise its change stays in its tab until it loads again. the panel starts from the default keys and takes yours a moment later, once the extension says them. keys a page kept in its own `localStorage` before are not brought over: set them once more. where the page's own copy of devknobs runs the panel (prefer page), it keeps its keys in the page's `localStorage`, as with no extension. the panel keeps your own scheme and motion: the extension reads them outside every tab and hands them to the panel.
 
 ## what servers see
 

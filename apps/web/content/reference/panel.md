@@ -38,13 +38,15 @@ while the panel is out and the focus is in no field:
 
 - `/` opens the search
 - `⇧R` replays the page's animations
-- `⇧N` shows the [requests](/docs/requests-and-storage#requests) and hides them again
+- `⇧N` shows the [requests](/docs/requests-and-storage#requests), and opens the panel for them where it is closed; pressed again while they show, it leaves them
 - `⇧S` shows the [storage](/docs/requests-and-storage#storage) view, and opens the panel for it where it is closed
+- `⇧E` shows inspect's [elements view](/docs/grab#inspect), the DOM tree and the styles, on the element inspect last picked, else the page's body, without picking; it opens the panel where it is closed, and pressed again while the view shows, it leaves it
+- `⇧O` shows the [settings](#settings), with the shortcuts, and opens the panel for them where it is closed; pressed again while they show, it leaves them
 - shift backspace (or shift delete) resets every knob, from the frame too
 
 while the frame is up, meta or ctrl with `+` and `-` zoom it a step in and out, and with `0` fit it again, from the frame too, unless the focus is in a field.
 
-every other key goes to the page as it would without the panel. `⇧K` toggles the panel everywhere except in a field of the page, where shift types a capital as ever. in the panel's search, which finds in lower case anyway, `⇧K`, `⇧R`, `⇧N`, `⇧S`, `⇧G` and `⇧C` are the panel's keys and are not typed, so `⇧K` closes the panel from it, and a plain `k` is just a letter. the panel's other fields, a list's filter and the user agent and route boxes, take every letter.
+every other key goes to the page as it would without the panel. `⇧K` toggles the panel everywhere except in a field of the page, where shift types a capital as ever. in the panel's search, which finds in lower case anyway, `⇧K`, `⇧R`, `⇧N`, `⇧S`, `⇧E`, `⇧O`, `⇧G` and `⇧C` are the panel's keys and are not typed, so `⇧K` closes the panel from it, and a plain `k` is just a letter. the panel's other fields, a list's filter and the user agent and route boxes, take every letter.
 
 the footer lists the keys, most used first: `⇧K` for the panel, `/` for search, the grab key, the inspect key, `⇧R` for replay animations and `⇧⌫` for reset, as `Shift K`, `Shift R` and `Shift Backspace` off a Mac. each one is a button too, so a click does what its key does. with the overflow knob on, the count of overflowing boxes sits above them.
 
@@ -76,14 +78,15 @@ the real phone mode switch shows only with a host that sends requests as another
 
 ## shortcuts
 
-the panel, grab, inspect, replay, requests, storage and reset keys above are the defaults, and each can be set from the panel: the settings list them under shortcuts, click one and press the new key, escape to cancel.
+the panel, grab, inspect, replay, requests, storage, elements, settings and reset keys above are the defaults, and each can be set from the panel: the settings list them under shortcuts, click one and press the new key, esc to cancel.
 
-- a key needs shift, alt (option), ctrl or meta (⌘) with it, as a key alone types, except F1 to F12, which work alone too.
+- any key or combination works, a key alone too, such as `c`, or `⇧C`. a key alone acts only when no field has the focus, the panel's search included, so it never takes what is typed.
+- where the `hotkey` or `grabKey` option takes `⇧E` or `⇧O`, the elements view takes `⇧L` (then `⇧D`) and the settings `⇧U` (then `⇧P`), as inspect takes `⇧I` where `⇧C` is taken.
 - the browser's own keys (meta or ctrl with c, v, x, z, a, w, r, t, q, l, n, f, p, s, h, m, a digit or the zoom keys, F5, F11, F12), `/` and a key another shortcut has are refused, with the reason under the row.
 - a key with shift alone, like the defaults, is the panel's in its search and the page's in a field of the page, and so is one with alt, ctrl or meta; a function key works in fields too.
 - a grab key with meta, ctrl or alt turns grab on with a hold, as [grab](/docs/grab) explains, and any other with a press.
 
-the keys set are kept in `localStorage` under `devknobs:keys`, for every tab of the origin, the width knob's frame included at once, and win over the `hotkey` and `grabKey` options. reset all leaves them; the x by a key puts that one back.
+the keys set are kept in `localStorage` under `devknobs:keys`, for every tab of the origin, the width knob's frame included at once, and win over the `hotkey` and `grabKey` options. reset all leaves them; the x by a key puts that one back. the extension keeps them in its own storage instead, the same on every site: see [the extension](/docs/extension#how-it-differs-from-the-npm-package).
 
 ## fresh mode
 

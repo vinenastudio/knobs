@@ -3,7 +3,7 @@ title: the panel
 meta_title: The devknobs panel: open, move, search and pin your knobs
 description: Open the devknobs panel with Shift K, move it along the window edge, search every knob by name or value, pin the ones you use, and change its shortcuts.
 order: 2
-updated: 2026-11-01
+updated: 2026-11-03
 ---
 
 ## open and move it
@@ -23,17 +23,19 @@ the add knob button opens a search. type `dark`, `390`, `+2d`, `tokyo` or `offli
 
 while the panel is out and the focus is in no field:
 
-| key           | what it does                                     |
-| ------------- | ------------------------------------------------ |
-| `⇧K`          | opens and closes the panel                       |
-| `/`           | opens the search                                 |
-| `⇧G`          | grabs an element, see [grab](/docs/grab)         |
-| `⇧R`          | replays the page's animations                    |
-| `⇧N`          | shows the [requests](/docs/requests-and-storage) |
-| `⇧S`          | shows the [storage](/docs/requests-and-storage)  |
-| `⇧` backspace | resets every knob                                |
+| key           | what it does                                               |
+| ------------- | ---------------------------------------------------------- |
+| `⇧K`          | opens and closes the panel                                 |
+| `/`           | opens the search                                           |
+| `⇧G`          | grabs an element, see [grab](/docs/grab)                   |
+| `⇧R`          | replays the page's animations                              |
+| `⇧N`          | shows the [requests](/docs/requests-and-storage)           |
+| `⇧S`          | shows the [storage](/docs/requests-and-storage)            |
+| `⇧E`          | shows the elements view, see [inspect](/docs/grab#inspect) |
+| `⇧O`          | shows the settings                                         |
+| `⇧` backspace | resets every knob                                          |
 
-every other key goes to the page. the gear in the footer opens the settings, where you can change every key but `/` and hide the handle. the dev tab icon switch there puts a `DEV` ribbon on the tab's icon: on local hosts only by default, or on any host or none, for this tab. turned off or unmounted, the page has its own icons back. with the extension, the real phone mode switch sends the device's user agent with the frame's page loads, so sites serve their mobile site; some sites may sign you out. it is one setting for every tab and site.
+`⇧N`, `⇧S`, `⇧E` and `⇧O` open the panel where it is closed, and the same key again leaves the view. every other key goes to the page. the gear in the footer opens the settings, where you can change every key but `/`, to any key or combination, a key alone too, and hide the handle. with the extension, the keys you set are the same on every site. the dev tab icon switch there puts a `DEV` ribbon on the tab's icon: on local hosts only by default, or on any host or none, for this tab. turned off or unmounted, the page has its own icons back. with the extension, the real phone mode switch sends the device's user agent with the frame's page loads, so sites serve their mobile site; some sites may sign you out. it is one setting for every tab and site.
 
 ## pinning
 

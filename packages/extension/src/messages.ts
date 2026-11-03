@@ -2,6 +2,7 @@ import type {
   NativeUa,
   NativeViewport,
   PreferValue,
+  StoredKeys,
   SystemMedia,
   UaBrand,
   UaHints,
@@ -34,7 +35,8 @@ export type Response = {
  * tab's loads skip service workers while it stays open, and `ua` is the user
  * agent the tab's requests carry, null for the browser's own. `prefer` keeps
  * whose copy of devknobs runs the panel on a page with its own, for every site,
- * and `realPhone` keeps real phone mode, for every tab and site.
+ * `realPhone` keeps real phone mode, for every tab and site, and `keys` keeps
+ * the shortcuts the user set in the panel, for every site.
  * `carry` hands the page's knobs on, as the tab follows its frame to another
  * origin the service worker saw it land on. `id` pairs the answer.
  */
@@ -46,6 +48,7 @@ export type Ask =
   | { type: 'ua'; ua: NativeUa | null }
   | { prefer: PreferValue; type: 'prefer' }
   | { on: boolean; type: 'realPhone' }
+  | { keys: Keys; type: 'keys' }
   | { state: Carry; type: 'carry' };
 export type Question = Ask & { id: number };
 
@@ -96,6 +99,37 @@ export const PREFER_KEY = 'prefer';
  */
 export const REAL_PHONE_KEY = 'realPhone';
 
+/**
+ * In `chrome.storage.local`: the shortcuts the user set in the panel, one set for every
+ * site, in place of each page's `localStorage`. The bridge reads it as the page starts and
+ * hands it on as it changes, in any tab. Keys a page's `localStorage` kept from before
+ * are not brought over: that would take a write with no hand of the user's in it.
+ */
+export const KEYS_KEY = 'keys';
+
+/**
+ * devknobs' bindings, the names its kept keys have: one devknobs adds and this leaves out, or
+ * one this has and devknobs dropped, is a type error.
+ */
+const BINDINGS: Record<keyof StoredKeys, true> = {
+  elements: true,
+  grab: true,
+  inspect: true,
+  panel: true,
+  replay: true,
+  requests: true,
+  reset: true,
+  settings: true,
+  storage: true,
+};
+const KEY_BINDINGS = Object.keys(BINDINGS) as Array<keyof StoredKeys>;
+
+/** The longest key devknobs writes, such as `meta+ctrl+alt+shift+backspace`, with room. */
+const KEY_MAX = 64;
+
+/** The shortcuts as devknobs keeps them: its version and each binding's key it set, as text. */
+export type Keys = { v?: number } & StoredKeys;
+
 /** The preference as stored, the extension's copy where none is. */
 export function readPrefer(value: unknown): PreferValue {
   return value === 'page' ? 'page' : 'extension';
@@ -106,6 +140,8 @@ export type PageMessage =
   | TabMessage
   | { prefer: PreferValue; type: 'prefer' }
   | { on: boolean; type: 'realPhone' }
+  /** The shortcuts kept for every site, null where the user set none yet. */
+  | { keys: Keys | null; type: 'keys' }
   | (Answer & { id: number; type: 'answer' })
   | {
       base: string;
@@ -292,6 +328,36 @@ export function readUa(value: unknown): NativeUa | null | undefined {
   };
 }
 
+/**
+ * The shortcuts a page sent or storage holds, or null for anything that is no object, has a
+ * bad version, or a key that is no short text. A name this build does not know, such as a
+ * binding of a newer devknobs, is left out. devknobs reads each key itself.
+ */
+export function readKeys(value: unknown): Keys | null {
+  if (!isFields(value)) {
+    return null;
+  }
+  const keys: Keys = {};
+  for (const [name, text] of Object.entries(value)) {
+    if (name === 'v') {
+      if (typeof text !== 'number' || !Number.isSafeInteger(text) || text < 0) {
+        return null;
+      }
+      keys.v = text;
+      continue;
+    }
+    const binding = oneOf(name, KEY_BINDINGS);
+    if (!binding) {
+      continue;
+    }
+    if (!isText(text) || text.length > KEY_MAX) {
+      return null;
+    }
+    keys[binding] = text;
+  }
+  return keys;
+}
+
 /** What a tab's page may send the service worker, through the bridge, or null for anything else. */
 export function readPageMessage(value: unknown): PageRequest | null {
   if (!isFields(value)) {
@@ -335,6 +401,10 @@ export function readPageMessage(value: unknown): PageRequest | null {
     }
     case 'realPhone': {
       return typeof value.on === 'boolean' ? { id, on: value.on, type: 'realPhone' } : null;
+    }
+    case 'keys': {
+      const keys = readKeys(value.keys);
+      return keys ? { id, keys, type: 'keys' } : null;
     }
     case 'carry': {
       const state = readCarry(value.state);
