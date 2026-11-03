@@ -7,7 +7,8 @@ import { specificity } from "../src/styles/selector";
 import type { RuleBlock } from "../src/styles/types";
 import { resetPage } from "../src/ui/panel";
 import { asElement, matchesSelector, PageDocument, PageElement, type PageSheet } from "./force-dom";
-import { as, element, type FakeElement, imported, layer, locked, media, nested, page, rule, sheet, supports } from "./styles-cssom";
+import { switchedSheet } from "../src/engine/style";
+import { as, element, type FakeElement, imported, layer, locked, media, nested, page, rule, scope, sheet, supports } from "./styles-cssom";
 
 afterEach(() => {
   clearForced();
@@ -116,6 +117,42 @@ describe("forcing a state", () => {
       `:is(.a${is}, .b) .icon { fill: red; }`,
     ]);
     expect(copiedText(doc)).not.toContain(".note");
+  });
+
+  test("copies an `@scope` whose limits have the state whole, a nested one under its rule, and no layer with no name", () => {
+    const { doc, cta } = hero();
+    doc.styleSheets = [
+      sheet([
+        scope(".hero:hover", null, [rule(".cta", "outline: 1px;")]),
+        scope(".hero", null, [rule(".plain", "color: red;")]),
+        rule(".n", "", [scope(".b", null, [rule(".c:hover", "color: pink;")])]),
+        layer("", [rule(".cta:hover", "color: gray;")]),
+      ]),
+    ];
+    forceState(asElement(cta), ["hover"]);
+    const is = `:is(:hover, [${FORCE_ATTRIBUTE}~="hover"])`;
+    expect(copiedText(doc).split("\n")).toEqual([`@scope (.hero${is}) { .cta { outline: 1px; } }`, `@scope (:is(.n) .b) { .c${is} { color: pink; } }`]);
+  });
+
+  test("puts back a force attribute the page had", () => {
+    const { section, cta } = hero();
+    section.setAttribute(FORCE_ATTRIBUTE, "page's own");
+    forceState(asElement(cta), ["hover"]);
+    expect(section.getAttribute(FORCE_ATTRIBUTE)).toBe("hover");
+    clearForced();
+    expect(section.getAttribute(FORCE_ATTRIBUTE)).toBe("page's own");
+    expect(cta.getAttribute(FORCE_ATTRIBUTE)).toBeNull();
+  });
+
+  test("a sheet removed stays off, whatever turns it on after", () => {
+    const { doc } = hero();
+    const switched = switchedSheet(doc as unknown as Document, "test");
+    if (!switched) throw new Error("no sheet");
+    switched.on();
+    expect(doc.adoptedStyleSheets).toHaveLength(1);
+    switched.remove();
+    switched.on();
+    expect(doc.adoptedStyleSheets).toEqual([]);
   });
 
   test("copies a shadow host's own rules too, for `:host(:hover)`", () => {
@@ -237,6 +274,7 @@ describe("the styles engine while a state is forced", () => {
         rule(".cta:hover", "background: red;"),
         rule(".hero:hover .cta", "color: white;"),
         rule(".cta:not(:hover)", "border: 1px;"),
+        scope(".hero:hover", null, [rule(".cta", "outline: 1px;")]),
       ]),
     );
     return { cta };
@@ -257,6 +295,8 @@ describe("the styles engine while a state is forced", () => {
     expect(applying(inspect(as(cta)))).toEqual([
       [".hero:hover .cta", "color"],
       [".cta:hover", "background"],
+      // The `@scope (.hero:hover)` rule, its limit matched with the state too.
+      [".cta", "outline"],
       [".cta", "background (off)"],
     ]);
     clearForced();

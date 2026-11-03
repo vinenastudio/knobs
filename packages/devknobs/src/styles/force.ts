@@ -22,8 +22,9 @@
  * state is on the element and its ancestors only, so `:has()` finds it there
  * and nowhere else, as with a real hover; a selector the browser will not
  * take once written so is left out; an `@scope` with no start is scoped to
- * the whole document; and `:visited` is not forced, as browsers hide it from
- * a page. A rule nested in a list that has a state in only some of its
+ * the whole document; a rule in a `@layer` with no name is not copied, as a
+ * copy would be a layer of its own; and `:visited` is not forced, as
+ * browsers hide it from a page. A rule nested in a list that has a state in only some of its
  * selectors, as `.a:hover, .b { .icon { } }`, is copied under the whole list,
  * `:is(.a:hover, .b) .icon`, so it applies again to `.b .icon` too.
  */
@@ -69,8 +70,8 @@ function isState(name: string): name is ForcedState {
 interface Forced {
   element: Element;
   states: ForcedState[];
-  /** The elements that carry the attribute. */
-  marked: Element[];
+  /** The elements that carry the attribute, each with the value it had before, null for none. */
+  marked: { element: Element; before: string | null }[];
   /** The trees whose rules are copied, each with its stylesheet of copies. */
   sheets: Map<Scope, OwnStyle>;
 }
@@ -171,8 +172,12 @@ function standalone(selector: string, parent: string | null): string {
     .join(", ");
 }
 
-/** The copies of the rules that have a state forced now, in their order, each in what it sits in. */
-function copies(rules: CSSRuleList, parent: string | null, wanted: ReadonlySet<ForcedState>): string[] {
+/**
+ * The copies of the rules that have a state forced now, in their order, each
+ * in what it sits in. `whole` copies every rule, as in an `@scope` whose
+ * limits have a state forced.
+ */
+function copies(rules: CSSRuleList, parent: string | null, wanted: ReadonlySet<ForcedState>, whole = false): string[] {
   const out: string[] = [];
   const wrap = (head: string, inner: string[]): void => {
     if (inner.length > 0) out.push(`${head} { ${inner.join(" ")} }`);
@@ -182,7 +187,7 @@ function copies(rules: CSSRuleList, parent: string | null, wanted: ReadonlySet<F
     if (body.trim() === "") return;
     const kept = splitList(selector)
       .map(rewrite)
-      .filter(({ states }) => [...states].some((state) => wanted.has(state)))
+      .filter(({ states }) => whole || [...states].some((state) => wanted.has(state)))
       .map(({ text }) => text);
     if (kept.length > 0) out.push(`${kept.join(", ")} { ${body} }`);
   };
@@ -193,20 +198,26 @@ function copies(rules: CSSRuleList, parent: string | null, wanted: ReadonlySet<F
       if (isKind(rule, "CSSStyleRule")) {
         const selector = standalone(rule.selectorText, parent);
         copy(selector, rule.style.cssText);
-        if (rule.cssRules?.length) out.push(...copies(rule.cssRules, selector, wanted));
+        if (rule.cssRules?.length) out.push(...copies(rule.cssRules, selector, wanted, whole));
       } else if (isKind(rule, "CSSNestedDeclarations")) {
         if (parent !== null) copy(resolveNesting("&", parent), rule.style.cssText);
       } else if (isKind(rule, "CSSMediaRule")) {
-        wrap(`@media ${rule.media.mediaText}`, copies(rule.cssRules, parent, wanted));
+        wrap(`@media ${rule.media.mediaText}`, copies(rule.cssRules, parent, wanted, whole));
       } else if (isKind(rule, "CSSSupportsRule")) {
-        wrap(`@supports ${rule.conditionText}`, copies(rule.cssRules, parent, wanted));
+        wrap(`@supports ${rule.conditionText}`, copies(rule.cssRules, parent, wanted, whole));
       } else if (isKind(rule, "CSSContainerRule")) {
-        wrap(`@container ${rule.conditionText}`, copies(rule.cssRules, parent, wanted));
+        wrap(`@container ${rule.conditionText}`, copies(rule.cssRules, parent, wanted, whole));
       } else if (isKind(rule, "CSSLayerBlockRule")) {
-        wrap(rule.name ? `@layer ${rule.name}` : "@layer", copies(rule.cssRules, parent, wanted));
+        // A layer with no name is another one each time it is written: a copy would not keep its place.
+        if (rule.name) wrap(`@layer ${rule.name}`, copies(rule.cssRules, parent, wanted, whole));
       } else if (isKind(rule, "CSSScopeRule")) {
-        const limits = rule.start ? ` (${rule.start})${rule.end ? ` to (${rule.end})` : ""}` : "";
-        wrap(`@scope${limits}`, copies(rule.cssRules, null, wanted));
+        // Nested in a rule, the scope starts from what that rule styles.
+        const start = parent === null ? rule.start : rule.start ? resolveNesting(rule.start, parent) : parent;
+        const end = parent !== null && rule.end ? resolveNesting(rule.end, parent) : rule.end;
+        const limits = start ? ` (${start})${end ? ` to (${end})` : ""}` : "";
+        // Limits with a state forced: every rule in it may now apply, as written there.
+        const stated = [start, end].some((one) => one !== null && [...rewrite(one).states].some((state) => wanted.has(state)));
+        wrap(`@scope${limits ? rewrite(limits).text : ""}`, copies(rule.cssRules, null, wanted, whole || stated));
       } else if (isKind(rule, "CSSImportRule")) {
         if (rule.styleSheet) out.push(...sheetCopies(rule.styleSheet, wanted, rule));
       }
@@ -281,7 +292,7 @@ export function syncForced(): void {
   if (!forced) return;
   const wanted = new Set<ForcedState>();
   const scopes = new Set<Scope>();
-  for (const element of forced.marked) {
+  for (const { element } of forced.marked) {
     for (const state of (element.getAttribute(FORCE_ATTRIBUTE) ?? "").split(" ")) if (isState(state)) wanted.add(state);
     scopes.add(scopeOf(element));
     // A host's own shadow root holds its `:host(:hover)` rules.
@@ -300,9 +311,10 @@ export function clearForced(): void {
   if (!forced) return;
   current = null;
   written.clear();
-  for (const element of forced.marked) {
+  for (const { element, before } of forced.marked) {
     try {
-      element.removeAttribute(FORCE_ATTRIBUTE);
+      if (before === null) element.removeAttribute(FORCE_ATTRIBUTE);
+      else element.setAttribute(FORCE_ATTRIBUTE, before);
     } catch {
       // An element of a page that went.
     }
@@ -330,8 +342,8 @@ export function forceState(element: Element | null, states: readonly string[]): 
   const forced: Forced = { element, states: chosen, marked: [], sheets: new Map() };
   for (const [one, own] of marks(element, chosen)) {
     if (own.length === 0) continue;
+    forced.marked.push({ element: one, before: one.getAttribute(FORCE_ATTRIBUTE) });
     one.setAttribute(FORCE_ATTRIBUTE, own.join(" "));
-    forced.marked.push(one);
   }
   current = forced;
   syncForced();

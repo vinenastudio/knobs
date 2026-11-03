@@ -59,10 +59,11 @@ is in the view and not in a field (⌘Z and Ctrl Z do not), and `copy prompt
 for agent` copies a prompt that asks your agent to put them in the code.
 
 `+ new rule` adds a rule for the element, its selector from the element's
-classes, and the chips `:hover`, `:focus`, `:focus-visible`, `:active` and
-`:focus-within` over the rules force that state: the page draws the element
-so and the styles show the rules of the state. a forced state is no edit,
-and it ends when you pick another element or close the view.
+classes. the chips `:hover`, `:focus`, `:focus-visible`, `:active` and
+`:focus-within` over the rules force a state: each makes the page draw the
+element in that state, and the styles show the rules of that state as
+applying. a forced state is no edit, and it ends when you pick another
+element or close the view.
 
 the DOM tree can be edited too: double-click a text or an attribute to edit
 it, and on the selected line `a` adds an attribute, `F2` edits it as html,

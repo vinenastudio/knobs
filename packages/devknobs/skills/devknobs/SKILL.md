@@ -223,6 +223,8 @@ window.devknobs.forceState(null);
 ```
 
 It takes an element or a selector, returns the states forced, and is no edit.
+`reset()` does not clear it: call `forceState(null)` before you go on to the
+next condition and before `reset()` when you finish.
 It is emulated: a stylesheet from another origin is not seen, and a page rule
 with `:not(:hover)` still draws.
 
@@ -260,6 +262,7 @@ changes data values, such as numbers and names. That is not a bug.
 Put the knobs back, and the panel as you noted it at the start:
 
 ```js
+window.devknobs.forceState(null); // a state you forced; reset() leaves it
 window.devknobs.reset();
 window.devknobs.setState({ panel: NOTED_PANEL }); // the panel json you noted
 await window.devknobs.ready();

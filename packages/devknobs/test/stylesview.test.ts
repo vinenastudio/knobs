@@ -10,7 +10,7 @@ import type { DevknobsState } from "../src/types";
 import { createEditLog, type EditLog } from "../src/edit/log";
 import { parseDeclarations } from "../src/styles/declarations";
 import { ADD, HOLD, NEW_RULE } from "../src/ui/cssedit";
-import type { ForcedState } from "../src/styles/force";
+import { FORCED_STATES, type ForcedState } from "../src/styles/force";
 import {
   createStylesView,
   EMPTY,
@@ -126,7 +126,7 @@ const page: StylesPage = {
   force: {
     state: () => forced,
     set: (element, states) => {
-      const chosen = states.filter((state): state is ForcedState => ["hover", "focus", "focus-visible", "active", "focus-within"].includes(state));
+      const chosen = FORCED_STATES.filter((state) => states.includes(state));
       forced = element && chosen.length > 0 ? { element, states: chosen } : null;
       forceCalls.push(`set ${chosen.join(" ")}`);
       return chosen;
@@ -1148,31 +1148,41 @@ describe("editing", () => {
     const node = editing();
     const [chips] = node.shown("force-states");
     expect(chips?.getAttribute("aria-label")).toBe(FORCE_LABEL);
-    const chip = (state: string) => node.find("chip").find((one) => one.textContent === `:${state}`);
+    const chip = (state: string): FakeNode => {
+      const found = node.find("chip").find((one) => one.textContent === `:${state}`);
+      if (!found) throw new Error(`no :${state} chip`);
+      return found;
+    };
     expect(node.find("force-states")[0]?.find("chip").map((one) => one.textContent)).toEqual([":hover", ":focus", ":focus-visible", ":active", ":focus-within"]);
     const reads = asked.length;
-    chip("hover")?.fire("click");
+    chip("hover").fire("click");
     expect(forced).toEqual({ element: as(save), states: ["hover"] });
-    expect(chip("hover")?.getAttribute("aria-pressed")).toBe("true");
+    expect(chip("hover").getAttribute("aria-pressed")).toBe("true");
     // The view reads the styles again, the copies of the rules made first.
     expect(asked.length).toBe(reads + 1);
     expect(forceCalls).toEqual(["set hover", "sync"]);
-    chip("focus-visible")?.fire("click");
+    chip("focus-visible").fire("click");
     expect(forced?.states).toEqual(["hover", "focus-visible"]);
-    chip("hover")?.fire("click");
+    chip("hover").fire("click");
     expect(forced?.states).toEqual(["focus-visible"]);
-    expect(chip("hover")?.getAttribute("aria-pressed")).toBe("false");
+    expect(chip("hover").getAttribute("aria-pressed")).toBe("false");
     expect(log.list()).toEqual([]);
   });
 
   test("the states end when another element is shown, and when the view goes", () => {
     const node = editing();
-    node.find("chip").find((one) => one.textContent === ":hover")?.fire("click");
+    const hover = node.find("chip").find((one) => one.textContent === ":hover");
+    if (!hover) throw new Error("no :hover chip");
+    hover.fire("click");
+    expect(forced).toEqual({ element: as(save), states: ["hover"] });
     view?.show(as(app));
     expect(forced).toBeNull();
     expect(forceCalls.at(-1)).toBe("clear");
     view?.show(as(save));
-    node.find("chip").find((one) => one.textContent === ":active")?.fire("click");
+    const active = node.find("chip").find((one) => one.textContent === ":active");
+    if (!active) throw new Error("no :active chip");
+    active.fire("click");
+    expect(forced).toEqual({ element: as(save), states: ["active"] });
     view?.destroy();
     view = null;
     expect(forced).toBeNull();
@@ -1181,6 +1191,7 @@ describe("editing", () => {
   test("the states another element has are not the shown one's, and stay", () => {
     forced = { element: as(app), states: ["hover"] };
     const node = editing();
+    expect(node.find("chip")).toHaveLength(FORCED_STATES.length);
     expect(node.find("chip").every((one) => one.getAttribute("aria-pressed") === "false")).toBe(true);
     view?.show(as(body));
     expect(forced).toEqual({ element: as(app), states: ["hover"] });
@@ -1200,8 +1211,9 @@ describe("editing", () => {
     forced = { element: as(save), states: ["hover"] };
     const node = editing();
     const [line] = node.find("css-new-rule");
-    expect(line?.textContent).toBe(NEW_RULE);
-    line?.fire("click");
+    if (!line) throw new Error("no new rule line");
+    expect(line.textContent).toBe(NEW_RULE);
+    line.fire("click");
     const [selector] = node.find("css-edit");
     if (!selector) throw new Error("no field");
     expect(Reflect.get(selector, "value")).toBe(".primary:hover");
@@ -1240,7 +1252,9 @@ describe("editing", () => {
     paneBody.append(fake(view.node));
     const node = fake(view.node);
     view.show(as(save));
-    node.find("css-new-rule")[0]?.fire("click");
+    const [line] = node.find("css-new-rule");
+    if (!line) throw new Error("no new rule line");
+    line.fire("click");
     const [selector] = node.find("css-edit");
     if (!selector) throw new Error("no field");
     Reflect.set(selector, "value", ".primary");
@@ -1258,10 +1272,53 @@ describe("editing", () => {
     expect(node.find("css-applied")[0]?.find("css-decl").map((one) => one.textContent)).toContain("background: #2f6df6");
   });
 
+  /** Open the new rule's field, with its selector set where given. */
+  function newRuleField(node: FakeNode, text?: string): FakeNode {
+    const [line] = node.find("css-new-rule");
+    if (!line) throw new Error("no new rule line");
+    line.fire("click");
+    const [selector] = node.find("css-edit");
+    if (!selector) throw new Error("no field");
+    if (text !== undefined) Reflect.set(selector, "value", text);
+    return selector;
+  }
+
+  test("a click elsewhere adds no rule where the selector is as it opened", () => {
+    Object.assign(save, { getRootNode: () => new PageDocument() });
+    const node = editing();
+    newRuleField(node).fire("blur");
+    expect(log.list()).toEqual([]);
+    expect(node.find("css-new-rule")).toHaveLength(1);
+  });
+
+  test("a click elsewhere adds a rule with a selector typed, and leaves the focus where it went", async () => {
+    Object.assign(save, { getRootNode: () => new PageDocument() });
+    const node = editing();
+    newRuleField(node, ".primary:focus").fire("blur");
+    expect(log.list().map((one) => [one.kind, one.after])).toEqual([["css-rule", ".primary:focus"]]);
+    await Promise.resolve();
+    expect(node.find("css-adding")).toEqual([]);
+  });
+
+  test("a new rule the filter hides does not open its line for a property", async () => {
+    Object.assign(save, { getRootNode: () => new PageDocument() });
+    const node = editing();
+    const [filter] = node.find("filter");
+    if (!filter) throw new Error("no filter");
+    filter.value = "color";
+    filter.fire("input");
+    newRuleField(node, ".primary:hover").fire("keydown", { key: "Enter" });
+    expect(log.list()).toHaveLength(1);
+    await Promise.resolve();
+    expect(node.find("css-adding")).toEqual([]);
+  });
+
   test("a selector the page does not take keeps the new rule's field open, marked", () => {
     Object.assign(save, { getRootNode: () => new PageDocument() });
     const node = editing();
-    node.find("css-new-rule")[0]?.fire("click");
+    const [line] = node.find("css-new-rule");
+    if (!line) throw new Error("no new rule line");
+    line.fire("click");
     const [selector] = node.find("css-edit");
     if (!selector) throw new Error("no field");
     Reflect.set(selector, "value", ".primary!!");

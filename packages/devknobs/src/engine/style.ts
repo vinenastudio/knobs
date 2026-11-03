@@ -119,13 +119,17 @@ export function switchedSheet(root: Root, name: string): SwitchedSheet | null {
     const off = (): void => {
       root.adoptedStyleSheets = root.adoptedStyleSheets.filter((other) => other !== sheet);
     };
+    let gone = false;
     return {
       sheet,
       on() {
-        if (!root.adoptedStyleSheets.includes(sheet)) root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
+        if (!gone && !root.adoptedStyleSheets.includes(sheet)) root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
       },
       off,
-      remove: off,
+      remove() {
+        gone = true;
+        off();
+      },
     };
   }
   const style = documentOf(root).createElement("style");

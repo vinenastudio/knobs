@@ -294,9 +294,11 @@ modes, and each edit goes on the page at once:
   selector that finds it where it has none, then the states forced on it
   (`.cta:hover`), and can be changed first. enter adds the rule, escape
   leaves none, and a selector the browser does not take turns red and stays
-  open. the rule goes in a stylesheet of devknobs' own in the element's
-  document, the width knob's frame's too, and its `+ add property` opens at
-  once. it is listed with the element's rules, from `new rule`, also while it
+  open. a click or tab elsewhere adds the rule where the selector was
+  changed, and none where it was left as it opened. the rule goes in a
+  stylesheet of devknobs' own in the element's document, the width knob's
+  frame's too, and its `+ add property` opens at once, unless it was added
+  by a click elsewhere or the filter hides it. it is listed with the element's rules, from `new rule`, also while it
   does not match the element (its selector quiet, its lines struck through),
   so a `:hover` rule can be written without the state forced. undo takes it
   off the page
@@ -356,6 +358,8 @@ where that falls short:
   the page's order would have lost
 - `:has()` finds a state only on the element and its ancestors, and an
   `@scope` with no start is scoped to the whole document
+- a rule in a `@layer` with no name is not copied: a copy would be a layer
+  of its own, in another place in the order
 - only the selectors of a list that have the state are copied, but a rule
   nested in such a list, as `.a:hover, .b { .icon { } }`, is copied under
   the whole list, `:is(.a:hover, .b) .icon`, so it comes again after the

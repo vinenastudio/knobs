@@ -96,6 +96,12 @@ describe("a new rule", () => {
     expect(doc.adoptedStyleSheets).toEqual([]);
   });
 
+  test("takes a selector with `{`, `}` or `;` in a string", () => {
+    const { element } = cta();
+    const change = newRule({ element: asElement(element), selector: "a.cta" }, 'a[title="a;b{}"]');
+    expect(change?.edit.after).toBe('a[title="a;b{}"]');
+  });
+
   test("is listed for the element it was made for, while it is in force", () => {
     const { doc, element } = cta();
     const other = new PageElement(doc, "p");

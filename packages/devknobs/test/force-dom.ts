@@ -130,23 +130,21 @@ function matchesCompound(element: Matchable, compound: string): boolean {
   return ok;
 }
 
+/** Whether the compound at `index` matches the element, and the rest of the selector from it, trying every ancestor a descendant combinator allows. */
+function matchesAt(element: Matchable, parts: { compound: string; combinator: " " | ">" }[], index: number): boolean {
+  const part = parts[index];
+  if (!part || !matchesCompound(element, part.compound)) return false;
+  if (index === parts.length - 1) return true;
+  if (part.combinator === ">") return element.parentElement !== null && matchesAt(element.parentElement, parts, index + 1);
+  for (let at = element.parentElement; at; at = at.parentElement) if (matchesAt(at, parts, index + 1)) return true;
+  return false;
+}
+
 function matchesComplex(element: Matchable, selector: string): boolean {
-  const [subject, ...rest] = compounds(selector.trim());
-  if (!subject || !matchesCompound(element, subject.compound)) return false;
-  let at: Matchable | null = element;
-  let combinator = subject.combinator;
-  for (const part of rest) {
-    if (combinator === ">") {
-      at = at?.parentElement ?? null;
-      if (!at || !matchesCompound(at, part.compound)) return false;
-    } else {
-      at = at?.parentElement ?? null;
-      while (at && !matchesCompound(at, part.compound)) at = at.parentElement;
-      if (!at) return false;
-    }
-    combinator = part.combinator;
-  }
-  return true;
+  const parts = compounds(selector.trim());
+  // The browser parses the whole selector before it matches: each compound throws here where it is no css.
+  for (const part of parts) matchesCompound(element, part.compound);
+  return matchesAt(element, parts, 0);
 }
 
 /** Whether an element matches a selector list, as `Element.matches` answers. Throws on what it cannot read. */
@@ -181,10 +179,13 @@ export class PageSheet {
   constructor(private readonly page: PageDocument) {}
 
   insertRule(text: string, index = 0): number {
-    const found = /^\s*([^{}]+?)\s*\{\s*\}\s*$/.exec(text);
-    if (!found?.[1] || found[1].startsWith("@")) throw new SyntaxError(`Failed to parse the rule '${text}'.`);
+    const found = /^\s*(.+?)\s*\{\s*\}\s*$/s.exec(text);
+    // A brace outside a string ends the selector early: that is no one rule.
+    const bare = found?.[1]?.replace(/"[^"]*"|'[^']*'/g, "") ?? "";
+    if (!found?.[1] || found[1].startsWith("@") || /[{}]/.test(bare)) throw new SyntaxError(`Failed to parse the rule '${text}'.`);
     // A selector the page cannot read is no rule: matches() is how the fake parses it.
-    matchesSelector(this.page.documentElement, found[1].replace(/::?[\w-]+$/, ""));
+    // A pseudo-element at its end is no part of what an element matches; an unknown pseudo-class is, and throws.
+    matchesSelector(this.page.documentElement, found[1].replace(/(::[\w-]+|:(before|after))$/, ""));
     this.cssRules.splice(index, 0, new CSSStyleRule(found[1], this));
     return index;
   }

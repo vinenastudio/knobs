@@ -73,14 +73,14 @@ export function inScope(element: Element, scope: ScopeLimits): boolean {
   let root: Element | null = scope.around;
   if (scope.start !== null) {
     root = element;
-    while (root && !root.matches(scope.start)) root = root.parentElement;
+    while (root && !matches(root, scope.start)) root = root.parentElement;
     if (!root) return false;
   } else if (root && !root.contains(element)) {
     return false;
   }
   if (scope.end === null) return true;
   for (let current: Element | null = element; current && current !== root; ) {
-    if (current.matches(scope.end)) return false;
+    if (matches(current, scope.end)) return false;
     current = current.parentElement;
   }
   return true;

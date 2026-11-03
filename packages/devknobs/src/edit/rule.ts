@@ -57,8 +57,8 @@ function viewOf(element: Element): Window | null {
  */
 export function newRule(place: { element: Element; selector: string }, text: string): Change | null {
   const selectorText = text.trim();
-  // One selector list and nothing more: no block, no at-rule, no second rule.
-  if (selectorText === "" || /[{};]/.test(selectorText) || selectorText.startsWith("@")) return null;
+  // One selector list and nothing more: an at-rule is refused here, a block or a second rule by the browser below.
+  if (selectorText === "" || selectorText.startsWith("@")) return null;
   const { element } = place;
   const root = element.getRootNode();
   if (!isDocumentNode(root) && !isShadowRoot(root)) return null;

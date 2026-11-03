@@ -139,8 +139,17 @@ function escaped(element: Element, name: string): string {
  */
 export function newRuleSelector(element: Element, states: readonly string[] = []): string {
   const classes = (element.getAttribute("class") ?? "").split(/\s+/).filter(Boolean);
-  const base = classes.length > 0 ? classes.map((name) => `.${escaped(element, name)}`).join("") : selectorOf(element);
+  // Grab's selector goes through shadow roots and frames: the rule's own tree takes its last step alone.
+  const local = selectorOf(element).split(/>>>|>>iframe>>/).pop()?.trim() || element.tagName.toLowerCase();
+  const base = classes.length > 0 ? classes.map((name) => `.${escaped(element, name)}`).join("") : local;
   return `${base}${states.map((state) => `:${state}`).join("")}`;
+}
+
+/** Whether a node is on the page and shown, nothing it is in hidden. */
+function shows(node: HTMLElement): boolean {
+  if (!node.isConnected) return false;
+  for (let at: HTMLElement | null = node; at; at = at.parentElement) if (at.hidden) return false;
+  return true;
 }
 
 /** A click on a custom property's name in a value: that does its own. */
@@ -305,8 +314,10 @@ export function createCssEditor(context: CssEditorContext): CssEditor {
     control.addEventListener("click", () => openAdd(control, place));
     if (opening === place.style) {
       opening = null;
-      // Once the view has put it in its place.
-      queueMicrotask(() => openAdd(control, place));
+      // Once the view has put it in its place, and only where it shows: a filter may hide it.
+      queueMicrotask(() => {
+        if (shows(control)) openAdd(control, place);
+      });
     }
     return control;
   }
@@ -335,8 +346,9 @@ export function createCssEditor(context: CssEditorContext): CssEditor {
       open = null;
       if (away) hold();
       const text = field.value.trim();
-      const tried = commit && text !== "";
-      const added = tried && addRule(element, text);
+      // Left as it opened, a click elsewhere adds no rule.
+      const tried = commit && text !== "" && !(away && text === selector);
+      const added = tried && addRule(element, text, !away);
       if (tried && !added && !away) {
         shown = true;
         open = self;
@@ -367,12 +379,12 @@ export function createCssEditor(context: CssEditorContext): CssEditor {
     field.setSelectionRange(field.value.length, field.value.length);
   }
 
-  /** Add a rule for the element, and say whether the page took its selector. */
-  function addRule(element: Element, text: string): boolean {
+  /** Add a rule for the element, and say whether the page took its selector. With `then`, its line for a property opens. */
+  function addRule(element: Element, text: string, then: boolean): boolean {
     const change = newRule({ element, selector: selectorOf(element) }, text);
     if (!change) return false;
     // Set before the edit, which draws the view again at once.
-    opening = ruleOf(change)?.style ?? null;
+    opening = then ? (ruleOf(change)?.style ?? null) : null;
     const took = recordAt(log, change, element, context.locate) !== null;
     if (!took) opening = null;
     return took;
