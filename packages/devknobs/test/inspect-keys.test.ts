@@ -48,7 +48,7 @@ describe("the inspect action", () => {
 describe("the inspect key", () => {
   test("is shift and c, listed after grab's", () => {
     expect(comboText(defaultKeys().inspect)).toBe("shift+c");
-    expect(BINDINGS).toEqual(["panel", "grab", "inspect", "replay", "requests", "storage", "reset"]);
+    expect(BINDINGS).toEqual(["panel", "grab", "inspect", "replay", "requests", "storage", "elements", "settings", "reset"]);
     expect(BINDING_WORDS.inspect).toBe("inspect");
   });
 

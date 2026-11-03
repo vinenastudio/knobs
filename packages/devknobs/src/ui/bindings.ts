@@ -15,7 +15,8 @@ import {
 
 /**
  * Where the keys the user set in the panel are kept, in `localStorage`, so they
- * hold across reloads and in new tabs of the origin. Reset all leaves them.
+ * hold across reloads and in new tabs of the origin. Reset all leaves them. A
+ * mount with a `keysStore` keeps them there instead.
  */
 export const KEYS_KEY = "devknobs:keys";
 
@@ -30,6 +31,8 @@ export const BINDINGS: readonly Binding[] = [
   "replay",
   "requests",
   "storage",
+  "elements",
+  "settings",
   "reset",
 ];
 
@@ -42,6 +45,8 @@ export const BINDING_WORDS: Record<Binding, string> = {
   requests: "requests",
   storage: "storage",
   reset: "reset",
+  elements: "elements",
+  settings: "settings",
 };
 
 /** The keys the user set, by binding, as `comboText` writes them. */
@@ -93,9 +98,9 @@ function clashText(combo: Combo): string {
 }
 
 /**
- * Why a combination cannot be a binding's, or null where it can: a key alone
- * types, so it needs a modifier unless it is a function key, the browser keeps
- * some, `/` is the search's, and no two bindings share one. `others` are the
+ * Why a combination cannot be a binding's, or null where it can: the browser
+ * keeps some, `/` is the search's, and no two bindings share one. A key alone
+ * is fine, as it acts only where no field has the focus. `others` are the
  * keys the other bindings have now.
  */
 export function comboProblem(
@@ -104,7 +109,6 @@ export function comboProblem(
   others: Partial<Keys> = {},
 ): string | null {
   if (!keepable(combo.key)) return "use a letter, digit, symbol or F1 to F12";
-  if (bare(combo) && !isFunctionKey(combo.key)) return "add a modifier, alone it types";
   if (isReserved(combo)) return "the browser uses it";
   if (combo.key === "/" && !combo.meta && !combo.ctrl && !combo.alt) return "/ opens the search";
   const text = clashText(combo);
@@ -193,6 +197,11 @@ export function readKeys(json: string | null | undefined): StoredKeys {
   } catch {
     return {};
   }
+  return keysOf(value);
+}
+
+/** The stored keys as `readKeys` reads them, from the value itself rather than its json. */
+export function keysOf(value: unknown): StoredKeys {
   if (newer(value, KEYS_VERSION)) return {};
   const stored = record(value);
   const keys: StoredKeys = {};
@@ -260,6 +269,32 @@ function keepKeys(keys: StoredKeys): void {
   }
 }
 
+/**
+ * @internal Where a mount keeps the keys the user sets in place of `localStorage`, for
+ * the devknobs extension, which keeps them for every site. `load` gives what
+ * was last kept, read as `keysOf` reads it, `save` keeps them with their
+ * version, and `subscribe` hears them change elsewhere and returns the way to
+ * stop. `load` answers at once, so it gives the last it knows.
+ */
+export interface KeysStore {
+  load(): unknown;
+  save(keys: { v: number } & StoredKeys): void;
+  subscribe(listener: () => void): () => void;
+}
+
+/**
+ * The keys a panel acts on: those of the bindings it lists, such as no
+ * elements view's without inspect. One it does not list has none, so its key
+ * goes to the page. The panel's always keeps its own.
+ */
+export function keysListed(keys: Keys, listed: readonly Binding[]): Keys {
+  const here: Keys = { ...keys };
+  for (const binding of BINDINGS) {
+    if (binding !== "panel" && !listed.includes(binding)) here[binding] = null;
+  }
+  return here;
+}
+
 /** The keys in force, kept in step with the ones the user sets, here or in another tab. */
 export interface LiveKeys {
   get(): Keys;
@@ -277,14 +312,41 @@ export interface LiveKeys {
 /**
  * The keys for a mount's options, with the ones the user set on top. Another
  * document of the origin that sets them, as the page above the width knob's
- * frame does, is heard through the storage event.
+ * frame does, is heard through the storage event. With a `store`, they are
+ * the store's, and so are their changes. In fresh mode nothing kept is read
+ * from either, and nothing is written to the store.
  */
 export function createKeys(
-  options: { hotkey?: string; grabKey?: string; grab?: boolean } = {},
+  options: { hotkey?: string; grabKey?: string; grab?: boolean; store?: KeysStore } = {},
 ): LiveKeys {
   const base = defaultKeys(options);
   const grab = options.grab !== false;
-  let stored = loadKeys();
+  const store = options.store ?? null;
+
+  function load(): StoredKeys {
+    if (!store) return loadKeys();
+    if (fresh()) return {};
+    try {
+      return keysOf(store.load());
+    } catch {
+      return {};
+    }
+  }
+
+  function keep(keys: StoredKeys): void {
+    if (!store) {
+      keepKeys(keys);
+      return;
+    }
+    if (fresh()) return;
+    try {
+      store.save(stamped(keys, KEYS_VERSION));
+    } catch {
+      // A store that went, as an extension reloaded: the key holds until the page goes.
+    }
+  }
+
+  let stored = load();
   let keys = resolveKeys(base, stored, grab);
   const listeners = new Set<() => void>();
 
@@ -295,13 +357,18 @@ export function createKeys(
 
   function onStorage(event: StorageEvent): void {
     if (event.key !== KEYS_KEY && event.key !== null) return;
+    heard();
+  }
+
+  function heard(): void {
     // In fresh mode nothing kept is read: a key set here holds, whatever another tab keeps.
     if (fresh()) return;
-    stored = loadKeys();
+    stored = load();
     changed();
   }
 
-  if (typeof window !== "undefined") window.addEventListener("storage", onStorage);
+  const stopStore = store?.subscribe(heard) ?? null;
+  if (!store && typeof window !== "undefined") window.addEventListener("storage", onStorage);
 
   return {
     get: () => keys,
@@ -314,7 +381,7 @@ export function createKeys(
       if (combo === null || comboText(combo) === comboText(base[binding])) delete next[binding];
       else next[binding] = comboText(combo);
       stored = next;
-      keepKeys(stored);
+      keep(stored);
       changed();
     },
     subscribe(listener) {
@@ -326,6 +393,7 @@ export function createKeys(
     recording: false,
     destroy() {
       listeners.clear();
+      stopStore?.();
       if (typeof window !== "undefined") window.removeEventListener("storage", onStorage);
     },
   };

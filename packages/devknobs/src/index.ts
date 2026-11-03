@@ -26,7 +26,7 @@ import {
 import { claim, expose, free, type Host, hostOf, owned, superseded, type Take, withdraw } from "./instance";
 import { applyOnLoad } from "./storage/onload";
 import type { DevknobsState, DevknobsStatePatch, GrabColorValue } from "./types";
-import { createKeys, type LiveKeys } from "./ui/bindings";
+import { createKeys, type KeysStore, type LiveKeys } from "./ui/bindings";
 import { runtimeLabel } from "./ui/footer";
 import { forwardKeys } from "./ui/keys";
 import { createPanel, type Panel, type PanelPrefer } from "./ui/panel";
@@ -82,6 +82,8 @@ export type { EngineOptions } from "./engine";
 export type { FrameRefusal, NativeDriver, NativeMedia, NativeSetting, NativeUa, NativeViewport } from "./engine/native";
 export type { SystemMedia } from "./engine/system";
 export type { HostBuild, PreferSetting, PreferValue } from "./host";
+/** @internal For the devknobs extension, with `keysStore`: not public api. */
+export type { KeysStore, StoredKeys } from "./ui/bindings";
 export type {
   GrabEntry,
   GrabFrame,
@@ -141,6 +143,12 @@ export interface MountOptions extends engine.EngineOptions {
   build?: HostBuild;
   /** For a host with a `build`: it stood down for another host, which holds the page for this load. */
   stoodDown?: () => void;
+  /**
+   * @internal For the devknobs extension: where the keys the user sets are
+   * kept in place of the page's `localStorage`, so they are the same on every
+   * site. Not public api: it may change in any release.
+   */
+  keysStore?: KeysStore;
 }
 
 export const PRESETS = {
@@ -229,6 +237,7 @@ function attach(options: MountOptions): void {
     hotkey: options.hotkey,
     grabKey: options.grabKey,
     grab: options.grab !== false,
+    store: options.keysStore,
   });
   keys = live;
   // Ahead of the panel's keys, so escape ends grab before it closes the panel.

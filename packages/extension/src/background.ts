@@ -5,6 +5,7 @@ import {
   type Answer,
   type Carry,
   detachMessage,
+  KEYS_KEY,
   PREFER_KEY,
   REAL_PHONE_KEY,
   type Question,
@@ -804,6 +805,10 @@ async function answer(tabId: number, question: Question, url: string | undefined
       await chrome.storage.local.set({ [REAL_PHONE_KEY]: question.on });
       return {};
     }
+    case 'keys': {
+      await chrome.storage.local.set({ [KEYS_KEY]: question.keys });
+      return {};
+    }
     case 'carry': {
       await follow(tabId, question.state);
       return {};
@@ -852,6 +857,7 @@ chrome.runtime.onMessage.addListener(
       request.type === 'ua' ||
       request.type === 'prefer' ||
       request.type === 'realPhone' ||
+      request.type === 'keys' ||
       request.type === 'carry'
     ) {
       answer(tabId, request, sender.url).then(reply, (error) =>

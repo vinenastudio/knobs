@@ -18,13 +18,13 @@ import type { DevknobsState } from "../types";
 import { runAction, stopAction } from "./actions";
 import { type Action, availableActions, type Live } from "./catalog";
 import { readColumn, wrapSliding } from "./column";
-import { BINDINGS, createKeys, type LiveKeys } from "./bindings";
+import { BINDINGS, createKeys, keysListed, type LiveKeys } from "./bindings";
 import { createDockSlide } from "./dockslide";
 import { button, el, lay } from "./dom";
 import { createDrag } from "./drag";
 import { type Command, createFooter, overflowBadge } from "./footer";
 import { icon } from "./icons";
-import { createInspector } from "./inspector";
+import { createInspector, STYLES_VIEW } from "./inspector";
 import {
   comboLabel,
   comboSpoken,
@@ -160,10 +160,11 @@ export function createPanel(options: PanelOptions = {}): Panel {
   stage.flip = flip;
   /** The actions the page has: grab and inspect only where there is one. */
   const actionsHere = availableActions();
-  /** The keys the shortcuts list: grab's and inspect's only where there is one. */
+  /** The keys the shortcuts list: grab's, and inspect's and its elements view's, only where there is one. */
   const bindingsHere = BINDINGS.filter(
     (binding) =>
-      (binding !== "grab" || grab !== null) && (binding !== "inspect" || inspect !== null),
+      (binding !== "grab" || grab !== null) &&
+      ((binding !== "inspect" && binding !== "elements") || inspect !== null),
   );
 
   const host = document.createElement("div");
@@ -539,12 +540,57 @@ export function createPanel(options: PanelOptions = {}): Panel {
       actionOf("storage")?.run();
       return;
     }
+    if (action === "requests" || action === "elements") {
+      showView(action);
+      return;
+    }
+    if (action === "settings") {
+      showSettings();
+      return;
+    }
     if (!engine.getState().panel.open) return;
     // A key runs its action alone: the panel's rows stay as they are.
-    if (action === "replay" || action === "requests") actionOf(action)?.run();
+    if (action === "replay") actionOf(action)?.run();
     else if (action === "reset") runCommand("reset");
     else if (action === "search") palette.startBrowsing();
     else toggle(false);
+  }
+
+  /** Whether a key's action opens a closed panel, so it is the panel's there too. */
+  function opensPanel(action: KeyAction): boolean {
+    return (
+      action === "toggle" ||
+      action === "storage" ||
+      action === "requests" ||
+      action === "settings" ||
+      action === "elements"
+    );
+  }
+
+  /**
+   * The requests' or the elements view's key: it shows its view, opening the
+   * panel where it is closed, and leaves the view where it shows already.
+   */
+  function showView(action: "requests" | "elements"): void {
+    const id = side.view();
+    const mine = action === "requests" ? requests.shows() : id === STYLES_VIEW;
+    if (mine && engine.getState().panel.open && viewing()) {
+      side.close();
+      return;
+    }
+    if (mine && id !== null) side.show(id);
+    else if (action === "requests") requestsHere.toggle();
+    else inspector?.elements();
+  }
+
+  /** The settings' key: it shows them, opening the panel where it is closed, and leaves them where they show. */
+  function showSettings(): void {
+    if (engine.getState().panel.open && settings.editing()) {
+      settings.leaveKeys();
+      return;
+    }
+    toggle(true);
+    settings.openKeys();
   }
 
   /**
@@ -616,15 +662,16 @@ export function createPanel(options: PanelOptions = {}): Panel {
       event.stopPropagation();
       return;
     }
-    const action = keyAction(event, keys.get());
+    // A binding the panel does not list, such as the elements view's without inspect, leaves its key to the page.
+    const action = keyAction(event, keysListed(keys.get(), bindingsHere));
     // A key the panel acts on does only that, not the browser's own as well:
-    // the toggle unless a drag holds it, replay, requests and reset while the
-    // panel is open. In the search no key the panel took is typed.
+    // the toggle and the views' keys unless a drag holds it, replay and reset
+    // while the panel is open. In the search no key the panel took is typed.
     const acts =
       action !== null &&
       action !== "close" &&
       !drag.dragging() &&
-      (action === "toggle" || action === "storage" || engine.getState().panel.open);
+      (opensPanel(action) || engine.getState().panel.open);
     const inSearch = event.composedPath()[0] === searchInput;
     if (acts || (action && action !== "close" && inSearch)) event.preventDefault();
     if (action === "close") escape();

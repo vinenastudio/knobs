@@ -4,6 +4,7 @@ import {
   type DevknobsStatePatch,
   type FrameRefusal,
   getState,
+  type KeysStore,
   mount,
   type NativeDriver,
   type PreferSetting,
@@ -17,6 +18,7 @@ import { DEFAULT_STATE, type KnobState, patchOf, sameState } from './knobs.ts';
 import {
   type Answer,
   type Ask,
+  type Keys,
   LEGACY_TO_PAGE,
   LOAD_FRAME,
   type NativeReason,
@@ -290,6 +292,97 @@ const driver: NativeDriver = {
   },
 };
 
+/** The shortcuts kept for every site, as the bridge last said, null until it says. */
+let keptKeys: Keys | null = null;
+const keysHeard = new Set<() => void>();
+
+// On the top window: the store below, for the copy in devknobs' frame, which has no bridge of its
+// own, to read the same keys.
+const KEYS_STORE = Symbol.for(`${TO_PAGE}.keys`);
+
+/**
+ * Where devknobs keeps the shortcuts set in the panel: in the extension's storage, the same on
+ * every site, not in the page's `localStorage`. The bridge says what they are after the mount,
+ * so devknobs starts from the defaults and takes them once they come. Only a key set during a gesture
+ * of the user's is kept for every site: a page script can change them only right after you click
+ * or press a key on that page; otherwise its change stays in this tab until it loads again. Where the
+ * page's own copy runs the panel, it keeps its keys in the page's `localStorage`, as with no extension.
+ */
+const keysStore: KeysStore = {
+  load: () => keptKeys,
+  save: (keys) => {
+    if (top && navigator.userActivation.isActive) {
+      void ask({ keys, type: 'keys' }).then(({ error }) => {
+        if (error === undefined) {
+          return;
+        }
+        // Not kept, as with the extension reloaded since the page loaded: the panel goes back
+        // to the keys that are, and the error is reported as any other of the page's.
+        heardKeys(keptKeys);
+        queueMicrotask(() => {
+          throw new Error(`knobs: the shortcut was not kept for every site: ${error}`);
+        });
+      });
+    }
+  },
+  subscribe: (listener) => {
+    keysHeard.add(listener);
+    return () => {
+      keysHeard.delete(listener);
+    };
+  },
+};
+
+function heardKeys(keys: Keys | null) {
+  keptKeys = keys;
+  for (const listener of keysHeard) {
+    try {
+      listener();
+    } catch (error) {
+      // One copy's error is its own: the others still hear the keys, and it is reported as ever.
+      queueMicrotask(() => {
+        throw error;
+      });
+    }
+  }
+}
+
+/** The store of the extension's copy on the page above, for the copy in devknobs' frame. */
+function keysAbove(): KeysStore | null {
+  let above: unknown;
+  try {
+    above = Reflect.get(window.parent, KEYS_STORE);
+  } catch {
+    return null;
+  }
+  if (typeof above !== 'object' || above === null) {
+    return null;
+  }
+  const store = above as KeysStore;
+  return {
+    load: () => store.load(),
+    save: (keys) => store.save(keys),
+    subscribe: (listener) => {
+      // The frame's page can go without its copy unmounting: the page above stops calling it.
+      let gone = false;
+      const stop = store.subscribe(() => {
+        if (!gone) {
+          listener();
+        }
+      });
+      window.addEventListener(
+        'pagehide',
+        () => {
+          gone = true;
+          stop();
+        },
+        { once: true },
+      );
+      return stop;
+    },
+  };
+}
+
 /**
  * Who runs the panel on a page with its own devknobs, shown in the panel's settings.
  * The choice is kept for every site; going back to the extension's copy from the
@@ -352,6 +445,7 @@ function onIdle(event: Event) {
 
 /** Mount the extension's copy as the page's host, its options as for the first mount. */
 function mountHost(persist: boolean) {
+  const keys = top ? keysStore : keysAbove();
   // The toolbar button opens and closes the panel, so no handle waits on the page's edge.
   // The user's own choice in the panel's settings still wins. As the host, a copy of
   // devknobs the page mounts itself hands its keys and grab here and takes no panel,
@@ -361,6 +455,7 @@ function mountHost(persist: boolean) {
     build: typeof KNOBS_BUILD === 'string' ? KNOBS_BUILD : 'store',
     handle: false,
     host: true,
+    ...(keys ? { keysStore: keys } : {}),
     native: driver,
     persist,
     stoodDown: standDown,
@@ -419,6 +514,9 @@ function onMessage(event: Event) {
   if (message.type === 'answer') {
     answers.get(message.id)?.(message);
     answers.delete(message.id);
+  } else if (message.type === 'keys') {
+    // Kept after a handover too, for a mount again once the page's copy has gone.
+    heardKeys(message.keys);
   } else if (yielded) {
     afterYield(message);
   } else if (message.type === 'prefer') {
@@ -488,6 +586,7 @@ function yieldedAbove(): boolean {
 
 if (top || (window.name === FRAME_NAME && !yieldedAbove())) {
   if (top) {
+    Reflect.set(window, KEYS_STORE, keysStore);
     document.addEventListener(TO_PAGE, onMessage);
     // An older copy of the extension, the store's 0.5 say, hears one channel for every copy.
     // Once it stood down for this one, its bridge's knobs and toolbar button must not reach it.

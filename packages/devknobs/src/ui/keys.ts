@@ -26,7 +26,16 @@ export interface Combo {
 }
 
 /** The shortcuts the panel can be told to use, and by whom. */
-export type Binding = "panel" | "grab" | "inspect" | "replay" | "requests" | "storage" | "reset";
+export type Binding =
+  | "panel"
+  | "grab"
+  | "inspect"
+  | "replay"
+  | "requests"
+  | "storage"
+  | "reset"
+  | "elements"
+  | "settings";
 
 /** Each binding's key as the mount options and the defaults give it: every binding has one. */
 export type BaseKeys = Record<Binding, Combo>;
@@ -122,26 +131,39 @@ export function comboSpoken(combo: Combo): string {
 }
 
 /** The letters inspect's key is, the first that the panel's and grab's keys leave free. */
-const INSPECT_KEYS = ["c", "i", "y"];
+const INSPECT_KEYS = ["c", "i", "y"] as const;
+
+/** The letters the elements view's key is, the same way. */
+const ELEMENTS_KEYS = ["e", "l", "d"] as const;
+
+/** The letters the settings' key is, the same way. */
+const SETTINGS_KEYS = ["o", "u", "p"] as const;
 
 /**
  * The panel's keys with none set: shift and the hotkey, shift g, shift c,
- * shift r, shift n, shift s and shift backspace. Where the mount gave the
- * panel or grab shift and c, inspect takes the next letter of its own.
+ * shift r, shift n, shift s, shift backspace, shift e and shift o. Where the
+ * mount gave the panel or grab one of inspect's, the elements view's or the
+ * settings' shift letters, that binding takes the next letter of its own.
  */
 export function defaultKeys(options: { hotkey?: string; grabKey?: string } = {}): BaseKeys {
   const panel = withShift(hotkeyOf(options.hotkey));
   const grab = parseCombo(options.grabKey) ?? withShift("g");
   const taken = [panel, grab].map(comboText);
-  const free = INSPECT_KEYS.find((key) => !taken.includes(comboText(withShift(key))));
+  const free = (letters: readonly [string, ...string[]]): Combo => {
+    const key = withShift(letters.find((letter) => !taken.includes(comboText(withShift(letter)))) ?? letters[0]);
+    taken.push(comboText(key));
+    return key;
+  };
   return {
     panel,
     grab,
-    inspect: withShift(free ?? "c"),
+    inspect: free(INSPECT_KEYS),
     replay: withShift(REPLAY_KEY),
     requests: withShift(REQUESTS_KEY),
     storage: withShift(STORAGE_KEY),
     reset: withShift("backspace"),
+    elements: free(ELEMENTS_KEYS),
+    settings: free(SETTINGS_KEYS),
   };
 }
 
@@ -185,6 +207,11 @@ function isEditable(node: EventTarget | null): boolean {
     (node as HTMLElement | null)?.tagName === "SELECT" ||
     focusInClosedRoot(node)
   );
+}
+
+/** Whether a key goes into any field, one of the panel's too, its search included. */
+export function inField(event: Pick<KeyLike, "target" | "composedPath">): boolean {
+  return isEditable(event.composedPath?.()[0] ?? event.target);
 }
 
 /**
@@ -255,18 +282,19 @@ export function comboMatches(event: KeyLike, combo: Combo): boolean {
  * so it does so everywhere. One that deletes is any field's, the panel's
  * search too. Every other key is a field's on the page and the panel's in a
  * field marked with `KEYS_FIELD`, with alt, ctrl or meta as well, so a
- * page's own shortcuts in its fields stay the page's.
+ * page's own shortcuts in its fields stay the page's. A key with no modifier
+ * at all is any field's too, so it never takes what is typed.
  */
 function actsHere(event: KeyLike, combo: Combo): boolean {
   if (isFunctionKey(combo.key)) return true;
-  if (deletes(combo.key)) return !isEditable(event.composedPath?.()[0] ?? event.target);
+  if (deletes(combo.key) || !(combo.meta || combo.ctrl || combo.alt || combo.shift)) return !inField(event);
   return !typesInField(event);
 }
 
 /** The letter that with shift replays the page's animations. */
 export const REPLAY_KEY = "r";
 
-/** The letter that with shift shows the requests log, and hides it. */
+/** The letter that with shift shows the requests log, from a closed panel too, and leaves it. */
 export const REQUESTS_KEY = "n";
 
 /** The letter that with shift shows and leaves the storage view. */
@@ -274,13 +302,15 @@ export const STORAGE_KEY = "s";
 
 /**
  * What a keydown asks of the panel, if anything: escape closes, and the
- * panel's, replay's, requests', reset's and the storage view's keys do
- * theirs, the panel's winning where they are the same, and the storage view's
- * giving way to all. In a field, `actsHere` says whether the key is its.
+ * panel's, replay's, requests', reset's, the elements view's, the settings'
+ * and the storage view's keys do theirs, the panel's winning where they are
+ * the same, and the storage view's giving way to all. In a field, `actsHere`
+ * says whether the key is its.
  */
 export function keyAction(
   event: KeyLike,
-  keys: Pick<Keys, "panel" | "replay" | "requests" | "reset"> & Partial<Pick<Keys, "storage">>,
+  keys: Pick<Keys, "panel" | "replay" | "requests" | "reset"> &
+    Partial<Pick<Keys, "storage" | "elements" | "settings">>,
 ): KeyAction | null {
   if (event.key === "Escape") return "close";
   const steps: readonly (readonly [KeyAction, Combo | null | undefined])[] = [
@@ -288,6 +318,8 @@ export function keyAction(
     ["replay", keys.replay],
     ["requests", keys.requests],
     ["reset", keys.reset],
+    ["elements", keys.elements],
+    ["settings", keys.settings],
     ["storage", keys.storage],
   ];
   for (const [action, combo] of steps) {

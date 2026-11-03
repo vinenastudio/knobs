@@ -3,6 +3,7 @@ import { DEFAULT_STATE } from '../src/knobs.ts';
 import {
   detachMessage,
   readCarry,
+  readKeys,
   readPageMessage,
   readPrefer,
   readState,
@@ -93,6 +94,53 @@ describe('readPageMessage', () => {
 
   test('the bridge alone asks for the knobs', () => {
     expect(readTabRequest({ type: 'get' })).toEqual({ type: 'get' });
+  });
+});
+
+describe('the shortcuts', () => {
+  test('pass with their version, each a known binding with its key as text', () => {
+    const keys = { elements: 'alt+e', grab: 'shift+j', settings: 'o', v: 1 };
+    expect(readPageMessage({ id: 6, keys, type: 'keys' })).toEqual({ id: 6, keys, type: 'keys' });
+    expect(readPageMessage({ id: 6, keys: {}, type: 'keys' })).toEqual({
+      id: 6,
+      keys: {},
+      type: 'keys',
+    });
+  });
+
+  test('drop a key that is no text or too long, and a bad version', () => {
+    const bad: Array<unknown> = [
+      null,
+      'shift+j',
+      ['shift+j'],
+      { grab: 7 },
+      { grab: null },
+      { grab: 'shift+'.repeat(20) },
+      { v: -1 },
+      { v: 1.5 },
+      { v: '1' },
+    ];
+    for (const keys of bad) {
+      expect(readPageMessage({ id: 7, keys, type: 'keys' })).toBeNull();
+    }
+    expect(readPageMessage({ keys: { grab: 'shift+j' }, type: 'keys' })).toBeNull();
+  });
+
+  test("leave out a name this build does not know, a newer devknobs' binding say", () => {
+    expect(readKeys({ grab: 'shift+j', later: 'shift+q', v: 2 })).toEqual({
+      grab: 'shift+j',
+      v: 2,
+    });
+    expect(readPageMessage({ id: 8, keys: { other: 7 }, type: 'keys' })).toEqual({
+      id: 8,
+      keys: {},
+      type: 'keys',
+    });
+  });
+
+  test('read from storage as from a page, nothing where none were kept', () => {
+    expect(readKeys({ grab: 'shift+j', v: 1 })).toEqual({ grab: 'shift+j', v: 1 });
+    expect(readKeys(undefined)).toBeNull();
   });
 });
 

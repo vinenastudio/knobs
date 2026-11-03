@@ -320,6 +320,8 @@ export const BINDING_ICONS: Record<Binding, IconName> = {
   requests: "arrow-up-down",
   storage: "database",
   reset: "eraser",
+  elements: "chevrons-left-right",
+  settings: "settings",
 };
 
 /** An empty drawing `size` px square, hidden from assistive tech. */

@@ -4,13 +4,15 @@ import {
   comboProblem,
   createKeys,
   isReserved,
+  keysListed,
+  type KeysStore,
   KEYS_KEY,
   KEYS_VERSION,
   readKeys,
   recordStep,
   resolveKeys,
 } from "../src/ui/bindings";
-import { type Combo, comboText, defaultKeys, type KeyLike, parseCombo } from "../src/ui/keys";
+import { type Combo, comboText, defaultKeys, type KeyLike, keyAction, parseCombo } from "../src/ui/keys";
 
 function press(patch: Partial<KeyLike>): KeyLike {
   return {
@@ -53,9 +55,9 @@ describe("recording a key", () => {
     );
   });
 
-  test("refuses a bare key, as it types", () => {
-    expect(recorded({ key: "k" })).toBe("refused: add a modifier, alone it types");
-    expect(recorded({ key: "1", code: "Digit1" })).toBe("refused: add a modifier, alone it types");
+  test("keeps a key alone, which acts only where no field has the focus", () => {
+    expect(recorded({ key: "j", code: "KeyJ" })).toBe("j");
+    expect(recorded({ key: "1", code: "Digit1" })).toBe("1");
   });
 
   test("keeps a function key alone or with modifiers", () => {
@@ -191,7 +193,6 @@ describe("readKeys", () => {
 
   test("drops what could not have been set in the panel", () => {
     const json = JSON.stringify({
-      panel: "k",
       grab: "meta+c",
       replay: 7,
       reset: "shift+",
@@ -199,6 +200,18 @@ describe("readKeys", () => {
     });
     expect(readKeys(json)).toEqual({});
     expect(readKeys(JSON.stringify({ panel: "ctrl++" }))).toEqual({});
+  });
+
+  test("keeps a key alone", () => {
+    expect(readKeys(JSON.stringify({ panel: "k", elements: "e" }))).toEqual({ panel: "k", elements: "e" });
+  });
+
+  test("keeps the elements view's and the settings' keys, and reads old keys without them", () => {
+    expect(readKeys(JSON.stringify({ v: 1, elements: "alt+e", settings: "shift+p" }))).toEqual({
+      elements: "alt+e",
+      settings: "shift+p",
+    });
+    expect(readKeys(JSON.stringify({ v: 1, grab: "shift+j" }))).toEqual({ grab: "shift+j" });
   });
 
   test("reads nothing from json that does not parse or is not an object", () => {
@@ -321,7 +334,7 @@ describe("createKeys", () => {
 
   test("starts from the stored keys over the mount's", () => {
     const { local } = stubWindow();
-    local.set(KEYS_KEY, JSON.stringify({ panel: "alt+k", grab: "k" }));
+    local.set(KEYS_KEY, JSON.stringify({ panel: "alt+k", grab: "meta+c" }));
     const keys = createKeys({ hotkey: "d" });
     expect(comboText(keys.get().panel)).toBe("alt+k");
     expect(textOf(keys.get().grab)).toBe("shift+g");
@@ -398,5 +411,135 @@ describe("createKeys", () => {
     keys.set("panel", combo("alt+k"));
     expect(comboText(keys.get().panel)).toBe("alt+k");
     keys.destroy();
+  });
+});
+
+/** A store as the extension hands one in: what it keeps, what it was asked to keep, and a change from elsewhere. */
+function fakeStore(initial: unknown = null) {
+  let kept = initial;
+  const saved: unknown[] = [];
+  const listeners = new Set<() => void>();
+  const store: KeysStore = {
+    load: () => kept,
+    save: (keys) => {
+      saved.push(keys);
+      kept = keys;
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+  return {
+    store,
+    saved,
+    change(value: unknown) {
+      kept = value;
+      for (const listener of [...listeners]) listener();
+    },
+    listening: () => listeners.size,
+  };
+}
+
+describe("createKeys with a store", () => {
+  afterEach(() => {
+    Reflect.deleteProperty(globalThis, "window");
+  });
+
+  test("starts from the store, not the origin's storage, and keeps a key set there with its version", () => {
+    const { local } = stubWindow();
+    local.set(KEYS_KEY, JSON.stringify({ panel: "alt+k" }));
+    const { store, saved } = fakeStore({ v: KEYS_VERSION, grab: "shift+j" });
+    const keys = createKeys({ store });
+    expect(comboText(keys.get().panel)).toBe("shift+k");
+    expect(textOf(keys.get().grab)).toBe("shift+j");
+    keys.set("settings", combo("shift+p"));
+    expect(saved).toEqual([{ v: KEYS_VERSION, grab: "shift+j", settings: "shift+p" }]);
+    expect(local.get(KEYS_KEY)).toBe(JSON.stringify({ panel: "alt+k" }));
+    keys.set("grab", null);
+    keys.set("settings", null);
+    expect(saved.at(-1)).toEqual({ v: KEYS_VERSION });
+    keys.destroy();
+  });
+
+  test("starts from the defaults until the store answers, then takes its keys and says so", () => {
+    const { fire } = stubWindow();
+    const { store, change, listening } = fakeStore();
+    const keys = createKeys({ store });
+    let heard = 0;
+    keys.subscribe(() => heard++);
+    expect(textOf(keys.get().grab)).toBe("shift+g");
+    // The origin's storage event is not the store's.
+    fire(KEYS_KEY);
+    expect(heard).toBe(0);
+    change({ v: KEYS_VERSION, grab: "shift+j", elements: "e" });
+    expect(heard).toBe(1);
+    expect(textOf(keys.get().grab)).toBe("shift+j");
+    expect(textOf(keys.get().elements)).toBe("e");
+    expect(keys.custom("grab")).toBe(true);
+    keys.destroy();
+    expect(listening()).toBe(0);
+  });
+
+  test("reads what the store keeps by the rules every stored key goes by", () => {
+    stubWindow();
+    const { store } = fakeStore({ grab: "meta+c", panel: 7, other: "alt+k", settings: "shift+u" });
+    const keys = createKeys({ store });
+    expect(textOf(keys.get().grab)).toBe("shift+g");
+    expect(textOf(keys.get().settings)).toBe("shift+u");
+    keys.destroy();
+    const newer = createKeys({ store: fakeStore({ v: KEYS_VERSION + 1, grab: "shift+j" }).store });
+    expect(textOf(newer.get().grab)).toBe("shift+g");
+    newer.destroy();
+  });
+
+  test("a store that throws leaves the defaults, and a key set still holds in the tab", () => {
+    stubWindow();
+    const store: KeysStore = {
+      load: () => {
+        throw new Error("gone");
+      },
+      save: () => {
+        throw new Error("gone");
+      },
+      subscribe: () => () => {},
+    };
+    const keys = createKeys({ store });
+    expect(textOf(keys.get().grab)).toBe("shift+g");
+    keys.set("grab", combo("shift+j"));
+    expect(textOf(keys.get().grab)).toBe("shift+j");
+    keys.destroy();
+  });
+
+  test("in fresh mode reads nothing from the store, writes nothing to it, and a key set here holds", () => {
+    stubWindow("?devknobs=fresh");
+    const { store, saved, change } = fakeStore({ v: KEYS_VERSION, grab: "shift+j" });
+    const keys = createKeys({ store });
+    expect(textOf(keys.get().grab)).toBe("shift+g");
+    keys.set("panel", combo("shift+y"));
+    expect(saved).toEqual([]);
+    change({ v: KEYS_VERSION, panel: "alt+k" });
+    expect(comboText(keys.get().panel)).toBe("shift+y");
+    keys.destroy();
+  });
+});
+
+describe("keysListed", () => {
+  test("a binding the panel does not list has no key, so its key is the page's", () => {
+    const keys = resolveKeys(defaultKeys(), {});
+    const listed = keysListed(keys, ["panel", "grab", "replay", "requests", "storage", "settings", "reset"]);
+    expect(listed.elements).toBeNull();
+    expect(listed.inspect).toBeNull();
+    expect(textOf(listed.settings)).toBe("shift+o");
+    const event = { key: "E", code: "KeyE", altKey: false, ctrlKey: false, metaKey: false, shiftKey: true, target: null, composedPath: () => [] };
+    expect(keyAction(event, listed)).toBeNull();
+    expect(keyAction(event, keys)).toBe("elements");
+  });
+
+  test("the panel's key stays, listed or not", () => {
+    const keys = resolveKeys(defaultKeys(), {});
+    expect(comboText(keysListed(keys, []).panel)).toBe("shift+k");
   });
 });

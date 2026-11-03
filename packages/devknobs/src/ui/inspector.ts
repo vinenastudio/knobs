@@ -38,6 +38,11 @@ export interface Inspector {
    * opens the view on the element it holds, and with none it starts picking.
    */
   open(): void;
+  /**
+   * What the elements view's key does: open the view on the element it holds,
+   * else on the page's body, and pick nothing.
+   */
+  elements(): void;
   /** The name of the element the view holds, as devtools names one, or null with none. */
   picked(): string | null;
   /**
@@ -98,6 +103,16 @@ export function createInspector(
   /** The element held, where its page still shows it. */
   function current(): Element | null {
     return held && here(held) ? held : null;
+  }
+
+  /** The body of the page shown: the frame's while the frame is up. */
+  function pageBody(): Element | null {
+    try {
+      const page = framed ? frameWindow()?.document : typeof document === "undefined" ? undefined : document;
+      return page?.body ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /** Box an element the view points at, or with null take the box off. The picking's own box is left alone. */
@@ -226,6 +241,16 @@ export function createInspector(
       if (inspect.isOn()) inspect.set(false);
       else if (current()) reveal();
       else inspect.set(true);
+    },
+    elements(): void {
+      // Picking that is on ends: the view shows what it holds, and the page takes clicks again.
+      if (inspect.isOn()) inspect.set(false);
+      if (!current()) {
+        const body = pageBody();
+        if (view) view.show(body);
+        else hold(body);
+      }
+      reveal();
     },
     picked(): string | null {
       const element = current();

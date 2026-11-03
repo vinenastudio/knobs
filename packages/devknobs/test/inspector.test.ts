@@ -326,6 +326,77 @@ describe("the select button", () => {
   });
 });
 
+describe("the elements view's key", () => {
+  afterEach(() => {
+    Reflect.deleteProperty(globalThis, "document");
+  });
+
+  test("with nothing held opens the view on the page's body, and picks nothing", async () => {
+    const body = fakeElement("BODY", "");
+    Object.defineProperty(globalThis, "document", { configurable: true, value: { body } });
+    inspector?.elements();
+    await settle();
+    expect(on).toBe(false);
+    expect(open?.id).toBe("styles");
+    expect(shown).toEqual([body]);
+    expect(inspector?.picked()).toBe("body");
+  });
+
+  test("with an element held opens the view on it, and picks nothing", async () => {
+    inspector?.open();
+    await settle();
+    pick(button);
+    closePane();
+    shown = [];
+    inspector?.elements();
+    await settle();
+    expect(on).toBe(false);
+    expect(open?.id).toBe("styles");
+    expect(shown).toEqual([button]);
+  });
+
+  test("with the picking on, ends it and shows the view on what it holds", async () => {
+    const body = fakeElement("BODY", "");
+    Object.defineProperty(globalThis, "document", { configurable: true, value: { body } });
+    inspect.set(true);
+    await settle();
+    expect(open?.id).toBe("styles");
+    inspector?.elements();
+    await settle();
+    expect(on).toBe(false);
+    expect(open?.id).toBe("styles");
+    expect(shown.at(-1)).toBe(body);
+  });
+
+  test("with the picking on and the view still loading, ends it and opens the view", async () => {
+    inspect.set(true);
+    inspector?.elements();
+    expect(on).toBe(false);
+    await settle();
+    expect(open?.id).toBe("styles");
+    expect(opens).toBe(1);
+  });
+
+  test("closed again, the view takes the picking with it", async () => {
+    inspector?.elements();
+    await settle();
+    select().run();
+    expect(on).toBe(true);
+    closePane();
+    expect(on).toBe(false);
+  });
+
+  test("with the view open already, brings it back in sight", async () => {
+    inspector?.open();
+    await settle();
+    pick(button);
+    inspector?.elements();
+    await settle();
+    expect(opens).toBe(1);
+    expect(shows).toBe(1);
+  });
+});
+
 describe("the row's way in", () => {
   test("with nothing picked yet starts the picking, and opens the view", async () => {
     inspector?.open();

@@ -1,5 +1,11 @@
 # changelog
 
+## unreleased
+
+- `⇧N` opens the requests from a closed panel too, as `⇧S` does the storage view, and pressed again while they show, leaves them
+- two new shortcuts: `⇧E` shows inspect's elements view, the DOM tree and the styles, on the element inspect last picked, else the page's body, without picking, and `⇧O` shows the settings. both open the panel where it is closed, leave their view when pressed again, work from the width knob's frame, and do nothing while a field of the page has the focus. they are listed under shortcuts, to set or put back. where the `hotkey` or `grabKey` option takes `⇧E` or `⇧O`, the elements view takes the next free of `⇧L` and `⇧D`, and the settings the next free of `⇧U` and `⇧P`. keys you already set still work, and the only new defaults are `⇧E` and `⇧O`
+- a shortcut can be any key or combination, a key alone too, such as `c`, or `⇧C`: the recorder no longer asks for a modifier. a key alone acts only when no field has the focus, the panel's search included, so it never takes what is typed. a `grabKey` of a key alone works the same. the defaults stay as they are
+
 ## 0.5.3
 
 - a host can load the frame's page itself: `native.load(frame, url)`, given an address on the page's own origin, is called once the frame is in the document, on its first load and on each load again. it returns true where the host set the frame's address itself, such as a browser extension from its own world, which the page's `frame-src` policy does not bind, and false to leave it to devknobs. false, or no `load` at all, and devknobs sets the address as before
