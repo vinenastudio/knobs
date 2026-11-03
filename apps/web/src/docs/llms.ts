@@ -51,7 +51,7 @@ const anchors = new Map(
  * The reference links at the human pages, with the origin. A fragment stays
  * only where that page still has the heading; a bare `#x` is on the same page.
  */
-const absolute = (slug: string, body: string) =>
+export const absolute = (slug: string, body: string) =>
   body
     .replaceAll(
       /\]\((?:\/docs\/([a-z0-9-]+))?#([a-z0-9-]+)\)/g,
@@ -64,7 +64,7 @@ const absolute = (slug: string, body: string) =>
     .replaceAll('](/', `](${CANONICAL_ORIGIN}/`);
 
 /** Every heading one level down, outside code blocks, so a page's `##` sits under its own `##` title. */
-const demote = (body: string) =>
+export const demote = (body: string) =>
   body
     .split(/(^```[\s\S]*?^```)/gm)
     .map((part) => (part.startsWith('```') ? part : part.replaceAll(/^(#{1,5}) /gm, '#$1 ')))

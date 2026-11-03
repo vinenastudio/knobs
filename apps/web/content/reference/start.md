@@ -16,7 +16,7 @@ devknobs is a dev-only panel for flipping browser preferences from inside the pa
 with an ai agent: paste this setup prompt into claude code, codex or cursor, and it installs @vinena/knobs and mounts it in development only. it is the copy setup prompt button on the home page too.
 
 ```
-Install @vinena/knobs in this project. It is a dev-only panel that emulates browser preferences from inside the page. Docs: https://knobs.dev/docs
+Read https://knobs.dev/llms-full.txt first: it is the full devknobs reference. Then install @vinena/knobs in this project. It is a dev-only panel that emulates browser preferences from inside the page.
 
 1. Detect the package manager from the lockfile and add @vinena/knobs as a dev dependency (npm i -D @vinena/knobs, or the pnpm, yarn or bun equivalent).
 2. Mount it once, on the client, in development only:
@@ -25,8 +25,9 @@ Install @vinena/knobs in this project. It is a dev-only panel that emulates brow
 - A plain page with no bundler: skip the npm install and add <script src="//unpkg.com/@vinena/knobs/dist/index.global.js"></script> to the page. It mounts itself. Keep it out of the deployed page.
 3. Keep devknobs out of production builds. A static import stays in the bundle even behind a dev check, so gate the import itself as above. If the project has a build script, run it and check that the output has no devknobs.
 4. If the app reads media queries, the time or the user agent while it boots, or renders with React, add the early script as the first element in <head>, in development only: <script src="//unpkg.com/@vinena/knobs/dist/early.global.js"></script>
-5. Change nothing else in the project.
-6. Then tell me what you changed and how to open the panel: press Shift+K or click the handle on the right edge of the window. In the open panel, / searches the knobs. Shift+G grabs an element.
+5. Change nothing else in the project for the setup.
+6. Open the app in your browser tool, such as Playwright or the Chrome DevTools MCP, and drive window.devknobs. For each check, call reset(), then setState(), then await ready(). Check a phone ({ device: "iphone-17" }), dark mode ({ scheme: "dark" }) and a right-to-left language ({ locale: { lang: "ar", dir: "rtl" } }). The locale knob can reload the page, so wait for the load. grab() what breaks, fix it and check again. Then call reset().
+7. Then tell me what you changed, what you fixed and how to open the panel: press Shift+K or click the handle on the right edge of the window. In the open panel, / searches the knobs. Shift+G grabs an element.
 ```
 
 or by hand:

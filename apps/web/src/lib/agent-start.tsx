@@ -17,7 +17,7 @@ export const AGENT_PROMPT = `Read https://knobs.dev/llms-full.txt first: it is t
 
 1. Add @vinena/knobs as a dev dependency with the project's package manager: npm i -D @vinena/knobs, or the pnpm, yarn or bun equivalent.
 2. Mount it once, on the client, in development only, the way the reference shows for this framework: mount() from @vinena/knobs behind the bundler's dev flag, <DevKnobs /> from @vinena/knobs/react in React (in Next.js, loaded with dynamic() behind the dev check), or the unpkg script tag on a plain page. Gate the import itself, so no devknobs reaches the production build.
-3. If the app reads a media query, the time or the user agent while it boots, add the early script first in <head>, in development only.
+3. If the app reads media queries, the time or the user agent while it boots, or renders with React, add the early script as the first element in <head>, in development only.
 4. Open the app in your browser tool, such as Playwright or the Chrome DevTools MCP, and drive the knobs through window.devknobs: describe() lists them. For each check, call reset(), then setState(), then await ready(). Check the page on a phone ({ device: "iphone-17" }), in dark mode ({ scheme: "dark" }) and in another language ({ locale: { lang: "ar", dir: "rtl" } }). The locale knob can reload the page, so wait for the load.
 5. grab() what breaks, fix the code, and check again. Then call reset() and tell me what you changed and what you fixed.`;
 

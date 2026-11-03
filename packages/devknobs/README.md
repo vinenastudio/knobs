@@ -10,7 +10,7 @@ with an ai agent: paste this setup prompt into claude code, codex or cursor, and
 it installs @vinena/knobs and mounts it in development only. it is the copy setup
 prompt button on https://knobs.dev too.
 
-<!-- the same text is the install_prompt message in apps/web/messages/en.json; change both together. -->
+<!-- the same text is the install_prompt message in apps/web/messages/en.json and the setup prompt in apps/web/content/reference/start.md; change all three together. -->
 
 ```
 Read https://knobs.dev/llms-full.txt first: it is the full devknobs reference. Then install @vinena/knobs in this project. It is a dev-only panel that emulates browser preferences from inside the page.
