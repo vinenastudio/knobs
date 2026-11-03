@@ -75,6 +75,8 @@ describe("$0", () => {
 describe("the elements view", () => {
   let view: StylesView | null = null;
   let revealed: (Node | null)[];
+  /** The nodes the view selected in the tree, apart from those it revealed. */
+  let selects: Node[] = [];
   let tree: DomTreeContext | null;
   let asked: Element[];
   let app: FakeElement & { nodeType: number };
@@ -168,7 +170,7 @@ describe("the elements view", () => {
     const stub: DomTree = {
       node: new FakeNode("div") as unknown as HTMLElement,
       reveal: (node) => revealed.push(node),
-      select: (node) => revealed.push(node),
+      select: (node) => selects.push(node),
       selected: () => picked,
       escape: () => false,
       destroy: () => {
@@ -205,11 +207,13 @@ describe("the elements view", () => {
     const made = elem("section");
     picked = pageNode(old);
     revealed = [];
-    log.record(must(htmlEdit({ selector: "div.block" }, pageNode(old) as Element, "<div></div>", [pageNode(made)], "<section></section>")));
-    expect(revealed).toEqual([pageNode(made)]);
+    selects = [];
+    log.record(must(htmlEdit({ selector: "div.block" }, pageNode(old) as Element, "<div></div>", [pageNode(made)])));
+    expect(selects).toEqual([pageNode(made)]);
     picked = pageNode(made);
     log.record(must(attrEdit({ selector: "section" }, pageNode(made) as Element, "id", "x")));
-    expect(revealed).toEqual([pageNode(made)]);
+    expect(selects).toEqual([pageNode(made)]);
+    expect(revealed).toEqual([]);
     log.undoAll();
     picked = null;
   });

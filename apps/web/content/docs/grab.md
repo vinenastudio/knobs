@@ -62,4 +62,6 @@ the DOM tree can be edited too: double-click a text or an attribute to edit
 it, and on the selected line `a` adds an attribute, `F2` edits it as html,
 `h` hides it and Delete deletes it, or use the bar under the tree. those
 edits go into the same changes, and the prompt asks your agent to change the
-component, as a re-render may undo an edit of the DOM.
+component, as a re-render may undo an edit of the DOM. `<html>`, `<head>`
+and `<body>` and devknobs' own nodes and attributes cannot be replaced,
+hidden or deleted.

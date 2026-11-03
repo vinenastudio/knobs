@@ -166,6 +166,7 @@ export class FakeNode {
   }
 
   removeChild(node: FakeNode): FakeNode {
+    if (node.parentElement !== this) throw new Error("NotFoundError: the node is not a child of this node");
     node.remove();
     return node;
   }

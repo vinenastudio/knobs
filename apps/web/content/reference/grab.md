@@ -236,8 +236,9 @@ the page at once, into the same changes as the style edits:
   the element's other children stay. an empty text is refused
 - a double-click on an attribute makes it a field with `name="value"`, as in
   the tag, a `"` in the value written `&quot;` and a `&` as `&amp;`. change
-  the value or the name, write more than one, or clear the field to take the
-  attribute out. `class` is one of them
+  the value or the name, write several `name="value"` pairs in one field, or
+  clear the field to take the attribute out. `class` is edited like any
+  other attribute
 - a text or a value with line breaks, as in a `<pre>` or an svg path, opens
   in a field that keeps them, where ↩ breaks the line, and `⇧↩`
   (`Shift Enter` off a Mac) or its `apply` button puts it on the page
@@ -245,18 +246,22 @@ the page at once, into the same changes as the style edits:
 - `F2` edits the element as html: a field with its outer html, where ↩
   breaks the line. `⇧↩` (`Shift Enter` off a Mac), its `apply` button, or a
   click elsewhere puts the new html in the element's place and selects it;
-  esc leaves it. html with no element in it is refused and the field turns
-  red. undo puts the very element back
+  esc leaves it. html with no element in it, or with devknobs' own
+  `data-devknobs` attributes, is refused: applying it with `⇧↩` or the
+  button turns the field red and keeps it open, while a click elsewhere
+  closes it without the edit. undo puts the very element back, unless the
+  page moved the new nodes since
 - `h` hides the selected element and all in it, and shows it again:
   `visibility: hidden` through an attribute of devknobs', so the page's own
   `style` stays as it is. its line goes faint
 - Delete or Backspace deletes the selected node, and the line after it is
   selected. undo puts it back where it stood
 
-a field closed as it was opened makes no edit. an element that holds
-devknobs' own nodes, as the `<body>` holds the panel and the `<head>` its
-styles, is not edited as html, hidden or deleted, and a text straight in a
-shadow root or the document is not edited.
+a field closed as it was opened makes no edit, and one whose edit is refused
+stays open, red, until it is fixed, left with esc or the focus leaves it,
+and no key or button of the tree acts while it is open. `<html>`, `<head>`, `<body>` and an element that holds devknobs'
+own nodes are not edited as html, hidden or deleted, and a text straight in
+a shadow root or the document is not edited.
 
 the keys are plain and act only on the selected line, never while a field
 has the focus. the bar under the tree has the same actions for the selected

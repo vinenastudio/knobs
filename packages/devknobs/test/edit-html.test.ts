@@ -124,7 +124,7 @@ describe("an html edit", () => {
     page(() => [body]);
     const made = [elem("div", { class: "new" }, text("New")), text("\n")];
     const log = createEditLog();
-    const edit = log.record(must(htmlEdit(AT, el(old), '<div class="block"><b>Old</b></div>', made.map(as), '<div class="new">New</div>\n')));
+    const edit = log.record(must(htmlEdit(AT, el(old), '<div class="block"><b>Old</b></div>', made.map(as))));
     expect(edit).toMatchObject({ kind: "html", property: "html", before: '<div class="block"><b>Old</b></div>', after: '<div class="new">New</div>' });
     expect(body.childNodes).toEqual([made[0] as PageNode, made[1] as PageNode, after]);
     expect(old.parentNode).toBeNull();
@@ -136,11 +136,44 @@ describe("an html edit", () => {
     expect(body.childNodes).toEqual([made[0] as PageNode, made[1] as PageNode, after]);
   });
 
+  test("keeps as its after the markup the browser writes back, and refuses devknobs' own attribute", () => {
+    const old = elem("div");
+    page(() => [elem("body", {}, old)]);
+    expect(htmlEdit(AT, el(old), "<div></div>", [as(elem("img", { src: "x" }))])?.edit.after).toBe('<img src="x">');
+    expect(htmlEdit(AT, el(old), "<div></div>", [as(elem("p", {}, elem("b", { "data-devknobs-hide": "" })))])).toBeNull();
+    expect(htmlEdit(AT, el(old), "<div></div>", [as(elem("p", { "data-devknobs": "x" }))])).toBeNull();
+  });
+
+  test("whose element the page moved since changes nothing, and is dropped", () => {
+    const old = elem("div");
+    const other = elem("section");
+    const body = elem("body", {}, old, other);
+    page(() => [body]);
+    const made = elem("p");
+    const log = createEditLog();
+    log.record(must(htmlEdit(AT, el(old), "<div></div>", [as(made)])));
+    // Page code moves the new element somewhere else: undo leaves it there.
+    other.append(made);
+    body.removeChild(made);
+    log.undo();
+    expect(other.childNodes).toEqual([made]);
+    expect(old.parentNode).toBeNull();
+    // Moved back and undone, then the old element moved by the page: redo is refused and changes nothing.
+    const again = elem("div");
+    body.append(again);
+    const second = log.record(must(htmlEdit(AT, el(again), "<div></div>", [as(elem("p"))])));
+    expect(second).not.toBeNull();
+    log.undo();
+    other.append(again);
+    expect(log.redo()).toBeNull();
+    expect(other.childNodes.at(-1)).toBe(again);
+  });
+
   test("is refused for html with no element in it, or the markup it has", () => {
     const old = elem("div");
     page(() => [elem("body", {}, old)]);
-    expect(htmlEdit(AT, el(old), "<div></div>", [as(text("just text"))], "just text")).toBeNull();
-    expect(htmlEdit(AT, el(old), "<div></div>", [as(elem("div"))], " <div></div> ")).toBeNull();
+    expect(htmlEdit(AT, el(old), "<div></div>", [as(text("just text"))])).toBeNull();
+    expect(htmlEdit(AT, el(old), "<div></div>", [as(elem("div"))])).toBeNull();
   });
 
   test("whose new element the page took out stays as text, and undo changes nothing", () => {
@@ -149,7 +182,7 @@ describe("an html edit", () => {
     page(() => [body]);
     const made = elem("section");
     const log = createEditLog();
-    log.record(must(htmlEdit(AT, el(old), "<div></div>", [as(made)], "<section></section>")));
+    log.record(must(htmlEdit(AT, el(old), "<div></div>", [as(made)])));
     // The framework renders again, and puts its own node there.
     const theirs = elem("div", { id: "rendered" });
     body.removeChild(made);
@@ -199,6 +232,17 @@ describe("a delete", () => {
     expect(ids()).toEqual(["1", "2", "3", "4"]);
   });
 
+  test("goes back first where it was first and the node after it went", () => {
+    const [one, two, three] = ["1", "2", "3"].map((name) => elem("li", { id: name }));
+    const list = elem("ul", {}, one as PageNode, two as PageNode, three as PageNode);
+    page(() => [elem("body", {}, list)]);
+    const log = createEditLog();
+    log.record(must(deleteEdit(AT, as(one as PageNode), "")));
+    list.removeChild(two as PageNode);
+    log.undo();
+    expect(list.childNodes.map((node) => node.getAttribute("id"))).toEqual(["1", "3"]);
+  });
+
   test("goes back after the node before it where the one after it went, and nowhere where its parent went", () => {
     const [one, two, three] = ["1", "2", "3"].map((name) => elem("li", { id: name }));
     const list = elem("ul", {}, one as PageNode, two as PageNode, three as PageNode);
@@ -243,6 +287,14 @@ describe("html edits as text", () => {
       ["p.ad", true, ["hide hidden"]],
       ["li.gone", true, ["delete node"]],
     ]);
+  });
+
+  test("never merge a real hidden attribute with a hide", () => {
+    const mixed: Edit[] = [
+      { id: 1, kind: "attr", target: { selector: "p" }, property: "hidden", before: "", after: null },
+      { id: 2, kind: "hide", target: { selector: "p" }, property: "hidden", before: null, after: "hidden" },
+    ];
+    expect(netChanges(mixed)[0]?.changes.map((one) => one.kind)).toEqual(["attr", "hide"]);
   });
 
   test("never merge two deletes, as a selector after a node taken out names the next one", () => {
@@ -401,6 +453,9 @@ describe("the tree's edit keys", () => {
     const head = (doc.documentElement as PageNode).childNodes[0] as PageNode;
     const line = (node: PageNode, kind: Row["kind"]): Row => ({ kind, node: as(node), pseudo: null, depth: 0, more: 0 });
     expect(actionsFor(line(body, "open"))).toEqual(["attr"]);
+    // The head and body stay without devknobs' nodes in them too, as where its styles are adopted.
+    const bare = page(() => [elem("head"), elem("body", {}, elem("p"))]);
+    for (const one of (bare.documentElement as PageNode).childNodes) expect(actionsFor(line(one, "open"))).toEqual(["attr"]);
     expect(actionsFor(line(head, "open"))).toEqual(["attr"]);
     expect(actionsFor(line(host, "open"))).toEqual(["attr", "html", "hide", "delete"]);
     expect(actionsFor(line(loose, "text"))).toEqual([]);

@@ -130,30 +130,51 @@ export function parseHtml(doc: Document, html: string): Node[] {
   return Array.from(template.content.childNodes);
 }
 
+/** Nodes as markup, as the browser writes them back: an element's outer html, a comment, a text. */
+export function markupOfNodes(nodes: readonly Node[]): string {
+  return nodes
+    .map((node) => {
+      if (isElement(node)) return node.outerHTML;
+      if (node.nodeType === 8) return `<!--${node.nodeValue ?? ""}-->`;
+      return node.nodeValue ?? "";
+    })
+    .join("");
+}
+
+/** Whether nodes carry devknobs' own attribute, on them or anything in them, which no edit makes. */
+export function holdsReserved(nodes: readonly Node[]): boolean {
+  return nodes.some((node) => isElement(node) && [node, ...Array.from(node.querySelectorAll("*"))].some((one) => Array.from(one.attributes).some((attr) => isOwnName(attr.name))));
+}
+
 /**
- * An element written anew: `nodes`, which `after` parsed to, in its place.
- * `before` is its markup as the tree copies it. Null where `after` holds no
- * element, or is the markup it has.
+ * An element written anew: `nodes` in its place. `before` is its markup as
+ * the tree copies it, and the edit's `after` the nodes' markup as the
+ * browser writes it back, so two edits of one element compare alike. Null
+ * where the nodes hold no element, carry devknobs' own attribute, or come to
+ * the markup it has. It goes on and comes off only where the element, or the
+ * nodes in its place, still stand in the parent it had, in one run.
  */
-export function htmlEdit(target: EditTarget, element: Element, before: string, nodes: readonly Node[], after: string): Change | null {
+export function htmlEdit(target: EditTarget, element: Element, before: string, nodes: readonly Node[]): Change | null {
   const first = nodes.find(isElement);
-  if (!first || after.trim() === before.trim()) return null;
+  const home = element.parentNode;
+  const after = markupOfNodes(nodes).trim();
+  if (!first || !home || holdsReserved(nodes) || after === before.trim()) return null;
   const made = [...nodes];
+  /** The nodes in the element's place stand in its parent, one after another. */
+  const inPlace = (): boolean => made.every((node, at) => node.parentNode === home && (at === 0 || made[at - 1]?.nextSibling === node));
   return {
-    edit: { kind: "html", target: { ...target }, property: "html", before, after: after.trim() },
+    edit: { kind: "html", target: { ...target }, property: "html", before, after },
     apply() {
-      const parent = element.parentNode;
-      if (!parent || !element.isConnected) return false;
-      for (const node of made) parent.insertBefore(node, element);
-      parent.removeChild(element);
+      if (element.parentNode !== home || !element.isConnected) return false;
+      for (const node of made) home.insertBefore(node, element);
+      home.removeChild(element);
       successors.set(element, first);
       return true;
     },
     revert() {
-      const parent = made[0]?.parentNode;
-      if (!parent || !made.every((node) => node.parentNode === parent) || element.parentNode !== null) return;
-      parent.insertBefore(element, made[0] ?? null);
-      for (const node of made) parent.removeChild(node);
+      if (!inPlace() || element.parentNode !== null) return;
+      home.insertBefore(element, made[0] ?? null);
+      for (const node of made) home.removeChild(node);
       successors.set(first, element);
     },
     view: viewOf(element),
@@ -198,7 +219,8 @@ export function hideEdit(target: EditTarget, element: Element, style: (element: 
 /**
  * A node deleted: `before` is its markup, `property` what it is in its
  * element. Undo puts it back where it stood, before the node that came after
- * it, or after the one before where that went. Null for a node with no parent.
+ * it, or after the one before where that went, or first where it was first.
+ * Null for a node with no parent.
  */
 export function deleteEdit(target: EditTarget, node: Node, before: string, property = "node"): Change | null {
   const parent = node.parentNode;
@@ -219,6 +241,7 @@ export function deleteEdit(target: EditTarget, node: Node, before: string, prope
       let at: Node | null = null;
       if (next?.parentNode === parent) at = next;
       else if (previous?.parentNode === parent) at = previous.nextSibling;
+      else if (previous === null) at = parent.firstChild;
       parent.insertBefore(node, at);
     },
     view: viewOf(node),

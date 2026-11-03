@@ -128,8 +128,29 @@ describe("the tree's editor", () => {
     key(bad, "Enter");
     expect(field(node)).toBe(bad);
     expect(bad.classList.contains("bad")).toBe(true);
-    key(bad, "Escape");
+    // Another action waits on the field it refused: nothing else is done, and the field stays.
+    const hideButton = (node.find("dom-acts")[0] as FakeNode).childNodes.find((one) => one.textContent === "hide") as FakeNode;
+    hideButton.fire("click");
+    expect(field(node)).toBe(bad);
+    expect(button.hasAttribute("data-devknobs-hide")).toBe(false);
+    expect(tree?.escape()).toBe(true);
     expect(field(node)).toBeUndefined();
+    expect(log.list()).toHaveLength(1);
+  });
+
+  test("refuses html that carries devknobs' own attribute, and keeps the field open", () => {
+    const old = elem("div", { class: "block" });
+    page(() => [elem("body", {}, old)]);
+    const node = start(old);
+    key(list(node), "F2");
+    const box = field(node) as FakeNode;
+    queued = [elem("div", {}, elem("span", { "data-devknobs": "panel" }))];
+    box.value = '<div><span data-devknobs="panel"></span></div>';
+    key(box, "Enter", { shiftKey: true });
+    expect(field(node)).toBe(box);
+    expect(box.classList.contains("bad")).toBe(true);
+    expect(old.parentNode).not.toBeNull();
+    expect(log.list()).toEqual([]);
   });
 
   test("a text with line breaks opens in a box that keeps them, Enter breaks the line and ⇧↩ puts it on", () => {
@@ -210,6 +231,7 @@ describe("the tree's editor", () => {
     queued = [made];
     box.value = '<div class="new">New</div>';
     key(box, "Enter", { shiftKey: true });
+    expect(asked.at(-1)).toBe('<div class="new">New</div>');
     expect(made.parentNode).not.toBeNull();
     expect(old.parentNode).toBeNull();
     expect(selected[selected.length - 1]).toBe(as(made));

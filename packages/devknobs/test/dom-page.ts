@@ -5,6 +5,14 @@
  */
 
 const HTML = "http://www.w3.org/1999/xhtml";
+
+/** Elements with no end tag. */
+const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"]);
+
+/** Text as the browser escapes it in markup. */
+function escapeText(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 const SVG = "http://www.w3.org/2000/svg";
 
 export class PageNode {
@@ -86,10 +94,13 @@ export class PageNode {
     return copy;
   }
 
-  /** The markup of an element, or a text's text. */
+  /** The markup of an element as the browser writes it: values and text escaped, no end tag on a void element. A text's text, escaped. */
   get outerHTML(): string {
+    if (this.nodeType === 3) return escapeText(this.nodeValue ?? "");
+    if (this.nodeType === 8) return `<!--${this.nodeValue ?? ""}-->`;
     if (this.nodeType !== 1) return this.nodeValue ?? "";
-    const attrs = this.attributes.map((attr) => ` ${attr.name}="${attr.value}"`).join("");
+    const attrs = this.attributes.map((attr) => ` ${attr.name}="${escapeText(attr.value).replace(/"/g, "&quot;")}"`).join("");
+    if (VOID.has(this.localName)) return `<${this.localName}${attrs}>`;
     return `<${this.localName}${attrs}>${this.childNodes.map((child) => child.outerHTML).join("")}</${this.localName}>`;
   }
 
@@ -129,6 +140,7 @@ export class PageNode {
   }
 
   insertBefore(node: PageNode, before: PageNode | null): PageNode {
+    if (before && !this.childNodes.includes(before)) throw new Error("NotFoundError: the reference node is not a child of this node");
     node.parentNode?.removeChild(node);
     const at = before ? this.childNodes.indexOf(before) : -1;
     this.childNodes.splice(at < 0 ? this.childNodes.length : at, 0, node);
@@ -137,6 +149,7 @@ export class PageNode {
   }
 
   removeChild(node: PageNode): PageNode {
+    if (!this.childNodes.includes(node)) throw new Error("NotFoundError: the node is not a child of this node");
     this.childNodes = this.childNodes.filter((one) => one !== node);
     node.parentNode = null;
     return node;

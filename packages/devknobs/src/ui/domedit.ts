@@ -75,7 +75,7 @@ export interface DomEditor {
   selected(row: Row | null): void;
   /** A field is open. */
   busy(): boolean;
-  /** Close the field open, with or without its edit. Says whether one was open. */
+  /** Close the field open, with or without its edit; one whose edit is refused closes without it. Says whether one was open. */
   close(commit: boolean): boolean;
   destroy(): void;
 }
@@ -145,6 +145,11 @@ export function parseAttributes(doc: Document, text: string, svg = false, parse 
   return found.length > 0 ? found : null;
 }
 
+/** The document's head or body, which the page's frame stands on. */
+function isFrame(element: Element): boolean {
+  return element.namespaceURI === "http://www.w3.org/1999/xhtml" && (element.localName === "head" || element.localName === "body");
+}
+
 /** Whether an element holds devknobs' own nodes, as the body holds the panel and the head its styles. */
 export function holdsOwn(element: Element): boolean {
   return element.querySelector("[data-devknobs]") !== null;
@@ -158,8 +163,8 @@ export function actionsFor(row: Row | null): TreeEditAction[] {
   if (textOf(row)) out.push("text");
   if (row.kind === "open" && isElement(node)) {
     out.push("attr");
-    // The root element goes only with its document, and one with the panel in it stays.
-    if (node.parentNode?.nodeType !== 9 && !holdsOwn(node)) out.push("html", "hide", "delete");
+    // The root element goes only with its document; the head and body, and one with the panel in it, stay.
+    if (node.parentNode?.nodeType !== 9 && !isFrame(node) && !holdsOwn(node)) out.push("html", "hide", "delete");
   } else if ((row.kind === "text" || row.kind === "comment") && inElement(node)) out.push("delete");
   return out;
 }
@@ -232,7 +237,7 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
   bar.setAttribute("aria-label", "edit the selected node");
   bar.hidden = true;
   /** The field open: its way to close. */
-  let open: { close(commit: boolean): void } | null = null;
+  let open: { close(commit: boolean, away?: boolean): void } | null = null;
   let current: Row | null = null;
 
   function record(change: Change | null, element: Element): boolean {
@@ -282,7 +287,7 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
       hooks.settled();
       if (!away) refocus();
     };
-    const self = { close: (apply: boolean) => close(apply) };
+    const self = { close: (apply: boolean, away = false) => close(apply, away) };
     open = self;
     const box: HTMLElement = input;
     box.addEventListener("keydown", (key) => {
@@ -374,7 +379,7 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
       commit(text) {
         if (text.trim() === before.trim()) return true;
         const nodes = parse(element.ownerDocument, text);
-        const change = htmlEdit(target(element), element, before, nodes, text);
+        const change = htmlEdit(target(element), element, before, nodes);
         if (!change || !record(change, element)) return false;
         const made = nodes.find(isElement);
         if (made) hooks.select(made);
@@ -401,9 +406,14 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
     if (next) hooks.select(next);
   }
 
-  function act(action: TreeEditAction, row: Row): void {
-    if (!actionsFor(row).includes(action)) return;
+  /** Put the open field's edit on. False where it refused it: the field stays open, marked, and nothing else is done. */
+  function done(): boolean {
     open?.close(true);
+    return open === null;
+  }
+
+  function act(action: TreeEditAction, row: Row): void {
+    if (!actionsFor(row).includes(action) || !done()) return;
     if (action === "text") editText(row);
     else if (action === "attr") editAttr(row, null);
     else if (action === "html") editHtml(row);
@@ -435,8 +445,7 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
       const piece = pieceAt(at, hooks.code(row));
       const name = piece?.getAttribute("data-attr");
       if (name) {
-        open?.close(true);
-        editAttr(row, name);
+        if (done()) editAttr(row, name);
         return true;
       }
       if (!piece || !textOf(row)) return false;
@@ -453,7 +462,8 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
     busy: () => open !== null,
     close(commit) {
       if (!open) return false;
-      open.close(commit);
+      // The tree goes on, as to another node: a field whose edit is refused gives way all the same.
+      open.close(commit, commit);
       return true;
     },
     destroy() {

@@ -56,7 +56,8 @@ export function netChanges(edits: readonly Edit[]): ChangeGroup[] {
     // One element's selector and source, together: the last that knows where it is written.
     if (edit.target.source) group.target = edit.target;
     // A delete is never one with another: the selectors after a node taken out shift.
-    const at = edit.kind === "delete" ? `#${edit.id}` : `${key}\n${edit.property}`;
+    // An html edit's property is the kind's own: a real `hidden` attribute is not a hide.
+    const at = edit.kind === "delete" ? `#${edit.id}` : isMarkupKind(edit.kind) ? `${key}\n${edit.kind}\n${edit.property}` : `${key}\n${edit.property}`;
     const known = byProperty.get(at);
     // An html edit goes on from the last only where it starts from that one's value: a selector or a `text 2` that shifted is another node.
     if (known && (!isMarkupKind(edit.kind) || known.after === edit.before)) known.after = edit.after;
