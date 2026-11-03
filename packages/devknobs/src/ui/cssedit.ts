@@ -5,15 +5,19 @@
  * hands each line and block here to be made editable; every edit goes to the
  * log. While a field is open, or a click that closed one is still under way,
  * the editor is busy: the view waits with its next read of the styles, and
- * is told once it may go ahead. To use it:
+ * is told once it may go ahead. A line under the element's rules adds a new
+ * rule, its selector typed first, and the line that adds a property to it
+ * opens once it is drawn. To use it:
  *
  *   const editor = createCssEditor({ log, node, settled });
  *   editor.begin(); editor.editable(row, value, declaration, place, null); editor.addLine(place);
+ *   editor.newRuleLine(element, ".cta");
  *   if (editor.busy()) wait(); editor.destroy();
  */
 
-import { type CssPlace, cssOff, cssOn, cssValue, type Off, offIn, valueText } from "../edit/css";
+import { type CssPlace, cssOff, cssOn, cssValue, type Off, offIn, sheetIdOf, valueText } from "../edit/css";
 import type { Change, EditLog } from "../edit/log";
+import { newRule, ruleOf } from "../edit/rule";
 import { type Locate, recordAt } from "../edit/source";
 import { elementSelector } from "../grab/selector";
 import type { OwnBlock, StyleDeclaration } from "../styles/types";
@@ -21,6 +25,9 @@ import { button, el } from "./dom";
 
 /** What the line that adds a property says. */
 export const ADD = "+ add property";
+
+/** What the line that adds a rule says. */
+export const NEW_RULE = "+ new rule";
 
 /** How long a field closed by a click elsewhere keeps the view as it is, for that click to land, at most, in ms. */
 export const HOLD = 1000;
@@ -49,6 +56,8 @@ export interface CssEditor {
   editable(row: HTMLElement, value: HTMLElement, declaration: StyleDeclaration, place: Place, off: Off | null): void;
   /** The line under a block that adds a property to it. */
   addLine(place: Place): HTMLElement;
+  /** The line that adds a new rule for an element, its selector field filled with `selector`. */
+  newRuleLine(element: Element, selector: string): HTMLElement;
   /** A field is open, or a click that closed one is still under way. */
   busy(): boolean;
   /** Close the field open, with or without its edit. Says whether one was open. */
@@ -88,22 +97,6 @@ export function offDeclaration(off: Off): StyleDeclaration {
   };
 }
 
-/** The ids stylesheets are told apart by, by the sheet, or the rule where it has none. */
-const sheetIds = new WeakMap<object, number>();
-let sheetsSeen = 0;
-
-/** A number for a rule's stylesheet, the same for every rule of it while it is up. */
-function sheetIdOf(rule: CSSRule | CSSNestedDeclarations): number {
-  const sheet: unknown = Reflect.get(rule, "parentStyleSheet");
-  const key = typeof sheet === "object" && sheet !== null ? sheet : rule;
-  let id = sheetIds.get(key);
-  if (id === undefined) {
-    id = ++sheetsSeen;
-    sheetIds.set(key, id);
-  }
-  return id;
-}
-
 /** A selector that finds the element, for an edit's target. */
 export function selectorOf(element: Element): string {
   try {
@@ -129,6 +122,27 @@ export function editField(value: string, label: string): HTMLInputElement {
   return input;
 }
 
+/** One of the element's classes in a selector, as its window's css writes it. */
+function escaped(element: Element, name: string): string {
+  try {
+    const css = element.ownerDocument?.defaultView?.CSS ?? globalThis.CSS;
+    if (css && typeof css.escape === "function") return css.escape(name);
+  } catch {
+    // A window that went: the plain name stands in.
+  }
+  return name;
+}
+
+/**
+ * What a new rule's selector starts as: the element's classes, else a short
+ * selector that finds it, then the states forced on it, as `.cta:hover`.
+ */
+export function newRuleSelector(element: Element, states: readonly string[] = []): string {
+  const classes = (element.getAttribute("class") ?? "").split(/\s+/).filter(Boolean);
+  const base = classes.length > 0 ? classes.map((name) => `.${escaped(element, name)}`).join("") : selectorOf(element);
+  return `${base}${states.map((state) => `:${state}`).join("")}`;
+}
+
 /** A click on a custom property's name in a value: that does its own. */
 function inButton(target: EventTarget | null): boolean {
   const closest: unknown = target ? Reflect.get(target, "closest") : null;
@@ -144,6 +158,8 @@ export function createCssEditor(context: CssEditorContext): CssEditor {
   /** A field closed by a click elsewhere: the view stays as it is until that click is done. */
   let holding = false;
   let holdTimer = 0;
+  /** The block of a rule just added: its line that adds a property opens once drawn. */
+  let opening: CSSStyleDeclaration | null = null;
 
   function release(): void {
     if (!holding) return;
@@ -287,7 +303,79 @@ export function createCssEditor(context: CssEditorContext): CssEditor {
   function addLine(place: Place): HTMLElement {
     const control = button("css-add", ADD);
     control.addEventListener("click", () => openAdd(control, place));
+    if (opening === place.style) {
+      opening = null;
+      // Once the view has put it in its place.
+      queueMicrotask(() => openAdd(control, place));
+    }
     return control;
+  }
+
+  function newRuleLine(element: Element, selector: string): HTMLElement {
+    const control = button("css-new-rule", NEW_RULE);
+    control.addEventListener("click", () => openNewRule(control, element, selector));
+    return control;
+  }
+
+  /**
+   * A field for the new rule's selector. Enter adds the rule, escape leaves
+   * none. A selector the browser does not take keeps the field open, marked.
+   */
+  function openNewRule(control: HTMLElement, element: Element, selector: string): void {
+    open?.close(true);
+    if (!control.isConnected) return;
+    const row = el("div", "css-decl css-adding css-rule-adding");
+    const field = editField(selector, "selector of the new rule");
+    row.append(field, el("span", "css-punct", " { }"));
+    control.replaceWith(row);
+    let shown = true;
+    const close = (commit: boolean, away = false): void => {
+      if (!shown) return;
+      shown = false;
+      open = null;
+      if (away) hold();
+      const text = field.value.trim();
+      const tried = commit && text !== "";
+      const added = tried && addRule(element, text);
+      if (tried && !added && !away) {
+        shown = true;
+        open = self;
+        field.classList.add("bad");
+        field.setAttribute("aria-invalid", "true");
+        field.focus({ preventScroll: true });
+        return;
+      }
+      if (row.isConnected) row.replaceWith(control);
+      closed();
+      // A rule added opens its line for a property, which takes the focus.
+      if (!away && !added) node.focus({ preventScroll: true });
+    };
+    const self = { close: (commit: boolean) => close(commit) };
+    open = self;
+    field.addEventListener("keydown", (event: KeyboardEvent) => {
+      if (event.isComposing) return;
+      if (event.key === "Enter") {
+        event.preventDefault();
+        close(true);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        close(false);
+      }
+    });
+    field.addEventListener("blur", () => close(true, true));
+    field.focus({ preventScroll: true });
+    field.setSelectionRange(field.value.length, field.value.length);
+  }
+
+  /** Add a rule for the element, and say whether the page took its selector. */
+  function addRule(element: Element, text: string): boolean {
+    const change = newRule({ element, selector: selectorOf(element) }, text);
+    if (!change) return false;
+    // Set before the edit, which draws the view again at once.
+    opening = ruleOf(change)?.style ?? null;
+    const took = recordAt(log, change, element, context.locate) !== null;
+    if (!took) opening = null;
+    return took;
   }
 
   /** A field for the name, then one for the value. Enter or Tab on the value adds it. */
@@ -376,6 +464,7 @@ export function createCssEditor(context: CssEditorContext): CssEditor {
     },
     editable,
     addLine,
+    newRuleLine,
     busy: () => open !== null || holding,
     close(commit) {
       if (!open) return false;

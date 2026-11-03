@@ -11,6 +11,7 @@ import {
 import { isShadowRoot, label, type Scope } from "./tree";
 import type { HiddenSheet, RuleOrigin, Specificity } from "./types";
 import { isOwnSheet } from "../engine/style";
+import { isNewRuleSheet, NEW_RULE_SHEET } from "../edit/rule";
 
 /** Something around a rule that must hold now for it to apply. */
 export type Condition =
@@ -107,10 +108,12 @@ interface Walk {
 }
 
 function sheetName(sheet: CSSStyleSheet): string {
+  if (isNewRuleSheet(sheet)) return NEW_RULE_SHEET;
   return sheet.href ?? (sheet.ownerNode ? "<style>" : "constructed");
 }
 
 function ownerOf(sheet: CSSStyleSheet): Element | null {
+  if (isNewRuleSheet(sheet)) return null;
   const node = sheet.ownerNode;
   return node && "hasAttribute" in node ? node : null;
 }
@@ -270,8 +273,12 @@ function sheetsOf(scope: Scope): CSSStyleSheet[] {
   return [...Array.from(scope.styleSheets), ...(scope.adoptedStyleSheets ?? [])];
 }
 
-/** devknobs' own: a stylesheet its element brought in, or any in one of its shadow roots. */
+/**
+ * devknobs' own: a stylesheet its element brought in, or any in one of its
+ * shadow roots. A rule added from the styles view is shown as the page's.
+ */
 function isOwn(sheet: CSSStyleSheet): boolean {
+  if (isNewRuleSheet(sheet)) return false;
   if (isOwnSheet(sheet)) return true;
   const owner = ownerOf(sheet);
   return owner !== null && isDevknobs(owner);

@@ -8,6 +8,7 @@ import { LOCALE_PRESETS } from "./engine/locale";
 import { TIME_ZONE_PRESETS } from "./engine/time";
 import { UA_PRESETS } from "./engine/ua";
 import { type Edit, edits as editLog } from "./edit/log";
+import { clearForced, type ForcedState, forceState as forceOn } from "./styles/force";
 import { createGrab, type GrabControl } from "./grab/control";
 import { createInspect, type InspectControl, oneAtATime } from "./grab/inspect";
 import type { GrabOptions, GrabResult } from "./grab/types";
@@ -78,6 +79,7 @@ export type {
 } from "./engine/describe";
 export type { DeviceKind, DevicePreset } from "./engine/devices";
 export type { Edit, EditKind, EditTarget } from "./edit/log";
+export type { ForcedState } from "./styles/force";
 export type { GeoPreset } from "./engine/geo";
 export type { UaBrand, UaHints, UaPreset } from "./engine/ua";
 export type { EngineOptions } from "./engine";
@@ -423,7 +425,10 @@ export function unmount(): void {
   if (superseded(window, unmount)) return;
   detach();
   // The page goes back to how it was written, unless the panel is only handed over.
-  if (!handing) editLog.undoAll();
+  if (!handing) {
+    editLog.undoAll();
+    clearForced();
+  }
   // A host keeps its switch's choice through a take-back: off stays off.
   const native = mounted?.host ? engine.nativeSwitch() : null;
   engine.stop();
@@ -559,7 +564,23 @@ export function edits(): Edit[] {
   return (hosted("edits") ?? editLog.list)();
 }
 
-const api = { mount, unmount, getState, setState, reset, replay, grab, describe, ready, edits };
+/**
+ * Force states on an element, so it renders as if hovered, focused or
+ * pressed, for a screenshot of that state: `hover`, `focus`,
+ * `focus-visible`, `active` and `focus-within`, with or without the colon.
+ * Takes the element or a selector for it. One element at a time: the states
+ * on another come off first, and with no states, or no element found,
+ * nothing is forced. Returns the states forced. Not an edit, so not in
+ * `edits()`; the panel's reset and `unmount` take them off, `reset()` leaves them.
+ */
+export function forceState(target: Element | string | null, states: readonly string[] = []): ForcedState[] {
+  const host = hosted("forceState");
+  if (host) return host(target, states);
+  const element = typeof target === "string" ? document.querySelector(target) : target;
+  return forceOn(element, states);
+}
+
+const api = { mount, unmount, getState, setState, reset, replay, grab, describe, ready, edits, forceState };
 
 /** What `mount` puts at `window.devknobs`, for agents that run code in the page. */
 export type DevknobsApi = typeof api;

@@ -3,7 +3,7 @@ title: grab and inspect
 meta_title: Grab and inspect elements for a coding agent with devknobs
 description: Grab any element on the page and copy its html, the components that rendered it and their source files for a coding agent, or inspect its box and css.
 order: 5
-updated: 2026-11-03
+updated: 2026-11-04
 ---
 
 ## grab
@@ -57,6 +57,12 @@ click a value to edit it, the box at a line's start turns it off and on, and
 `+` lines: `Z` undoes and `⇧Z` (`Shift Z` off a Mac) redoes while the focus
 is in the view and not in a field (⌘Z and Ctrl Z do not), and `copy prompt
 for agent` copies a prompt that asks your agent to put them in the code.
+
+`+ new rule` adds a rule for the element, its selector from the element's
+classes, and the chips `:hover`, `:focus`, `:focus-visible`, `:active` and
+`:focus-within` over the rules force that state: the page draws the element
+so and the styles show the rules of the state. a forced state is no edit,
+and it ends when you pick another element or close the view.
 
 the DOM tree can be edited too: double-click a text or an attribute to edit
 it, and on the selected line `a` adds an attribute, `F2` edits it as html,

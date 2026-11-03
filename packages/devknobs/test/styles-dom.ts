@@ -129,6 +129,8 @@ export class FakeNode {
 
   select(): void {}
 
+  setSelectionRange(): void {}
+
   /** Marks the node a page's own, so it and what is under it are connected. */
   root = false;
 

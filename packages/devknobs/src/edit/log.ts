@@ -14,10 +14,10 @@
 
 /**
  * What an edit changes: a css declaration's value, a declaration turned off
- * or on, a property added, or in the html a text, an attribute, an element
- * written anew as html, an element hidden, a node deleted.
+ * or on, a property added, a new rule, or in the html a text, an attribute,
+ * an element written anew as html, an element hidden, a node deleted.
  */
-export type EditKind = "css-value" | "css-toggle" | "css-add" | "text" | "attr" | "html" | "hide" | "delete";
+export type EditKind = "css-value" | "css-toggle" | "css-add" | "css-rule" | "text" | "attr" | "html" | "hide" | "delete";
 
 /** Where an edit is, for an agent to find it in the code. */
 export interface EditTarget {
@@ -28,7 +28,7 @@ export interface EditTarget {
   /** The rule the edit is in. Left out for an edit of the element's own `style`. */
   rule?: {
     selectorText: string;
-    /** The stylesheet's address, `<style>` for an inline one, `constructed` for an adopted one. */
+    /** The stylesheet's address, `<style>` for an inline one, `constructed` for an adopted one, `new rule` for a rule the panel added. */
     sheet: string;
     /** The element that brought the stylesheet in, as `style#theme`. Null for an adopted one. */
     owner: string | null;
@@ -46,8 +46,8 @@ export interface Edit {
   kind: EditKind;
   target: EditTarget;
   /**
-   * What in its place it changes: the css property, as written, the
-   * attribute's name, `text` for the element's text (`text 2` for its second
+   * What in its place it changes: the css property, as written, `rule` for
+   * a new rule, whose selector is its value after, the attribute's name, `text` for the element's text (`text 2` for its second
    * text), `html` for its markup, `hidden` for a hide, `node` for a delete.
    */
   property: string;

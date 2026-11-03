@@ -10,6 +10,7 @@ import type {
   StyleDeclaration,
   VariableValue,
 } from "../styles/types";
+import { NEW_RULE_SHEET } from "../edit/rule";
 import { resolveVars, varReferences } from "../styles/varrefs";
 
 /** The most characters the view's head, a crumb and a file name show. */
@@ -35,7 +36,7 @@ export function crumbText(label: string): string {
 
 /** The last segment of a stylesheet's address. One with no address keeps its name. */
 export function fileName(sheet: string): string {
-  if (sheet === "<style>" || sheet === "constructed") return sheet;
+  if (sheet === "<style>" || sheet === "constructed" || sheet === NEW_RULE_SHEET) return sheet;
   const path = sheet.split(/[?#]/)[0] ?? sheet;
   const segments = path.split("/").filter((segment) => segment !== "");
   return middle(segments[segments.length - 1] ?? sheet, FILE_MAX);
@@ -45,6 +46,7 @@ export function fileName(sheet: string): string {
 export function sourceOf(origin: RuleOrigin): { text: string; tip: string } {
   const text = fileName(origin.sheet);
   if (origin.sheet === "constructed") return { text, tip: "a stylesheet made by script" };
+  if (origin.sheet === NEW_RULE_SHEET) return { text, tip: "made in the panel: it is on the page only, until it is in the code" };
   if (origin.sheet === "<style>") {
     return { text, tip: origin.owner ? `a style element, ${origin.owner}` : "a style element" };
   }

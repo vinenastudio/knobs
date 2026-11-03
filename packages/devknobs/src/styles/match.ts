@@ -1,4 +1,5 @@
 import type { Condition, FlatPart, FlatRule, ScopeLimits } from "./collect";
+import { forcedSelector, forcing } from "./force";
 import { compareSpecificity } from "./selector";
 import type { Specificity } from "./types";
 
@@ -49,14 +50,19 @@ export function conditionsFor(view: Window & typeof globalThis): Checks["holds"]
     });
 }
 
+/** Whether an element matches a selector, a state forced on it counted as on. */
+function matches(element: Element, selector: string): boolean {
+  return element.matches(forcing() ? forcedSelector(selector) : selector);
+}
+
 function reaches(element: Element, part: FlatPart, reach: Reach): boolean {
-  if (reach.kind === "host") return part.host !== null && element.matches(part.host);
+  if (reach.kind === "host") return part.host !== null && matches(element, part.host);
   if (reach.kind === "slotted") {
     if (part.slotted === null) return false;
-    return element.matches(part.slotted) && reach.slot.matches(part.match);
+    return matches(element, part.slotted) && matches(reach.slot, part.match);
   }
   // `:host` alone names the host from inside, and `::slotted()` an element of another tree.
-  return part.host === null && part.slotted === null && element.matches(part.match);
+  return part.host === null && part.slotted === null && matches(element, part.match);
 }
 
 /**
