@@ -168,16 +168,17 @@ is left or the elements give nothing.
 After a fix, reload the page. The knobs stay set across reloads. Call
 `await window.devknobs.ready()` and check again.
 
-## Apply the user's style edits
+## Apply the user's edits
 
-The user can edit styles in inspect's view (`⇧C`) and ask you to put them in
-the code. Read them:
+The user can edit styles and the html in inspect's view (`⇧C`) and ask you
+to put them in the code. Read them:
 
 ```js
 window.devknobs.edits();
 ```
 
-Each edit is plain json: `kind` (`css-value`, `css-toggle` or `css-add`),
+Each edit is plain json: `kind` (`css-value`, `css-toggle` or `css-add` for
+styles, or one of the html kinds below),
 `target.selector` (finds the element; see `grab` for `>>>` and `>>iframe>>` steps),
 `target.source` (the file and line where the element is written, when grab
 finds it), `target.rule` (`selectorText`, `sheet`, `owner`, `sheetId`, `path` and `context` of the rule,
@@ -190,8 +191,20 @@ empties the list. Of those,
 for several edits of one property in one rule, take the first `before` and
 the last `after`. Put the changes where the project writes
 its styles (Tailwind classes, CSS modules, a stylesheet), not as inline
-styles, unless the edit was to the element's own style. The edits live only
-on the page: a reload drops them.
+styles, unless the edit was to the element's own style.
+
+The html edits have `kind` `text`, `attr`, `html`, `hide` or `delete`, and no
+`target.rule`. `property` is `text` (`text 2` and on for an element's later
+texts), the attribute's name, `html`, `hidden` or `node`; a `delete` of an
+element has `node`, of a text `text` (or `text 2` and on), and of a comment
+`comment`. `before` and `after` are the text, the attribute's value or the
+markup (null where it is not set: an attribute added or taken out, a node
+deleted). A `hide` with `after: "hidden"` asks to hide or remove the
+element, and one with `before: "hidden"` and `after: null` means it was
+shown again. Make each one
+in the component or template that renders the element, never by patching the
+DOM from a script: they were made on the live DOM, and the framework's next
+render may undo them. The edits live only on the page: a reload drops them.
 
 ## Loop over conditions
 

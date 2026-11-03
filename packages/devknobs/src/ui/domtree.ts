@@ -11,14 +11,18 @@
  * past `CHILD_CAP` children a line says how many more there are, which shows
  * them all. Only the lines that show are built, each once, and built again
  * when its node changes. One observer watches what shows, and a node that
- * changed lights for a moment. To use it:
+ * changed lights for a moment. Given an editor, its text and attributes
+ * can be edited, as `domedit.ts` says. To use it:
  *
  *   const tree = createDomTree({ outline, select, copy });
  *   body.append(tree.node); tree.reveal(element); tree.destroy();
  */
 
+import { HIDE_ATTRIBUTE } from "../edit/html";
 import { el } from "./dom";
+import type { DomEditor, TreeHooks } from "./domedit";
 import { icon } from "./icons";
+import { typesInField } from "./keys";
 import { actButton } from "./kit";
 import { middle } from "./stylesformat";
 
@@ -491,14 +495,20 @@ export interface DomTreeContext {
   select(node: Node, pseudo: string | null): void;
   /** Put a text on the clipboard. */
   copy(text: string): void;
+  /** Makes the tree's editor, which the lines' text and attributes are edited with. Left out, the tree is read only. */
+  editor?(hooks: TreeHooks): DomEditor;
 }
 
 export interface DomTree {
   node: HTMLElement;
   /** Show the tree of the node's document, with the node selected and in view. Null shows no tree. */
   reveal(node: Node | null, pseudo?: string | null): void;
+  /** Select a node's line, and tell the view, as a click on it does. */
+  select(node: Node): void;
   /** The node selected, or null. */
   selected(): Node | null;
+  /** Close a field open in the tree, without its edit. Says whether one was open. */
+  escape(): boolean;
   destroy(): void;
 }
 
@@ -563,7 +573,10 @@ export function createDomTree(context: DomTreeContext, model: TreeModel = create
     const changed = lit.get(row.node);
     for (const [kind, text, name] of model.pieces(row)) {
       const piece = kind === "" ? el("span", "", text) : el("span", `tok-${kind}`, text);
-      if (name !== undefined && changed?.has(name)) piece.classList.add("dom-flash");
+      if (name !== undefined) {
+        piece.setAttribute("data-attr", name);
+        if (changed?.has(name)) piece.classList.add("dom-flash");
+      }
       code.append(piece);
     }
     return code;
@@ -622,6 +635,7 @@ export function createDomTree(context: DomTreeContext, model: TreeModel = create
       if (opens) line.setAttribute("aria-expanded", open ? "true" : "false");
     }
     const one: Built = { node: line, turn, code, row, open, marks: [] };
+    if (row.kind === "open" && isElement(row.node) && row.node.hasAttribute(HIDE_ATTRIBUTE)) line.classList.add("dom-hid");
     mark(one, isSelected(row));
     if (lit.has(row.node) && lit.get(row.node) === null) line.classList.add("dom-flash");
     const element = elementOf(row.node);
@@ -675,6 +689,13 @@ export function createDomTree(context: DomTreeContext, model: TreeModel = create
     }
   }
 
+  /** Build the lines that show, once no field is open: a field is in a line, which building again would take away. */
+  function settle(): void {
+    timer = 0;
+    if (editor?.busy()) timer = window.setTimeout(settle, SETTLE);
+    else render();
+  }
+
   /** Build the lines that show. The list is put together again only when its lines are others. */
   function render(): void {
     clearTimeout(timer);
@@ -696,6 +717,7 @@ export function createDomTree(context: DomTreeContext, model: TreeModel = create
     const row = rows[selectedIndex()];
     const line = row ? lineOf(row) : null;
     list.setAttribute("aria-activedescendant", line?.id ?? "");
+    editor?.selected(row ?? null);
   }
 
   function selectedIndex(): number {
@@ -766,6 +788,7 @@ export function createDomTree(context: DomTreeContext, model: TreeModel = create
 
   /** Open or close a node's line. What it holds is read again as it opens, since nothing watched it while closed. */
   function setOpen(target: Node, open: boolean): void {
+    editor?.close(true);
     if (open) model.forget(target);
     model.setExpanded(target, open);
     drop(target);
@@ -773,11 +796,17 @@ export function createDomTree(context: DomTreeContext, model: TreeModel = create
   }
 
   function onKeydown(event: KeyboardEvent): void {
-    if (event.altKey) return;
+    // A key typed in a field of the tree is the field's.
+    if (event.altKey || typesInField(event)) return;
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "c") {
       if (!selection) return;
       event.preventDefault();
       context.copy(markupOf(selection.node));
+      return;
+    }
+    if (editor?.key(event, rows[selectedIndex()] ?? null)) {
+      event.preventDefault();
+      event.stopPropagation();
       return;
     }
     if (event.metaKey || event.ctrlKey) return;
@@ -796,6 +825,14 @@ export function createDomTree(context: DomTreeContext, model: TreeModel = create
     context.outline(null);
   }
 
+  /** A double-click on a line's text or attribute edits it. */
+  function onDoubleClick(event: MouseEvent): void {
+    if (!editor || !hasClasses(event.target)) return;
+    const line = event.target.closest(".dom-row");
+    const row = rows.find((one) => built.get(one.node)?.get(slot(one))?.node === line);
+    if (row && editor.dblclick(row, event.target)) event.preventDefault();
+  }
+
   /** A line or a piece lights once: the light goes when it is over, so a line put back later does not light again. */
   function onLit(event: Event): void {
     if (hasClasses(event.target)) event.target.classList.remove("dom-flash");
@@ -804,6 +841,7 @@ export function createDomTree(context: DomTreeContext, model: TreeModel = create
   list.addEventListener("keydown", onKeydown);
   list.addEventListener("pointerleave", onLeave);
   list.addEventListener("animationend", onLit);
+  list.addEventListener("dblclick", onDoubleClick);
 
   /** What changed on the page: the lines of those nodes are built again, lit, once it settles. */
   function onRecords(records: MutationRecord[]): void {
@@ -829,6 +867,12 @@ export function createDomTree(context: DomTreeContext, model: TreeModel = create
         any = true;
       } else if (record.type === "attributes") {
         const name = record.attributeName ?? "";
+        if (name === HIDE_ATTRIBUTE) {
+          // A hide shows on the line, which is built again, unlit.
+          drop(target);
+          any = true;
+          continue;
+        }
         if (isOwnAttribute(name)) continue;
         model.forget(target);
         drop(target);
@@ -845,10 +889,11 @@ export function createDomTree(context: DomTreeContext, model: TreeModel = create
         any = true;
       }
     }
-    if (any && !timer) timer = window.setTimeout(render, SETTLE);
+    if (any && !timer) timer = window.setTimeout(settle, SETTLE);
   }
 
   function reveal(target: Node | null, pseudo: string | null = null): void {
+    editor?.close(true);
     if (!target) {
       observer?.disconnect();
       clearTimeout(timer);
@@ -880,11 +925,35 @@ export function createDomTree(context: DomTreeContext, model: TreeModel = create
     bringIntoView(true);
   }
 
+  const editor =
+    context.editor?.({
+      list,
+      code: (row) => (rows.includes(row) ? builtOf(row).code : null),
+      children: (target) => model.children(target),
+      select(target) {
+        reveal(target);
+        context.select(target, null);
+      },
+      settled() {
+        if (timer) {
+          clearTimeout(timer);
+          timer = window.setTimeout(settle, 0);
+        }
+      },
+    }) ?? null;
+  if (editor) node.append(editor.bar);
+
   return {
     node,
     reveal,
+    select(target) {
+      reveal(target);
+      context.select(target, null);
+    },
     selected: () => selection?.node ?? null,
+    escape: () => editor?.close(false) ?? false,
     destroy(): void {
+      editor?.destroy();
       gone = true;
       observer?.disconnect();
       clearTimeout(timer);
@@ -893,6 +962,7 @@ export function createDomTree(context: DomTreeContext, model: TreeModel = create
       list.removeEventListener("keydown", onKeydown);
       list.removeEventListener("pointerleave", onLeave);
       list.removeEventListener("animationend", onLit);
+      list.removeEventListener("dblclick", onDoubleClick);
       context.outline(null);
       selection = null;
     },

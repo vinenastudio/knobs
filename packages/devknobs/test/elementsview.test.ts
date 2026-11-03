@@ -1,11 +1,18 @@
 import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import { DEFAULT_STATE } from "../src/engine/store";
 import type { DomTree, DomTreeContext } from "../src/ui/domtree";
-import { createEditLog, type EditLog } from "../src/edit/log";
+import { attrEdit, htmlEdit } from "../src/edit/html";
+import { type Change, createEditLog, type EditLog } from "../src/edit/log";
 import { createDollar, createElementsView, DOLLAR, undoKey } from "../src/ui/elementsview";
 import type { StylesPage, StylesView } from "../src/ui/stylesview";
 import type { Tips } from "../src/ui/tooltip";
+import { as as pageNode, elem, page as pageOf } from "./dom-page";
 import { as, element, type FakeElement, FakeNode, FakeObserver, fake, pageDocument } from "./styles-dom";
+
+function must(change: Change | null): Change {
+  if (!change) throw new Error("no change");
+  return change;
+}
 
 /** A window of the page, as far as `$0` goes on it. */
 function windowOf(): Window {
@@ -68,6 +75,8 @@ describe("$0", () => {
 describe("the elements view", () => {
   let view: StylesView | null = null;
   let revealed: (Node | null)[];
+  /** The nodes the view selected in the tree, apart from those it revealed. */
+  let selects: Node[] = [];
   let tree: DomTreeContext | null;
   let asked: Element[];
   let app: FakeElement & { nodeType: number };
@@ -151,6 +160,9 @@ describe("the elements view", () => {
   let copies: string[] = [];
   let copyWorks = true;
 
+  /** The node the stub tree has selected. */
+  let picked: Node | null = null;
+
   function start(): FakeNode {
     undid = [];
     copies = [];
@@ -158,7 +170,9 @@ describe("the elements view", () => {
     const stub: DomTree = {
       node: new FakeNode("div") as unknown as HTMLElement,
       reveal: (node) => revealed.push(node),
-      selected: () => null,
+      select: (node) => selects.push(node),
+      selected: () => picked,
+      escape: () => false,
       destroy: () => {
         destroyed++;
       },
@@ -183,6 +197,26 @@ describe("the elements view", () => {
     paneBody.append(fake(view.node));
     return fake(view.node);
   }
+
+  test("selects the node an edit put in place of the one selected, and nothing for a node still on the page", () => {
+    picked = null;
+    start();
+    const old = elem("div", { class: "block" });
+    const body = elem("body", {}, old);
+    pageOf(() => [body]);
+    const made = elem("section");
+    picked = pageNode(old);
+    revealed = [];
+    selects = [];
+    log.record(must(htmlEdit({ selector: "div.block" }, pageNode(old) as Element, "<div></div>", [pageNode(made)])));
+    expect(selects).toEqual([pageNode(made)]);
+    picked = pageNode(made);
+    log.record(must(attrEdit({ selector: "section" }, pageNode(made) as Element, "id", "x")));
+    expect(selects).toEqual([pageNode(made)]);
+    expect(revealed).toEqual([]);
+    log.undoAll();
+    picked = null;
+  });
 
   test("undoes on Z and redoes on ⇧Z, and leaves a key in a field to it", () => {
     const node = start();

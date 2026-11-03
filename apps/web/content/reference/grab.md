@@ -226,6 +226,51 @@ element does. the tree follows the page as it changes, and a node that
 changed lights for a moment. drag the tree's bottom corner for more or less
 of it.
 
+### edit the html
+
+the tree can be edited as in the browsers' own tools, and each edit goes on
+the page at once, into the same changes as the style edits:
+
+- a double-click on a line's text, or ↩ on its line, makes the text a
+  field. ↩ puts it on the page and esc leaves it. only that text changes:
+  the element's other children stay. an empty text is refused
+- a double-click on an attribute makes it a field with `name="value"`, as in
+  the tag, a `"` in the value written `&quot;` and a `&` as `&amp;`. change
+  the value or the name, write several `name="value"` pairs in one field, or
+  clear the field to take the attribute out. `class` is edited like any
+  other attribute
+- a text or a value with line breaks, as in a `<pre>` or an svg path, opens
+  in a field that keeps them, where ↩ breaks the line, and `⇧↩`
+  (`Shift Enter` off a Mac) or its `apply` button puts it on the page
+- `a` on the selected line adds an attribute, in a field before the tag's end
+- `F2` edits the element as html: a field with its outer html, where ↩
+  breaks the line. `⇧↩` (`Shift Enter` off a Mac), its `apply` button, or a
+  click elsewhere puts the new html in the element's place and selects it;
+  esc leaves it. html with no element in it, or with devknobs' own
+  `data-devknobs` attributes, is refused: applying it with `⇧↩` or the
+  button turns the field red and keeps it open, while a click elsewhere
+  closes it without the edit. undo puts the very element back, unless the
+  page moved the new nodes since
+- `h` hides the selected element and all in it, and shows it again:
+  `visibility: hidden` through an attribute of devknobs', so the page's own
+  `style` stays as it is. its line goes faint
+- Delete or Backspace deletes the selected node, and the line after it is
+  selected. undo puts it back where it stood
+
+a field closed as it was opened makes no edit, and one whose edit is refused
+stays open, red, until it is fixed, left with esc or the focus leaves it,
+and no key or button of the tree acts while it is open. `<html>`, `<head>`, `<body>` and an element that holds devknobs'
+own nodes are not edited as html, hidden or deleted, and a text straight in
+a shadow root or the document is not edited.
+
+the keys are plain and act only on the selected line, never while a field
+has the focus. the bar under the tree has the same actions for the selected
+line: `edit text`, `+ attribute`, `edit as html`, `hide` (or `show`) and
+`delete`, and the line's `copy` copies its markup. it works the same on the
+width knob's frame. an edit of the html is made on the live DOM: where the
+page's framework renders again and changes or replaces the node, the edit
+stays in the list as text, and undo then only takes it out.
+
 ### edit the styles
 
 the styles can be edited in place, as in the browsers' own tools, in both
@@ -248,14 +293,20 @@ modes, and each edit goes on the page at once:
 the changes at the foot of the view count the edits and list them as diff
 lines, `-` the value before and `+` the value after, under the rule, what
 it sits in (`@media`, `@layer`, the rule a nested `&` is in) and its
-stylesheet, or `style=""` and the element for its own style.
+stylesheet, or `style=""` and the element for its own style. an element's
+html edits are under `html of` and its selector: `- text: "Start now"`,
+`+ class: "cta cta-lg"`, the markup an element had and has, `+ hidden`, and
+the markup of a node deleted.
 several edits of one property come to one change, and one that went back to
 where it started to none. `Z` undoes the last edit and `⇧Z` (`Shift Z` off
 a Mac) does it again, while the focus is in the view and not in a field. `copy prompt for
 agent` copies a prompt that asks a coding agent to put the edits in the
 code: each element's selector, its file and line where grab finds them, the
 rule and its stylesheet, and each property from its value before to its
-value after. `copy diff` copies the diff lines alone, and `undo all` takes
+value after, and for the html each text, attribute and markup from before
+to after, a hide and a delete. with html edits it ends by asking the agent
+to change the component or template that renders the element, not the DOM,
+as the framework's next render may undo an edit of the DOM. `copy diff` copies the diff lines alone, and `undo all` takes
 every edit back. reset in the footer undoes the edits with the knobs, and so
 does `unmount()`; `devknobs.reset()` leaves them. an edit whose page goes, as
 a frame's reloads, stays in the list as text, and undo then only takes it
@@ -277,5 +328,5 @@ loses them.
 - a closed shadow root, a frame's document inside the tree, and a
   `<template>`'s content
 
-the tree is read only for now, with no line numbers: no attribute is
-edited, no node is dragged, and the tree has no menu.
+the tree has no line numbers, no node is dragged yet, and there is no right
+click menu: the bar under the tree holds the actions.

@@ -22,7 +22,8 @@ const TEXT = Symbol.for("devknobs.text");
 
 const wrapped = new WeakMap<CSSStyleSheet, OwnStyle>();
 
-function isDocument(root: Root): root is Document {
+/** Whether `node` is a Document (nodeType 9). */
+export function isDocument(root: Node): root is Document {
   return root.nodeType === 9;
 }
 

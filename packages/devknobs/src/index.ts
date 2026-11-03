@@ -548,7 +548,10 @@ export async function grab(
  * The edits made in inspect's Elements view that are in force, oldest first,
  * as plain data: each one's kind, the element's selector, its source file and
  * line where grab finds it, the rule and stylesheet, the property and its
- * value before and after (null where it is not set). Undo and the panel's
+ * value before and after (null where it is not set). An html edit has in
+ * place of a css property `text` (`text 2` and on), the attribute's name,
+ * `html`, `hidden` or `node`, and a delete of a text or a comment `text` or
+ * `comment`. Undo and the panel's
  * reset take edits back, and so does `unmount`. `reset()` leaves them, so an
  * agent can loop over conditions with the edits on.
  */

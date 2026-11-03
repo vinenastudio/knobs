@@ -20,8 +20,8 @@ the page, such as playwright's `page.evaluate` or the chrome devtools mcp's
   knobs. it rejects when devknobs is not mounted, and past 10 seconds, so a
   timeout never passes for success.
 - [`grab()`](/docs/grab) takes an element, an array or a NodeList of them.
-- `edits()` gives the style edits made in inspect's view as json, to put in
-  the code.
+- `edits()` gives the style and html edits made in inspect's view as json,
+  to put in the code.
 - `reset()` sets the knobs back and leaves the panel as it is.
 
 ```js

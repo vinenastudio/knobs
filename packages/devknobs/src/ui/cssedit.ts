@@ -105,7 +105,7 @@ function sheetIdOf(rule: CSSRule | CSSNestedDeclarations): number {
 }
 
 /** A selector that finds the element, for an edit's target. */
-function selectorOf(element: Element): string {
+export function selectorOf(element: Element): string {
   try {
     return elementSelector(element).selector;
   } catch {
@@ -114,7 +114,7 @@ function selectorOf(element: Element): string {
 }
 
 /** A one-line field of the editor, as wide as what it holds. */
-function editField(value: string, label: string): HTMLInputElement {
+export function editField(value: string, label: string): HTMLInputElement {
   const input = document.createElement("input");
   input.className = "css-edit inline-field";
   input.value = value;

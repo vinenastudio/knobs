@@ -5,18 +5,22 @@
  * shows its element's styles, and an element the styles show, a pick on the
  * page or a crumb, is revealed in the tree. The node selected is `$0` on its
  * page's window while the view is up, as in the browser's console, unless the
- * page has a `$0` of its own. The styles can be edited, and the edits are
- * listed at the foot, with Z to undo and ⇧Z to redo while the focus is
- * in the view and not in a field. To use it, as the styles view:
+ * page has a `$0` of its own. The styles and the tree's html can be edited,
+ * and the edits are listed at the foot, with Z to undo and ⇧Z to redo while
+ * the focus is in the view and not in a field. Where an undo takes away the
+ * node selected, as one of an element written anew as html, the node put
+ * back in its place is selected. To use it, as the styles view:
  *
  *   const view = createElementsView(context);
  *   body.append(view.node); view.show(element); view.destroy();
  */
 
+import { successor } from "../edit/html";
 import { type EditLog, edits } from "../edit/log";
 import { type Copy, createChanges } from "./changes";
 import { copyText } from "./copytext";
 import { el } from "./dom";
+import { createDomEditor } from "./domedit";
 import { createDomTree, type DomTree, elementOf } from "./domtree";
 import { letterMatches, typesInField } from "./keys";
 import { createStylesView, type StylesContext, type StylesPage, type StylesView } from "./stylesview";
@@ -104,6 +108,7 @@ export function createElementsView(context: StylesContext, parts: ElementsParts 
     copy: (text) => {
       void Promise.resolve(copy(text)).catch(() => undefined);
     },
+    editor: (hooks) => createDomEditor(hooks, { log, locate: context.locate }),
   });
   const styles: StylesView = createStylesView(
     {
@@ -130,16 +135,26 @@ export function createElementsView(context: StylesContext, parts: ElementsParts 
     else log.redo();
   }
 
+  /** An undo or a redo took the node selected off the page: the one in its place is selected. */
+  function follow(): void {
+    const picked = tree.selected();
+    if (!picked || picked.isConnected) return;
+    const next = successor(picked);
+    if (next) tree.select(next);
+  }
+
   node.addEventListener("keydown", onKeydown);
+  const stopFollow = log.subscribe(follow);
 
   return {
     node,
     show: (element, pseudo) => styles.show(element, pseudo),
     refresh: () => styles.refresh(),
-    escape: () => styles.escape(),
+    escape: () => tree.escape() || styles.escape(),
     focus: () => styles.focus(),
     destroy(): void {
       node.removeEventListener("keydown", onKeydown);
+      stopFollow();
       tree.destroy();
       styles.destroy();
       changes.destroy();
