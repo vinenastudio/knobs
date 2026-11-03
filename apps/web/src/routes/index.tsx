@@ -333,10 +333,14 @@ function Landing() {
       <section {...props(styles.section)} id="try">
         <h2 {...props(styles.sectionHeading)}>{m.stage_title()}</h2>
         <p {...props(styles.text)}>{m.stage_line()}</p>
-        <Stage />
+        {/* Live readouts, empty when the llms files are built: left out of them. */}
+        <div data-llms="skip">
+          <Stage />
+        </div>
       </section>
 
-      <footer {...props(styles.footer)}>
+      {/* Site links, not page content: left out of llms-full.txt. */}
+      <footer data-llms="skip" {...props(styles.footer)}>
         <a href={DOCS} {...props(styles.link)}>
           {m.link_docs()}
         </a>

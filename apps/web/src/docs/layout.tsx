@@ -3,6 +3,7 @@ import { create, defaultMarker, props, when } from '@stylexjs/stylex';
 import { Link, Outlet, useParams, useRouter } from '@tanstack/react-router';
 import { ChevronDownIcon } from 'lucide-react';
 import type { MouseEvent } from 'react';
+import { AGENT_PROMPT, AgentStart, agentCommands } from '../lib/agent-start.tsx';
 import { KnobsMark } from '../lib/brand-marks.tsx';
 import { CodeBox } from '../lib/code-box.tsx';
 import { GitHubButton } from '../lib/github.tsx';
@@ -20,6 +21,9 @@ const styles = create({
   // The way to the whole text, set apart below the pages.
   agents: {
     marginTop: spacing.s4,
+  },
+  agentStart: {
+    marginTop: spacing.s6,
   },
   body: {
     columnGap: spacing.s8,
@@ -98,6 +102,10 @@ const styles = create({
   main: {
     maxWidth: '70ch',
     minWidth: 0,
+  },
+  // The steps by hand, clear of the top when the agent block's link jumps to them.
+  manual: {
+    scrollMarginTop: spacing.s6,
   },
   // On a phone the list folds into one row above the text.
   menu: {
@@ -330,21 +338,33 @@ export function DocPage({ slug }: { slug: string }) {
       <main {...props(styles.main)}>
         <article onClick={follow}>
           <h1 {...props(styles.title)}>{page.title}</h1>
-          {page.segments.map((segment) =>
-            segment.kind === 'code' ? (
-              <CodeBox
-                code={segment.code}
-                copyLabel={m.copy_code()}
-                html={segment.html}
-                key={segment.id}
-                name={`docs_${slug}`}
-                style={styles.codeBlock}
-              />
-            ) : (
-              // Rendered from the repo's own markdown at build, never from a visitor.
-              <div dangerouslySetInnerHTML={{ __html: segment.html }} key={segment.id} />
-            ),
+          {/* The first page is where a reader sets devknobs up: the agent's way first. */}
+          {slug === FIRST && (
+            <AgentStart
+              commands={agentCommands()}
+              manualHref="#manual"
+              prompt={AGENT_PROMPT}
+              snippet="agent_prompt_docs"
+              style={styles.agentStart}
+            />
           )}
+          <div id={slug === FIRST ? 'manual' : undefined} {...props(styles.manual)}>
+            {page.segments.map((segment) =>
+              segment.kind === 'code' ? (
+                <CodeBox
+                  code={segment.code}
+                  copyLabel={m.copy_code()}
+                  html={segment.html}
+                  key={segment.id}
+                  name={`docs_${slug}`}
+                  style={styles.codeBlock}
+                />
+              ) : (
+                // Rendered from the repo's own markdown at build, never from a visitor.
+                <div dangerouslySetInnerHTML={{ __html: segment.html }} key={segment.id} />
+              ),
+            )}
+          </div>
         </article>
         <nav {...props(styles.pager)}>
           {previous === undefined ? null : (
