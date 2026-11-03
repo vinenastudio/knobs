@@ -9,11 +9,24 @@ const outsideFences = (text: string) =>
     .join('')
     .split('\n');
 
+const files = Object.keys(import.meta.glob('../../content/reference/*.md'));
+
 describe('reference', () => {
   test('starts with the first page, every heading under the file heading', () => {
     const text = reference();
     expect(text.startsWith('## Reference: start\n')).toBe(true);
     expect(outsideFences(text).filter((line) => line.startsWith('# '))).toEqual([]);
+  });
+
+  test('one section per reference file, each heading in it below its ##', () => {
+    const sections = reference().split(/^(?=## Reference: )/m);
+    expect(files.length).toBeGreaterThan(0);
+    expect(sections).toHaveLength(files.length);
+    for (const section of sections) {
+      const [title, ...rest] = outsideFences(section).filter((line) => /^#{1,6} /.test(line));
+      expect(title).toMatch(/^## Reference: /);
+      expect(rest.filter((line) => !line.startsWith('### ') && !/^#{4,6} /.test(line))).toEqual([]);
+    }
   });
 });
 

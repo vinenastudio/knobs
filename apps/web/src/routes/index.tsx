@@ -279,7 +279,7 @@ const styles = create({
   },
 });
 
-// The same prompt is in packages/devknobs/README.md under install and in content/reference/start.md; change all three together.
+// The same prompt is in packages/devknobs/README.md under install and in apps/web/content/reference/start.md; change all three together.
 function promptBox(name: string, style?: StyleXStyles) {
   return (
     <CodeBox

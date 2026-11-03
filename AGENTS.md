@@ -71,7 +71,7 @@ Web app (`apps/web`): `pnpm --filter @knobs/web dev` (:3000 standalone, or portl
 - Env: `apps/web/.env` (copy `apps/web/.env.example`). Vite reads it, and the Cloudflare vite plugin also hands it to the Worker as local dev vars. `VITE_*` vars are validated in `packages/env`, all of them optional, so the site runs with no env at all.
 - StyleX in routes: import `../app.css` (build injection target); there is no importable `virtual:stylex.css` module; in dev the plugin middleware serves the CSS itself.
 - `pnpm --filter @knobs/web test` runs the llms files' unit tests (vitest, `vitest.config.ts`, `src/**/*.test.ts`). `packages/ui` stories cover the components.
-- `/docs/start` opens, under its title, with `AgentStart` (`src/lib/agent-start.tsx`, cleanstarter's agent-start block on the site's `CodeBox`): the agent prompt and its commands. Its steps come from `content/docs/start.md` and `agents.md`; change them together.
+- `/docs/start` opens, under its title, with `AgentStart` (`src/lib/agent-start.tsx`, cleanstarter's agent-start block on the site's `CodeBox`): the hero's setup prompt (`install_prompt`) and the commands under it, which come from `content/docs/start.md` and `agents.md`.
 
 ### devknobs in dev
 

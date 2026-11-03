@@ -3,7 +3,7 @@ import { create, defaultMarker, props, when } from '@stylexjs/stylex';
 import { Link, Outlet, useParams, useRouter } from '@tanstack/react-router';
 import { ChevronDownIcon } from 'lucide-react';
 import type { MouseEvent } from 'react';
-import { AGENT_PROMPT, AgentStart, agentCommands } from '../lib/agent-start.tsx';
+import { AgentStart, agentCommands } from '../lib/agent-start.tsx';
 import { KnobsMark } from '../lib/brand-marks.tsx';
 import { CodeBox } from '../lib/code-box.tsx';
 import { GitHubButton } from '../lib/github.tsx';
@@ -343,7 +343,7 @@ export function DocPage({ slug }: { slug: string }) {
             <AgentStart
               commands={agentCommands()}
               manualHref="#manual"
-              prompt={AGENT_PROMPT}
+              prompt={m.install_prompt()}
               snippet="agent_prompt_docs"
               style={styles.agentStart}
             />
