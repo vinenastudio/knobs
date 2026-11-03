@@ -34,6 +34,8 @@ describe('install prompt', () => {
     const html = renderToStaticMarkup(createElement(CopyInstallPrompt, { name: 'install_prompt' }));
     expect(m.copy_install_prompt()).toBe('Copy installation prompt');
     expect(html).toMatch(/^<button[^>]*type="button"/);
+    expect(html).toMatch(/^<button[^>]*aria-label="Copy installation prompt"/);
+    expect(html).toContain('aria-hidden="true"');
     expect(html).toContain('>Copy installation prompt<');
     expect(html).toContain(`>${m.copy_done()}<`);
     expect(html).toContain('data-copied="false"');

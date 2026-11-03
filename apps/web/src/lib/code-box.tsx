@@ -192,11 +192,15 @@ export function CodeBox({
       <>
         <button
           {...props(styles.code, styles.codeButton, defaultMarker(), style)}
+          aria-label={label}
           data-copied={copied}
           onClick={copy}
           type="button"
         >
-          <span {...props(styles.codeText, wrap && styles.codeWrap, styles.codeLabel)}>
+          <span
+            {...props(styles.codeText, wrap && styles.codeWrap, styles.codeLabel)}
+            aria-hidden="true"
+          >
             <span {...props(styles.labelText, copied && styles.labelOff)}>{label}</span>
             <span {...props(styles.labelText, !copied && styles.labelOff)}>{m.copy_done()}</span>
           </span>
