@@ -102,8 +102,8 @@ function deletes(key: string): boolean {
   return key === "backspace" || key === "delete";
 }
 
-const KEY_GLYPHS: Record<string, string> = { backspace: "⌫", delete: "⌦" };
-const KEY_NAMES: Record<string, string> = { backspace: "Backspace", delete: "Delete" };
+const KEY_GLYPHS: Record<string, string> = { backspace: "⌫", delete: "⌦", enter: "↩" };
+const KEY_NAMES: Record<string, string> = { backspace: "Backspace", delete: "Delete", enter: "Enter" };
 
 /**
  * A key as the panel shows it: `⌥⇧K` or `⇧⌫` on a Mac, `Alt Shift K` or

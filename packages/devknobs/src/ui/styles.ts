@@ -1464,6 +1464,7 @@ button:focus-visible { outline: 1px solid var(--faint); outline-offset: -1px; }
 /* A line whose element the panel hid, faint as its box on the page is gone. */
 .dom-hid > .dom-code { opacity: 0.5; }
 .dom-code > .dom-html { display: block; width: 100%; min-width: 30ch; resize: vertical; white-space: pre; }
+.dom-code > .dom-apply { margin: 4px 0 2px; }
 /* The selected line's actions, kept in sight at the foot of the tree as it scrolls either way. */
 .dom-acts {
   position: sticky;

@@ -10,8 +10,9 @@
  *   Delete   delete the node
  *
  * A one-line field puts its edit on with Enter and leaves with esc; the html
- * field takes line breaks, and puts its edit on with ⌘↩ (Ctrl Enter
- * elsewhere) or as the focus leaves it. To use it, as the tree does:
+ * field takes line breaks with Enter, and puts its edit on with ⇧↩ (Shift
+ * Enter elsewhere), its apply button, or as the focus leaves it. ⌘↩ and Ctrl
+ * Enter put it on too. To use it, as the tree does:
  *
  *   const editor = createDomEditor(hooks, { log });
  *   editor.dblclick(row, target); editor.key(event, row); editor.selected(row);
@@ -20,10 +21,11 @@
 import { attrEdit, attributeName, deleteEdit, HIDE_ATTRIBUTE, hideEdit, htmlEdit, parseHtml, textEdit } from "../edit/html";
 import type { Change, EditLog } from "../edit/log";
 import { type Locate, locateSource, recordAt } from "../edit/source";
+import { isMac } from "../engine/ua";
 import { editField, selectorOf } from "./cssedit";
 import { button, el } from "./dom";
 import { type Entry, isElement, markupOf, parentOf, type Row } from "./domtree";
-import { typesInField } from "./keys";
+import { comboLabel, typesInField, withShift } from "./keys";
 
 /** What a key on the selected line does. */
 export type TreeEditAction = "text" | "attr" | "html" | "hide" | "delete";
@@ -73,9 +75,14 @@ export interface DomEditor {
   destroy(): void;
 }
 
-/** Whether a key is the html field's own commit: ⌘↩ on a Mac, Ctrl Enter elsewhere. */
-function commitsHtml(event: KeyboardEvent): boolean {
-  return event.key === "Enter" && (event.metaKey || event.ctrlKey);
+/** The key that puts the html field's edit on, as its hint says it: `⇧↩` on a Mac, `Shift Enter` elsewhere. */
+export function applyHint(mac: boolean): string {
+  return comboLabel(withShift("enter"), mac);
+}
+
+/** Whether a key puts the html field's edit on: shift and Enter, or ⌘↩ and Ctrl Enter as well. Enter alone breaks the line. */
+export function commitsHtml(event: Pick<KeyboardEvent, "key" | "shiftKey" | "metaKey" | "ctrlKey" | "altKey">): boolean {
+  return event.key === "Enter" && !event.altKey && (event.shiftKey || event.metaKey || event.ctrlKey);
 }
 
 /** What a key on the selected line does: no modifier but shift, and never in a field. Null for any other key. */
@@ -159,8 +166,10 @@ interface FieldOptions {
   input: HTMLInputElement | HTMLTextAreaElement;
   /** Make the edits, and say whether they took: where they did not, the field stays open, marked. */
   commit(text: string): boolean;
-  /** Line breaks go in, and ⌘↩ or Ctrl Enter puts the edit on. */
+  /** Line breaks go in, and shift and Enter puts the edit on. */
   multiline?: boolean;
+  /** A button after the field that puts its edit on. */
+  apply?: HTMLButtonElement;
   /** The field closed, its pieces back. */
   closed?(): void;
 }
@@ -192,11 +201,12 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
   }
 
   /** Show a field in place of pieces of a line, and close it with Enter, esc, or as the focus leaves. */
-  function openField({ pieces, input, commit, multiline = false, closed }: FieldOptions): void {
+  function openField({ pieces, input, commit, multiline = false, apply: applies, closed }: FieldOptions): void {
     const first = pieces[0];
     const parent = first?.parentNode;
     if (!first || !parent) return;
     parent.insertBefore(input, first);
+    if (applies) parent.insertBefore(applies, first);
     for (const piece of pieces) parent.removeChild(piece);
     let shown = true;
     const close = (apply: boolean, away = false): void => {
@@ -215,6 +225,7 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
         for (const piece of pieces) input.parentNode.insertBefore(piece, input);
         input.remove();
       }
+      applies?.remove();
       closed?.();
       hooks.settled();
       if (!away) refocus();
@@ -235,6 +246,15 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
       }
     });
     input.addEventListener("blur", () => close(true, true));
+    if (applies) {
+      // Pressed, not clicked, so the field keeps the focus until the click puts its edit on.
+      applies.addEventListener("pointerdown", (event: Event) => event.preventDefault());
+      // The click stays off the line, which would select the element the edit took away.
+      applies.addEventListener("click", (event: Event) => {
+        event.stopPropagation();
+        close(true);
+      });
+    }
     input.focus({ preventScroll: true });
     input.select();
   }
@@ -301,11 +321,14 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
     };
     fit();
     area.addEventListener("input", fit);
-    area.setAttribute("aria-label", "edit as html, ⌘↩ or Ctrl Enter to apply, esc to leave");
+    const hint = applyHint(isMac());
+    area.setAttribute("aria-label", `edit as html, ${hint} to apply, esc to leave`);
+    const apply = button("chip dom-apply", `apply ${hint}`);
     openField({
       pieces: Array.from(code.childNodes),
       input: area,
       multiline: true,
+      apply,
       commit(text) {
         if (text.trim() === before.trim()) return true;
         const nodes = parseHtml(element.ownerDocument, text);

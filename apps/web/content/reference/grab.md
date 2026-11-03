@@ -238,9 +238,10 @@ the page at once, into the same changes as the style edits:
   the tag. change the value or the name, write more than one, or clear the
   field to take the attribute out. `class` is one of them
 - `a` on the selected line adds an attribute, in a field before the tag's end
-- `F2` edits the element as html: a field with its outer html, which takes
-  line breaks. ⌘↩ (Ctrl Enter off a Mac), or a click elsewhere, puts the
-  new html in the element's place and selects it; esc leaves it. html with
+- `F2` edits the element as html: a field with its outer html, where enter
+  breaks the line. `⇧↩` (`Shift Enter` off a Mac), its `apply` button, or a
+  click elsewhere puts the new html in the element's place and selects it;
+  esc leaves it. html with
   no element in it is refused and the field turns red. undo puts the very
   element back
 - `h` hides the selected element, and shows it again: `visibility: hidden`

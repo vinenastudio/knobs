@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { attrEdit, deleteEdit, HIDE_ATTRIBUTE, hideEdit, htmlEdit, successor, textEdit } from "../src/edit/html";
 import { type Change, createEditLog, type Edit } from "../src/edit/log";
 import { CHANGES_HEAD, diffText, KEEP_APPROACH, netChanges, promptText, RERENDER_NOTE } from "../src/edit/text";
-import { actionsFor, textOf, textProperty, treeEditKey } from "../src/ui/domedit";
+import { actionsFor, applyHint, commitsHtml, textOf, textProperty, treeEditKey } from "../src/ui/domedit";
 import type { Row } from "../src/ui/domtree";
 import { as, elem, page, type PageNode, text } from "./dom-page";
 
@@ -332,6 +332,18 @@ describe("the tree's edit keys", () => {
       expect(treeEditKey(key("Backspace", {}, field))).toBeNull();
       expect(treeEditKey(key("Enter", {}, field))).toBeNull();
     }
+  });
+
+  test("in the html field, Enter breaks the line, and shift and Enter puts the edit on, shown as ⇧↩", () => {
+    const press = (more: Partial<KeyboardEvent>) => commitsHtml({ key: "Enter", shiftKey: false, metaKey: false, ctrlKey: false, altKey: false, ...more });
+    expect(press({})).toBe(false);
+    expect(press({ shiftKey: true })).toBe(true);
+    expect(press({ metaKey: true })).toBe(true);
+    expect(press({ ctrlKey: true })).toBe(true);
+    expect(press({ shiftKey: true, altKey: true })).toBe(false);
+    expect(press({ key: "a", shiftKey: true })).toBe(false);
+    expect(applyHint(true)).toBe("⇧↩");
+    expect(applyHint(false)).toBe("Shift Enter");
   });
 
   test("act on what a line can take", () => {
