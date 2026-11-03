@@ -31,6 +31,8 @@ export type KeyAction =
   | "requests"
   | "reset"
   | "storage"
+  | "elements"
+  | "settings"
   | "search"
   | ZoomAction;
 
@@ -41,6 +43,8 @@ const KEY_ACTIONS: readonly KeyAction[] = [
   "requests",
   "reset",
   "storage",
+  "elements",
+  "settings",
   "search",
   "zoom-in",
   "zoom-out",

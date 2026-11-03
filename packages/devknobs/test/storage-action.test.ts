@@ -281,11 +281,11 @@ describe("the storage key", () => {
     const keys = resolveKeys(defaultKeys(), stored);
     expect(keyAction(key({ key: "D", code: "KeyD", shiftKey: true, altKey: true }), keys)).toBe("storage");
     expect(keyAction(key({ key: "S", shiftKey: true }), keys)).toBeNull();
-    // One that is another binding's default wins, and leaves that binding with no key. A bare letter is never kept.
+    // One that is another binding's default wins, and leaves that binding with no key.
     const won = resolveKeys(defaultKeys(), { storage: "shift+r" });
     expect(won.storage && comboText(won.storage)).toBe("shift+r");
     expect(won.replay).toBeNull();
-    expect(readKeys(JSON.stringify({ storage: "s" }))).toEqual({});
+    expect(readKeys(JSON.stringify({ storage: "s" }))).toEqual({ storage: "s" });
     const taken = parseCombo("shift+s");
     expect(taken && comboProblem(taken, "replay", defaultKeys())).toBe("used by storage");
   });

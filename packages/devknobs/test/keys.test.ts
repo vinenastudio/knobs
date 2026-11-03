@@ -366,6 +366,37 @@ describe("keyAction", () => {
     expect(keyAction(key({ key: "F2", target: element("INPUT") }), keys)).toBe("toggle");
   });
 
+  test("shows the requests, the elements view and the settings on shift n, e and o", () => {
+    for (const target of [null, element("DIV"), element("BODY")]) {
+      expect(keyAction(shifted({ key: "N", target }), hot("k"))).toBe("requests");
+      expect(keyAction(shifted({ key: "E", target }), hot("k"))).toBe("elements");
+      expect(keyAction(shifted({ key: "O", target }), hot("k"))).toBe("settings");
+    }
+    expect(keyAction(key({ key: "e" }), hot("k"))).toBeNull();
+    expect(keyAction(key({ key: "o" }), hot("k"))).toBeNull();
+    expect(keyAction(shifted({ key: "E", metaKey: true }), hot("k"))).toBeNull();
+  });
+
+  test("leaves shift n, e and o to a field of the page, where they type a capital", () => {
+    for (const letter of ["N", "E", "O"]) {
+      for (const tag of ["INPUT", "TEXTAREA", "SELECT"]) {
+        expect(keyAction(shifted({ key: letter, target: element(tag) }), hot("k"))).toBeNull();
+      }
+      expect(keyAction(shifted({ key: letter, target: element("DIV", true) }), hot("k"))).toBeNull();
+      expect(keyAction(shifted({ key: letter, composedPath: () => [element("INPUT")] }), hot("k"))).toBeNull();
+    }
+  });
+
+  test("a key alone acts only where no field has the focus, the panel's search included", () => {
+    const keys = { ...hot("k"), panel: { key: "c", meta: false, ctrl: false, alt: false, shift: false } };
+    expect(keyAction(key({ key: "c" }), keys)).toBe("toggle");
+    expect(keyAction(key({ key: "c", target: element("DIV") }), keys)).toBe("toggle");
+    expect(keyAction(key({ key: "c", target: element("INPUT") }), keys)).toBeNull();
+    expect(keyAction(key({ key: "c", target: element("DIV", true) }), keys)).toBeNull();
+    expect(keyAction(key({ key: "c", composedPath: () => [element("INPUT", false, true)] }), keys)).toBeNull();
+    expect(keyAction(shifted({ key: "C" }), keys)).toBeNull();
+  });
+
   test("the hotkey wins over replay where they are the same key", () => {
     expect(keyAction(shifted({ key: "R" }), hot("r"))).toBe("toggle");
     expect(keyAction(key({ key: "Backspace", shiftKey: true }), hot("r"))).toBe("reset");
@@ -555,6 +586,41 @@ describe("radioMove", () => {
   });
 });
 
+describe("defaultKeys", () => {
+  test("the elements view is shift e and the settings shift o", () => {
+    const keys = defaultKeys();
+    expect(comboText(keys.elements)).toBe("shift+e");
+    expect(comboText(keys.settings)).toBe("shift+o");
+  });
+
+  test("where the panel or grab has one of them, that binding takes the next letter", () => {
+    expect(comboText(defaultKeys({ hotkey: "e" }).elements)).toBe("shift+l");
+    expect(comboText(defaultKeys({ hotkey: "o" }).settings)).toBe("shift+u");
+    expect(comboText(defaultKeys({ grabKey: "shift+e" }).elements)).toBe("shift+l");
+    expect(comboText(defaultKeys({ grabKey: "shift+o" }).settings)).toBe("shift+u");
+    const both = defaultKeys({ hotkey: "e", grabKey: "shift+l" });
+    expect(comboText(both.elements)).toBe("shift+d");
+    expect(comboText(both.inspect)).toBe("shift+c");
+    // A grab key with another modifier takes no shift letter.
+    expect(comboText(defaultKeys({ grabKey: "alt+e" }).elements)).toBe("shift+e");
+  });
+
+  test("no two defaults are the same, whatever the mount's hotkey", () => {
+    for (const letter of "abcdefhijklmnopqtuvwxyz") {
+      const keys = defaultKeys({ hotkey: letter });
+      const texts = [keys.panel, keys.grab, keys.inspect, keys.elements, keys.settings].map(comboText);
+      expect(new Set(texts).size).toBe(texts.length);
+    }
+  });
+
+  test("are shift and a letter or backspace, never with meta or alt", () => {
+    for (const combo of Object.values(defaultKeys())) {
+      expect(combo.shift).toBe(true);
+      expect(combo.meta || combo.alt || combo.ctrl).toBe(false);
+    }
+  });
+});
+
 describe("forwardKeys", () => {
   /** What the frame posted to the page above, and where to. */
   const posted: unknown[][] = [];
@@ -605,6 +671,25 @@ describe("forwardKeys", () => {
       [{ source: "devknobs", type: "key", action: "close" }, "/"],
       [{ source: "devknobs", type: "key", action: "replay" }, "/"],
       [{ source: "devknobs", type: "key", action: "reset" }, "/"],
+    ]);
+  });
+
+  test("posts the views' keys up, and leaves them to a field of the page", () => {
+    forwardKeys(() => hot("k"));
+    let prevented = 0;
+    const send = (event: KeyLike) =>
+      listener?.(Object.assign(event, { preventDefault: () => prevented++ }));
+    send(shifted({ key: "N" }));
+    send(shifted({ key: "E" }));
+    send(shifted({ key: "O" }));
+    send(shifted({ key: "N", target: element("INPUT") }));
+    send(shifted({ key: "E", target: element("TEXTAREA") }));
+    send(shifted({ key: "O", target: element("DIV", true) }));
+    expect(prevented).toBe(3);
+    expect(posted).toEqual([
+      [{ source: "devknobs", type: "key", action: "requests" }, "/"],
+      [{ source: "devknobs", type: "key", action: "elements" }, "/"],
+      [{ source: "devknobs", type: "key", action: "settings" }, "/"],
     ]);
   });
 

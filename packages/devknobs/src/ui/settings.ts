@@ -95,6 +95,8 @@ export interface Settings {
   /** Take a key for the binding that records, if one does, and say whether it did. */
   recordingKey(event: KeyboardEvent): boolean;
   stopRecording(): void;
+  /** Show the settings in place of the rows, as the footer's control does. */
+  openKeys(): void;
   leaveKeys(): void;
   destroy(): void;
 }
@@ -394,6 +396,7 @@ export function createSettings(context: SettingsContext): Settings {
       return true;
     },
     stopRecording,
+    openKeys,
     leaveKeys,
     destroy: stopRefusing,
   };

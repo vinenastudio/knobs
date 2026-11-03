@@ -2,11 +2,13 @@
 // devknobs and the service worker, which only this world can reach.
 import {
   type Answer,
+  KEYS_KEY,
   LOAD_FRAME,
   type PageMessage,
   PREFER_KEY,
   REAL_PHONE_KEY,
   type Question,
+  readKeys,
   readPageMessage,
   readPrefer,
   type Request,
@@ -39,9 +41,14 @@ document.addEventListener(TO_BRIDGE, (event) => {
   if (!request) {
     return;
   }
-  // Real phone mode is kept for every tab only from the user's own hand, such as the panel's
-  // switch: a page script cannot fake that, and its turn stays in its own tab.
-  if (request.type === 'realPhone' && !navigator.userActivation.isActive) {
+  // Real phone mode and the shortcuts are kept for every tab only during a gesture of the user's,
+  // such as a click on the panel's switch or a key recorded in its settings. A page script can
+  // change them only right after you click or press a key on that page; otherwise its change
+  // stays in its tab.
+  if (
+    (request.type === 'realPhone' || request.type === 'keys') &&
+    !navigator.userActivation.isActive
+  ) {
     return;
   }
   if (request.type !== 'set' && request.type !== 'native') {
@@ -190,5 +197,16 @@ chrome.storage.onChanged.addListener((changes, area) => {
   const change = changes[REAL_PHONE_KEY];
   if (area === 'local' && change) {
     toPage({ on: change.newValue === true, type: 'realPhone' });
+  }
+});
+
+// The shortcuts set in the panel, the same way: one set for every site.
+chrome.storage.local.get(KEYS_KEY, (stored) =>
+  toPage({ keys: readKeys(stored[KEYS_KEY]), type: 'keys' }),
+);
+chrome.storage.onChanged.addListener((changes, area) => {
+  const change = changes[KEYS_KEY];
+  if (area === 'local' && change) {
+    toPage({ keys: readKeys(change.newValue), type: 'keys' });
   }
 });

@@ -3,7 +3,7 @@ import * as engine from "../engine";
 import { isDevknobsFrame, needsFrame, post, readMessage } from "../engine/frame";
 import { frameWindow } from "../engine/frames";
 import { systemMedia } from "../engine/system";
-import { typesInField } from "../ui/keys";
+import { inField, typesInField } from "../ui/keys";
 import {
   defaultGrabKey,
   type GrabKey,
@@ -185,8 +185,11 @@ export function createGrab(
   function onKeydown(event: KeyboardEvent): void {
     const key = keyNow();
     const press = key !== null && pressTurnsOn(key);
+    // A key alone is any field's, the panel's search too, so it never takes what is typed.
     const grabKey =
-      key !== null && isGrabKey(event, key) && !(grabKeyTypes(key) && typesInField(event));
+      key !== null &&
+      isGrabKey(event, key) &&
+      !(grabKeyTypes(key) && (key.shift ? typesInField(event) : inField(event)));
     if (grabKey && press) {
       // Where it is grab's, a key that types is not typed. A press turns grab
       // on, or off while it is on or loading, and a repeat does nothing.

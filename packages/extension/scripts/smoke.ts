@@ -9,8 +9,9 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { type DevknobsStatePatch, PRESETS } from '@vinena/knobs';
-import { type Browser, chromium, type Page, type Worker } from 'playwright-core';
+import { type Browser, chromium, type Frame, type Page, type Worker } from 'playwright-core';
 import type { KnobState } from '../src/knobs.ts';
 
 const root = join(import.meta.dirname, '..');
@@ -391,6 +392,30 @@ self.addEventListener('fetch', (event) => {
     response.setHeader('content-security-policy', "frame-ancestors 'none'");
   }
   // A frame of the page's own that its policy sandboxes, with no script: one that runs says so above.
+  if (path === '/forge-keys') {
+    // A page script that sets the shortcuts for every site with no gesture of the user's: through
+    // the bridge's event, named from the extension's store on the window, and through the store.
+    response.end(
+      page(`<script>
+addEventListener('load', () => setTimeout(() => {
+  const store = Object.getOwnPropertySymbols(window).find((symbol) =>
+    /^devknobs-extension:tab.*[.]keys$/.test(symbol.description || ''));
+  window.forged = { active: navigator.userActivation.isActive, store: Boolean(store) };
+  if (!store) {
+    console.log('forged');
+    return;
+  }
+  const toBridge = store.description.replace('devknobs-extension:tab', 'devknobs-extension:native').slice(0, -5);
+  document.dispatchEvent(new CustomEvent(toBridge, {
+    detail: JSON.stringify({ id: 9, keys: { grab: 'shift+x', v: 1 }, type: 'keys' }),
+  }));
+  window[store].save({ grab: 'shift+y', v: 1 });
+  console.log('forged');
+}, 500));
+</script>`),
+    );
+    return;
+  }
   if (path === '/sandboxed') {
     response.setHeader('content-security-policy', "sandbox; script-src 'none'");
     response.end(
@@ -2254,6 +2279,160 @@ async function preferPage() {
 }
 
 // Real phone mode as a tab's devknobs has it, once it is `on`.
+/** The grab key's chip in the panel's settings, as assistive tech hears it. */
+const grabChip = async (tab: Page) => {
+  await showSettings(tab);
+  return tab.evaluate(
+    () =>
+      [
+        ...document
+          .querySelector('[data-devknobs="panel"]')!
+          .shadowRoot!.querySelectorAll('.key-set'),
+      ]
+        .map((chip) => chip.getAttribute('aria-label'))
+        .find((label) => label?.startsWith('grab,')) ?? null,
+  );
+};
+
+/** Whether grab is on in the page, or in devknobs' frame where it is up. */
+const grabbing = (page: Page | Frame) =>
+  page.evaluate(() => document.querySelector('[data-devknobs="grab"]') !== null);
+
+/** Ask `read` until it gives `want`, for `ms` at most, and give what it gave last. */
+async function until<T>(read: () => Promise<T>, want: T, ms = 5000): Promise<T> {
+  const end = Date.now() + ms;
+  let got = await read();
+  while (!isDeepStrictEqual(got, want) && Date.now() < end) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    got = await read();
+  }
+  return got;
+}
+
+/**
+ * Press the grab key with the focus on the page's heading, say whether grab went on within
+ * `ms`, and end it. A key that should not grab is given a short `ms`, as its wait is the proof.
+ */
+async function grabsWith(tab: Page, where: Page | Frame, key: string, ms = 5000) {
+  await where.click('h1');
+  await tab.keyboard.press(key);
+  const on = await until(() => grabbing(where), true, ms);
+  await tab.keyboard.press('Escape');
+  await until(() => grabbing(where), false);
+  return on;
+}
+
+/**
+ * The shortcuts set in the panel, in a profile of its own, are the same on every site: shift j
+ * recorded for grab in the settings on one origin grabs on another, in a tab that was open
+ * already with no load again, in one opened after, and in devknobs' frame with the focus in it.
+ * `chrome.storage.local` holds them. A page script with no gesture of the user's, through the
+ * bridge's event or the extension's store on the window, changes nothing there.
+ */
+async function sharedKeys() {
+  const own = await mkdtemp(join(tmpdir(), 'knobs-smoke-keys-'));
+  const browser = await chromium.launchPersistentContext(own, {
+    args: [
+      `--disable-extensions-except=${dist}`,
+      `--load-extension=${dist}`,
+      `--window-size=${viewport.width},${viewport.height}`,
+    ],
+    channel: 'chromium',
+    headless: true,
+    viewport,
+  });
+  try {
+    const worker = browser.serviceWorkers()[0] ?? (await browser.waitForEvent('serviceworker'));
+    const stored = () =>
+      worker.evaluate(async () => (await chrome.storage.local.get('keys')).keys as unknown);
+    const open = async (address: string) => {
+      const tab = await browser.newPage();
+      await tab.goto(address);
+      await ready(tab);
+      return tab;
+    };
+    const tab = await open(url);
+    const before = await open(otherOrigin);
+    assert.equal(await grabChip(before), 'grab, shift g, change');
+
+    // Recorded as a user does: a click on the chip, then the keys.
+    await tab.bringToFront();
+    await showSettings(tab);
+    await tab.locator('[data-devknobs="panel"] .key-set[aria-label^="grab,"]').click();
+    await tab.keyboard.press('Shift+J');
+    const recorded = {
+      chip: await until(() => grabChip(tab), 'grab, shift j, change'),
+      stored: await until(stored, { grab: 'shift+j', v: 1 }),
+    };
+    log('shortcut recorded on one origin', recorded);
+    assert.deepEqual(recorded, {
+      chip: 'grab, shift j, change',
+      stored: { grab: 'shift+j', v: 1 },
+    });
+
+    await before.bringToFront();
+    const already = {
+      chip: await until(() => grabChip(before), 'grab, shift j, change'),
+      grabs: await grabsWith(before, before, 'Shift+J'),
+    };
+    log('a tab on another origin, open already', already);
+    assert.deepEqual(already, { chip: 'grab, shift j, change', grabs: true });
+
+    const after = await open(otherOrigin);
+    const opened = {
+      chip: await until(() => grabChip(after), 'grab, shift j, change'),
+      grabs: await grabsWith(after, after, 'Shift+J'),
+      oldKey: await grabsWith(after, after, 'Shift+G', 1000),
+    };
+    log('a tab on another origin, opened after', opened);
+    assert.deepEqual(opened, { chip: 'grab, shift j, change', grabs: true, oldKey: false });
+
+    // A page script, with no click or key of the user's. Playwright's own calls into a page count
+    // as one, so the page runs it itself, and nothing is asked of the page until it is done.
+    const script = await browser.newPage();
+    const tried = script.waitForEvent('console', (message) => message.text() === 'forged');
+    await script.goto(`${otherOrigin}forge-keys`);
+    await tried;
+    const forged = await script.evaluate(() => Reflect.get(window, 'forged') as unknown);
+    // Storage that stays as it was for a second, where a write would land in a few milliseconds.
+    const changed = await until(
+      async () => !isDeepStrictEqual(await stored(), { grab: 'shift+j', v: 1 }),
+      true,
+      1000,
+    );
+    const unchanged = { changed, forged, stored: await stored() };
+    log('a page script with no gesture', unchanged);
+    assert.deepEqual(unchanged, {
+      changed: false,
+      forged: { active: false, store: true },
+      stored: { grab: 'shift+j', v: 1 },
+    });
+
+    // devknobs' frame, with the focus in it: its copy reads the same keys.
+    await set(after, { frame: true, width: 400 });
+    let frame: Frame | undefined;
+    const up = await until(
+      async () => {
+        frame = after.frames().find((each) => each.name() === 'devknobs-frame');
+        return frame
+          ? frame
+              .evaluate(() => document.readyState === 'complete' && window.devknobs !== undefined)
+              .catch(() => false)
+          : false;
+      },
+      true,
+      10_000,
+    );
+    assert.ok(up && frame, "devknobs' frame is up");
+    const framed = { grabs: await grabsWith(after, frame, 'Shift+J') };
+    log("the new key in devknobs' frame", framed);
+    assert.deepEqual(framed, { grabs: true });
+  } finally {
+    await browser.close();
+    await rm(own, { force: true, recursive: true });
+  }
+}
+
 const realPhoneIn = (page: Page, on: boolean) =>
   page.waitForFunction((on) => window.devknobs?.getState().panel.realPhone === on, on);
 // devknobs' frame on the page, as a page script reads it.
@@ -3136,6 +3315,7 @@ try {
   await strictPolicy();
   await pageOwnCopy();
   await preferPage();
+  await sharedKeys();
   await selfReload();
 
   process.stdout.write('smoke passed\n');
