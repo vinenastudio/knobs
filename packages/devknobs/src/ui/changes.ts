@@ -51,6 +51,8 @@ export function createChanges(log: EditLog, copy: Copy, mac = isMac()): Changes 
   node.append(head, list, acts, el("div", "changes-note", AGENT_NOTE));
   const timers = new Map<HTMLButtonElement, number>();
   const labels = new Map<HTMLButtonElement, string>();
+  /** The section went: a copy that answers after that changes nothing. */
+  let gone = false;
 
   /** Copy a text, and let the button say for a moment whether it went. */
   async function copied(control: HTMLButtonElement, text: string): Promise<void> {
@@ -63,6 +65,7 @@ export function createChanges(log: EditLog, copy: Copy, mac = isMac()): Changes 
     } catch {
       went = false;
     }
+    if (gone) return;
     control.textContent = went ? COPIED : NOT_COPIED;
     clearTimeout(timers.get(control));
     timers.set(
@@ -98,6 +101,7 @@ export function createChanges(log: EditLog, copy: Copy, mac = isMac()): Changes 
   return {
     node,
     destroy(): void {
+      gone = true;
       stop();
       for (const timer of timers.values()) clearTimeout(timer);
     },

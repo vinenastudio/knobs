@@ -100,7 +100,10 @@ export function createElementsView(context: StylesContext, parts: ElementsParts 
         fromTree = false;
       }
     },
-    copy: (text) => void copy(text),
+    // Called at once, inside the click, and a copy that fails says nothing here.
+    copy: (text) => {
+      void Promise.resolve(copy(text)).catch(() => undefined);
+    },
   });
   const styles: StylesView = createStylesView(
     {

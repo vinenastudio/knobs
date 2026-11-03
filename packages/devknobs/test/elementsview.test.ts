@@ -147,8 +147,14 @@ describe("the elements view", () => {
     },
   };
 
+  /** What the tree copied, and whether the clipboard takes it. */
+  let copies: string[] = [];
+  let copyWorks = true;
+
   function start(): FakeNode {
     undid = [];
+    copies = [];
+    copyWorks = true;
     const stub: DomTree = {
       node: new FakeNode("div") as unknown as HTMLElement,
       reveal: (node) => revealed.push(node),
@@ -162,6 +168,10 @@ describe("the elements view", () => {
       {
         page,
         edits: log,
+        copy: (text) => {
+          copies.push(text);
+          return copyWorks ? true : Promise.reject(new Error("no clipboard"));
+        },
         tree: (context) => {
           tree = context;
           return stub;
@@ -183,6 +193,15 @@ describe("the elements view", () => {
     node.fire("keydown", { key: "я", code: "KeyZ", target: div });
     expect(undid).toEqual(["undo", "redo", "undo"]);
     expect(z.prevented).toBe(true);
+  });
+
+  test("copies from the tree at once, and a copy that fails throws nothing", async () => {
+    start();
+    copyWorks = false;
+    tree?.copy("<div></div>");
+    expect(copies).toEqual(["<div></div>"]);
+    await Promise.resolve();
+    await Promise.resolve();
   });
 
   test("is the tree over the styles, the crumbs first under it", () => {

@@ -184,7 +184,9 @@ finds it), `target.rule` (`selectorText`, `sheet`, `owner`, `sheetId`, `path` an
 `context` being the `@media`, `@layer` or outer rule it sits in, outermost
 first; left out for the element's own `style`), `property`, and `before` and `after` (the
 value, `!important` and all; null where it is not set, so `after: null` means
-the declaration was turned off). `edits()` lists every edit as it was made:
+the declaration was turned off). `edits()` lists the edits in force, each as
+it was made: an edit undone drops out, and undo all or the panel's reset
+empties the list. Of those,
 for several edits of one property in one rule, take the first `before` and
 the last `after`. Put the changes where the project writes
 its styles (Tailwind classes, CSS modules, a stylesheet), not as inline

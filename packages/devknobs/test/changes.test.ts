@@ -90,6 +90,22 @@ describe("the changes", () => {
     expect(copied[1]).toBe(diffText(log.list()));
   });
 
+  test("change nothing once gone, for a copy that answers after", async () => {
+    let answer: (went: boolean) => void = () => undefined;
+    changes = createChanges(log, () => new Promise<boolean>((resolve) => (answer = resolve)), true);
+    const node = fake(changes.node);
+    edit("color", "blue");
+    const prompt = control(node, "copy prompt for agent");
+    prompt.fire("click");
+    changes.destroy();
+    changes = null;
+    answer(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(prompt.textContent).toBe("copy prompt for agent");
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
   test("say so when the clipboard did not take it", async () => {
     clipboard = false;
     const node = start();
