@@ -71,7 +71,7 @@ Web app (`apps/web`): `pnpm --filter @knobs/web dev` (:3000 standalone, or portl
 - Env: `apps/web/.env` (copy `apps/web/.env.example`). Vite reads it, and the Cloudflare vite plugin also hands it to the Worker as local dev vars. `VITE_*` vars are validated in `packages/env`, all of them optional, so the site runs with no env at all.
 - StyleX in routes: import `../app.css` (build injection target); there is no importable `virtual:stylex.css` module; in dev the plugin middleware serves the CSS itself.
 - `pnpm --filter @knobs/web test` runs the llms files' unit tests (vitest, `vitest.config.ts`, `src/**/*.test.ts`). `packages/ui` stories cover the components.
-- `/docs/start` opens, under its title, with `AgentStart` (`src/lib/agent-start.tsx`, cleanstarter's agent-start block on the site's `CodeBox`): the hero's setup prompt (`install_prompt` in `messages/en.json`, kept the same as `packages/devknobs/README.md` and `apps/web/content/reference/start.md`; change all three together) and the commands under it, written in `src/lib/agent-start.tsx` from `content/docs/start.md` and `agents.md`.
+- No page has an agent section. The hero (next to "Add to Chrome") and `/docs/start` (under its title) carry one secondary "Copy installation prompt" button, `CopyInstallPrompt` (`src/lib/copy-install-prompt.tsx`, on the site's `CodeBox` with a `label`): it copies the whole setup prompt without showing it and says "Copied" for 2 seconds. The prompt is `install_prompt` in `messages/en.json`, kept the same as `packages/devknobs/README.md` and `apps/web/content/reference/start.md` (change all three together; `src/lib/install-prompt.test.ts` fails when they differ). llms-full.txt carries it once, in the start reference.
 
 ### devknobs in dev
 

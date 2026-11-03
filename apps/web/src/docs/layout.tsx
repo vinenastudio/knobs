@@ -3,9 +3,9 @@ import { create, defaultMarker, props, when } from '@stylexjs/stylex';
 import { Link, Outlet, useParams, useRouter } from '@tanstack/react-router';
 import { ChevronDownIcon } from 'lucide-react';
 import type { MouseEvent } from 'react';
-import { AgentStart, agentCommands } from '../lib/agent-start.tsx';
 import { KnobsMark } from '../lib/brand-marks.tsx';
 import { CodeBox } from '../lib/code-box.tsx';
+import { CopyInstallPrompt } from '../lib/copy-install-prompt.tsx';
 import { GitHubButton } from '../lib/github.tsx';
 import { ICON } from '../lib/icon.ts';
 import { asElement, usePanel } from '../lib/panel.ts';
@@ -21,9 +21,6 @@ const styles = create({
   // The way to the whole text, set apart below the pages.
   agents: {
     marginTop: spacing.s4,
-  },
-  agentStart: {
-    marginTop: spacing.s6,
   },
   body: {
     columnGap: spacing.s8,
@@ -103,10 +100,6 @@ const styles = create({
     maxWidth: '70ch',
     minWidth: 0,
   },
-  // The steps by hand, clear of the top when the agent block's link jumps to them.
-  manual: {
-    scrollMarginTop: spacing.s6,
-  },
   // On a phone the list folds into one row above the text.
   menu: {
     display: {
@@ -132,6 +125,10 @@ const styles = create({
     maxWidth: 1200,
     paddingBottom: spacing.s16,
     paddingInline: spacing.s4,
+  },
+  // The installation prompt under the first page's title, apart from the text below it.
+  prompt: {
+    marginTop: spacing.s6,
   },
   // The previous and next pages, at each end of one row.
   pager: {
@@ -338,33 +335,23 @@ export function DocPage({ slug }: { slug: string }) {
       <main {...props(styles.main)}>
         <article onClick={follow}>
           <h1 {...props(styles.title)}>{page.title}</h1>
-          {/* The first page is where a reader sets devknobs up: the agent's way first. */}
-          {slug === FIRST && (
-            <AgentStart
-              commands={agentCommands()}
-              manualHref="#manual"
-              prompt={m.install_prompt()}
-              snippet="agent_prompt_docs"
-              style={styles.agentStart}
-            />
+          {/* The first page is where a reader sets devknobs up: the agent's prompt first. */}
+          {slug === FIRST && <CopyInstallPrompt name="agent_prompt_docs" style={styles.prompt} />}
+          {page.segments.map((segment) =>
+            segment.kind === 'code' ? (
+              <CodeBox
+                code={segment.code}
+                copyLabel={m.copy_code()}
+                html={segment.html}
+                key={segment.id}
+                name={`docs_${slug}`}
+                style={styles.codeBlock}
+              />
+            ) : (
+              // Rendered from the repo's own markdown at build, never from a visitor.
+              <div dangerouslySetInnerHTML={{ __html: segment.html }} key={segment.id} />
+            ),
           )}
-          <div id={slug === FIRST ? 'manual' : undefined} {...props(styles.manual)}>
-            {page.segments.map((segment) =>
-              segment.kind === 'code' ? (
-                <CodeBox
-                  code={segment.code}
-                  copyLabel={m.copy_code()}
-                  html={segment.html}
-                  key={segment.id}
-                  name={`docs_${slug}`}
-                  style={styles.codeBlock}
-                />
-              ) : (
-                // Rendered from the repo's own markdown at build, never from a visitor.
-                <div dangerouslySetInnerHTML={{ __html: segment.html }} key={segment.id} />
-              ),
-            )}
-          </div>
         </article>
         <nav {...props(styles.pager)}>
           {previous === undefined ? null : (

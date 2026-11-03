@@ -13,7 +13,7 @@ devknobs is a dev-only panel for flipping browser preferences from inside the pa
 
 ## install
 
-with an ai agent: paste this setup prompt into claude code, codex or cursor, and it installs @vinena/knobs and mounts it in development only. it is the copy setup prompt button on the home page too.
+with an ai agent: paste this setup prompt into claude code, codex or cursor, and it installs @vinena/knobs and mounts it in development only. it is the copy installation prompt button on the home page and at the top of /docs/start too.
 
 ```
 Read https://knobs.dev/llms-full.txt first: it is the full devknobs reference. Then install @vinena/knobs in this project. It is a dev-only panel that emulates browser preferences from inside the page.

@@ -7,8 +7,8 @@ runtime dependencies.
 ## install
 
 with an ai agent: paste this setup prompt into claude code, codex or cursor, and
-it installs @vinena/knobs and mounts it in development only. it is the copy setup
-prompt button on https://knobs.dev too.
+it installs @vinena/knobs and mounts it in development only. it is the copy
+installation prompt button on https://knobs.dev too.
 
 <!-- the same text is the install_prompt message in apps/web/messages/en.json and the setup prompt in apps/web/content/reference/start.md; change all three together. -->
 
