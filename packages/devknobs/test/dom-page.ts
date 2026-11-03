@@ -53,6 +53,21 @@ export class PageNode {
     return this.childNodes.find((node) => node.nodeType === 1) ?? null;
   }
 
+  get head(): PageNode | null {
+    return this.documentElement?.childNodes.find((node) => node.nodeName === "HEAD") ?? null;
+  }
+
+  /** An element made in this document, as a style devknobs adds. */
+  createElement(tag: string): PageNode {
+    const made = elem(tag);
+    made.ownerDocument = this;
+    return made;
+  }
+
+  appendChild(node: PageNode): PageNode {
+    return this.insertBefore(node, null);
+  }
+
   get body(): PageNode | null {
     return this.documentElement?.childNodes.find((node) => node.nodeName === "BODY") ?? null;
   }

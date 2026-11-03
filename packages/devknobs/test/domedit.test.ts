@@ -238,6 +238,22 @@ describe("the tree's editor", () => {
     expect(tree?.selected()).toBe(as(made));
   });
 
+  test("a bar action with an html field open puts the html on first, then acts on the node selected then", () => {
+    const old = elem("div", { class: "block" }, text("Old"));
+    page(() => [elem("body", {}, old)]);
+    const node = start(old);
+    key(list(node), "F2");
+    const made = elem("div", { class: "new" });
+    queued = [made];
+    (field(node) as FakeNode).value = '<div class="new">New</div>';
+    const hideButton = (node.find("dom-acts")[0] as FakeNode).childNodes.find((one) => one.textContent === "hide") as FakeNode;
+    hideButton.fire("click");
+    expect(old.parentNode).toBeNull();
+    expect(old.hasAttribute("data-devknobs-hide")).toBe(false);
+    expect(made.hasAttribute("data-devknobs-hide")).toBe(true);
+    expect(log.list().map((one) => one.kind)).toEqual(["html", "hide"]);
+  });
+
   test("deletes with Delete and selects the line after, and leaves the body, which holds the panel, alone", () => {
     const [one, two, three] = ["1", "2", "3"].map((id) => elem("li", { id }));
     const body = elem("body", {}, elem("ul", {}, one as PageNode, two as PageNode, three as PageNode), elem("div", { "data-devknobs": "panel" }));

@@ -413,7 +413,8 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
   }
 
   function act(action: TreeEditAction, row: Row): void {
-    if (!actionsFor(row).includes(action) || !done()) return;
+    // The open field's edit may have replaced the line's node: an action on a node gone does nothing.
+    if (!actionsFor(row).includes(action) || !done() || !row.node.isConnected) return;
     if (action === "text") editText(row);
     else if (action === "attr") editAttr(row, null);
     else if (action === "html") editHtml(row);
@@ -431,8 +432,9 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
         const control = button("chip dom-act", hidden ? "show" : ACTIONS[action]);
         // Pressed, not clicked, so the tree keeps the focus its keys need.
         control.addEventListener("pointerdown", (event: Event) => event.preventDefault());
+        // The open field's edit goes on first, and may select another node: the action is on the one selected then.
         control.addEventListener("click", () => {
-          if (current) act(action, current);
+          if (done() && current) act(action, current);
         });
         return control;
       }),

@@ -130,13 +130,13 @@ export function parseHtml(doc: Document, html: string): Node[] {
   return Array.from(template.content.childNodes);
 }
 
-/** Nodes as markup, as the browser writes them back: an element's outer html, a comment, a text. */
+/** Nodes as markup, as the browser writes them back: an element's outer html, a comment, a text with `&`, `<` and `>` escaped. */
 export function markupOfNodes(nodes: readonly Node[]): string {
   return nodes
     .map((node) => {
       if (isElement(node)) return node.outerHTML;
       if (node.nodeType === 8) return `<!--${node.nodeValue ?? ""}-->`;
-      return node.nodeValue ?? "";
+      return (node.nodeValue ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     })
     .join("");
 }

@@ -140,6 +140,7 @@ describe("an html edit", () => {
     const old = elem("div");
     page(() => [elem("body", {}, old)]);
     expect(htmlEdit(AT, el(old), "<div></div>", [as(elem("img", { src: "x" }))])?.edit.after).toBe('<img src="x">');
+    expect(htmlEdit(AT, el(old), "<div></div>", [as(elem("p")), as(text(" a < b & c > d"))])?.edit.after).toBe("<p></p> a &lt; b &amp; c &gt; d");
     expect(htmlEdit(AT, el(old), "<div></div>", [as(elem("p", {}, elem("b", { "data-devknobs-hide": "" })))])).toBeNull();
     expect(htmlEdit(AT, el(old), "<div></div>", [as(elem("p", { "data-devknobs": "x" }))])).toBeNull();
   });
@@ -153,18 +154,17 @@ describe("an html edit", () => {
     const log = createEditLog();
     log.record(must(htmlEdit(AT, el(old), "<div></div>", [as(made)])));
     // Page code moves the new element somewhere else: undo leaves it there.
-    other.append(made);
-    body.removeChild(made);
+    other.insertBefore(made, null);
     log.undo();
     expect(other.childNodes).toEqual([made]);
     expect(old.parentNode).toBeNull();
     // Moved back and undone, then the old element moved by the page: redo is refused and changes nothing.
     const again = elem("div");
-    body.append(again);
+    body.insertBefore(again, null);
     const second = log.record(must(htmlEdit(AT, el(again), "<div></div>", [as(elem("p"))])));
     expect(second).not.toBeNull();
     log.undo();
-    other.append(again);
+    other.insertBefore(again, null);
     expect(log.redo()).toBeNull();
     expect(other.childNodes.at(-1)).toBe(again);
   });
