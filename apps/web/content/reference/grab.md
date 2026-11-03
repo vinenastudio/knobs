@@ -232,7 +232,8 @@ the styles can be edited in place, as in the browsers' own tools, in both
 modes, and each edit goes on the page at once:
 
 - a click on a value makes it a field. a click elsewhere puts its value on
-  the page, and lands on what it was pressed on. enter puts the new value on the page,
+  the page too, and that click still does what it does, as opening another
+  value or turning a line off. enter puts the new value on the page,
   escape leaves it as it was, and tab puts it on and goes to the next value,
   shift and tab to the one before. a value the page does not take turns red
   and stays open. `!important` at its end is kept

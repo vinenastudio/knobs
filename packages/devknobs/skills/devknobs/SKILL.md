@@ -178,14 +178,15 @@ window.devknobs.edits();
 ```
 
 Each edit is plain json: `kind` (`css-value`, `css-toggle` or `css-add`),
-`target.selector` (finds the element; see `grab` for `>>>` steps),
+`target.selector` (finds the element; see `grab` for `>>>` and `>>iframe>>` steps),
 `target.source` (the file and line where the element is written, when grab
-finds it), `target.rule` (`selectorText`, `sheet`, `path` and `context` of the rule,
+finds it), `target.rule` (`selectorText`, `sheet`, `owner`, `sheetId`, `path` and `context` of the rule,
 `context` being the `@media`, `@layer` or outer rule it sits in, outermost
 first; left out for the element's own `style`), `property`, and `before` and `after` (the
 value, `!important` and all; null where it is not set, so `after: null` means
-the declaration was turned off). Several edits of one property come to the
-first `before` and the last `after`. Put the changes where the project writes
+the declaration was turned off). `edits()` lists every edit as it was made:
+for several edits of one property in one rule, take the first `before` and
+the last `after`. Put the changes where the project writes
 its styles (Tailwind classes, CSS modules, a stylesheet), not as inline
 styles, unless the edit was to the element's own style. The edits live only
 on the page: a reload drops them.

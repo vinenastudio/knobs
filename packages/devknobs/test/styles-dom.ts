@@ -141,6 +141,8 @@ export class FakeNode {
   replaceWith(node: FakeNode): void {
     const parent = this.parentElement;
     if (!parent) return;
+    // As in the DOM, a node that is somewhere else leaves there first.
+    if (node !== this) node.remove();
     parent.children = parent.children.map((child) => (child === this ? node : child));
     node.parentElement = parent;
     this.parentElement = null;

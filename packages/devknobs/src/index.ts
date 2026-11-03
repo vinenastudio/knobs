@@ -367,6 +367,9 @@ function adopt(options: object, take?: Take): void {
  * Let the page go to the page copy that waits, and hand it the preference.
  * Where it does not take the page, the host mounts again, its switch as it was.
  */
+/** The panel goes to another copy, which leaves the page's edits on it. */
+let handing = false;
+
 function handOver(): void {
   const take = waiting;
   const options = mounted;
@@ -378,7 +381,13 @@ function handOver(): void {
     return;
   }
   const native = engine.nativeSwitch();
-  unmount();
+  // The page keeps its edits: the copy that takes it, or this one again, goes on from them.
+  handing = true;
+  try {
+    unmount();
+  } finally {
+    handing = false;
+  }
   const prefer = options.prefer;
   let took = false;
   try {
@@ -413,8 +422,8 @@ export function unmount(): void {
   waiting = null;
   if (superseded(window, unmount)) return;
   detach();
-  // The page goes back to how it was written.
-  editLog.undoAll();
+  // The page goes back to how it was written, unless the panel is only handed over.
+  if (!handing) editLog.undoAll();
   // A host keeps its switch's choice through a take-back: off stays off.
   const native = mounted?.host ? engine.nativeSwitch() : null;
   engine.stop();

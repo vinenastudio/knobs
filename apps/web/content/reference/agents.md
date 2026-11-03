@@ -26,9 +26,14 @@ the page, such as playwright's `page.evaluate` or the chrome devtools mcp's
   oldest first, as json: each one's `kind` (`css-value`, `css-toggle` or
   `css-add`), its `target` (the element's `selector`, its `source` file and
   line where grab finds it, and the `rule`'s `selectorText`, `sheet`,
-  `path` and `context`, the `@media`, `@layer` or outer rule it sits in,
-  left out for the element's own style), the `property`, and its
-  value `before` and `after`, null where it is not set. put them in the code.
+  `owner` (the element that brought the stylesheet in), `sheetId` (tells
+  two stylesheets with the same address apart), `path` and `context`, the
+  `@media`, `@layer` or outer rule it sits in, left out for the element's
+  own style), the `property`, and its value `before` and `after`, null where
+  it is not set (`after: null` means the declaration was turned off). each
+  edit is listed as made: several edits of one property come to the first
+  `before` and the last `after`. put the changes in the project's own
+  styles (classes, CSS modules, a stylesheet), not in inline styles.
 - `reset()` leaves the panel as it is: open or closed, docked or not, its
   handle shown or hidden, its dev tab icon (`devIcon`) and real phone mode (`realPhone`) as set.
 - `setState({ panel: { realPhone } })` with the extension: a change made during a user gesture, such as a click (the panel's switch included), is saved for every tab and site; a change a script makes without one stays in that tab, so a page's script cannot turn it for the others.

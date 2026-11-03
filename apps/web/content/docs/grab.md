@@ -54,5 +54,6 @@ card shows the color, font, contrast and spacing.
 
 click a value to edit it, the box at a line's start turns it off and on, and
 `+ add property` adds one. the changes at the foot list each edit as `-` and
-`+` lines: `Z` undoes, `⇧Z` (`Shift Z` off a Mac) redoes, and `copy prompt for agent` copies a
-prompt that asks your agent to put them in the code.
+`+` lines: `Z` undoes and `⇧Z` (`Shift Z` off a Mac) redoes while the focus
+is in the view and not in a field (⌘Z and Ctrl Z do not), and `copy prompt
+for agent` copies a prompt that asks your agent to put them in the code.

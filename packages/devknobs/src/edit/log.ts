@@ -26,6 +26,10 @@ export interface EditTarget {
     selectorText: string;
     /** The stylesheet's address, `<style>` for an inline one, `constructed` for an adopted one. */
     sheet: string;
+    /** The element that brought the stylesheet in, as `style#theme`. Null for an adopted one. */
+    owner: string | null;
+    /** Tells stylesheets apart on the page, two `<style>` elements say, for as long as it is up. */
+    sheetId: number;
     /** Its index in the stylesheet, then in each rule around it, outermost first. */
     path: number[];
     /** What it sits in, outermost first: `@media (min-width: 640px)`, `@layer base`, the selector of a rule it is nested in. */
@@ -114,10 +118,14 @@ export function createEditLog(): EditLog {
     if (!view || watched.has(view)) return;
     watched.add(view);
     try {
-      view.addEventListener("pagehide", () => {
+      const onHide = (event: Event): void => {
+        // A page kept for back and forward comes back as it was, its edits on it.
+        if (Reflect.get(event, "persisted") === true) return;
+        view.removeEventListener("pagehide", onHide);
         watched.delete(view);
         leave(view);
-      }, { once: true });
+      };
+      view.addEventListener("pagehide", onHide);
     } catch {
       // A window that will not be listened to keeps its edits live.
     }
@@ -171,8 +179,8 @@ export function createEditLog(): EditLog {
     undoAll() {
       const count = done.length;
       if (count === 0 && undone.length === 0) return 0;
-      for (const one of done.reverse()) revert(one);
-      done.length = 0;
+      // The last first, each out of the log before it reverts, so it sees the page as it was made on.
+      for (let one = done.pop(); one; one = done.pop()) revert(one);
       undone.length = 0;
       tell();
       return count;

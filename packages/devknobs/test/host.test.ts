@@ -336,6 +336,26 @@ describe("a host that prefers the page's copy", () => {
     page.release();
   });
 
+  test("leaves the page's edits on it as it steps aside", () => {
+    const prefer = preferring("extension");
+    devknobs.mount({ host: true, prefer: prefer.setting });
+    const page = pageCopy();
+    hostOf(window)?.adopt({}, page.take);
+    let on = false;
+    edits.record({
+      edit: { kind: "css-value", target: { selector: "a" }, property: "color", before: "red", after: "blue" },
+      apply: () => (on = true),
+      revert: () => {
+        on = false;
+      },
+    });
+    devknobs.setPrefer("page");
+    expect(page.handed).toHaveLength(1);
+    expect(on).toBe(true);
+    edits.undoAll();
+    page.release();
+  });
+
   test("stays for a page copy that unmounted since it deferred", () => {
     devknobs.mount({ host: true, prefer: preferring("extension").setting });
     const page = pageCopy();

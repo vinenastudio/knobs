@@ -130,18 +130,21 @@ const tips: Tips = {
   destroy: () => undefined,
 };
 
-function start(): FakeNode {
+/** The view, editable with a log. */
+function start(edits?: EditLog): FakeNode {
   view = createStylesView(
     {
       tips,
       title: (text) => titles.push(text),
       outline: (target) => outlined.push(target),
       held: (target) => held.push(target),
+      edits,
     },
     page,
   );
-  // The pane's body, which scrolls.
+  // The pane's body, which scrolls, on the page.
   const paneBody = new FakeNode("div");
+  paneBody.root = true;
   paneBody.append(fake(view.node));
   return fake(view.node);
 }
@@ -878,15 +881,8 @@ describe("editing", () => {
   });
 
   function editing(): FakeNode {
-    view = createStylesView(
-      { tips, title: (text) => titles.push(text), outline: (target) => outlined.push(target), edits: log },
-      page,
-    );
-    const paneBody = new FakeNode("div");
-    paneBody.root = true;
-    paneBody.append(fake(view.node));
-    const node = fake(view.node);
-    view.show(as(save));
+    const node = start(log);
+    view?.show(as(save));
     return node;
   }
 
@@ -1066,8 +1062,44 @@ describe("editing", () => {
   });
 
   test("puts a line to add a property under each rule it can edit", () => {
+    const other = new Block("gap: 0;") as Block & CSSStyleDeclaration;
+    const first = answer;
+    answer = (element, pseudo) => {
+      const read = first(element, pseudo);
+      read.blocks.push(rule(".shell .primary", [declaration("gap", "0")], { rule: { style: other } as unknown as CSSStyleRule }));
+      return read;
+    };
     const node = editing();
-    expect(node.find("css-add").map((one) => one.textContent)).toEqual([ADD]);
+    expect(node.find("css-add").map((one) => one.textContent)).toEqual([ADD, ADD]);
+  });
+
+  test("still says no rule reaches the element, under its own style to add to", () => {
+    answer = () => found([]);
+    const element = Object.assign(as(save), { style: new Block() });
+    const node = start(log);
+    view?.show(element);
+    expect(note(node)).toBe(NO_RULES);
+    expect(node.find("css-add")).toHaveLength(1);
+  });
+
+  test("an empty value is no edit: the field stays open, marked", () => {
+    const node = editing();
+    const input = open(node, "margin");
+    type(input, "  ");
+    input.fire("keydown", { key: "Enter" });
+    expect(field(node)).toBe(input);
+    expect(input.classList.contains("bad")).toBe(true);
+    expect(log.list()).toEqual([]);
+  });
+
+  test("a value put back as it was leaves its line as drawn, !important and all", () => {
+    style.cssText = "color: red !important; margin: 0;";
+    const node = editing();
+    const input = open(node, "color");
+    expect(Reflect.get(input, "value")).toBe("red !important");
+    input.fire("blur");
+    expect(log.list()).toEqual([]);
+    expect(lines(node)[0]?.[0]).toBe("color: red !important;");
   });
 
   test("says why the stylesheets it may not read cannot be edited", () => {

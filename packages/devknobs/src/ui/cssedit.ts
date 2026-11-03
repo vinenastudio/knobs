@@ -88,6 +88,22 @@ export function offDeclaration(off: Off): StyleDeclaration {
   };
 }
 
+/** The ids stylesheets are told apart by, by the sheet, or the rule where it has none. */
+const sheetIds = new WeakMap<object, number>();
+let sheetsSeen = 0;
+
+/** A number for a rule's stylesheet, the same for every rule of it while it is up. */
+function sheetIdOf(rule: CSSRule | CSSNestedDeclarations): number {
+  const sheet: unknown = Reflect.get(rule, "parentStyleSheet");
+  const key = typeof sheet === "object" && sheet !== null ? sheet : rule;
+  let id = sheetIds.get(key);
+  if (id === undefined) {
+    id = ++sheetsSeen;
+    sheetIds.set(key, id);
+  }
+  return id;
+}
+
 /** A selector that finds the element, for an edit's target. */
 function selectorOf(element: Element): string {
   try {
@@ -188,7 +204,9 @@ export function createCssEditor(context: CssEditorContext): CssEditor {
       // A click elsewhere closed it: the view stays as it is until that click lands.
       if (away) hold();
       const text = input.value;
-      const took = !commit || text.trim() === field.text || record(cssValue("css-value", full(field.place), field.property, text), field.place);
+      const same = text.trim() === field.text;
+      // An empty value is no css: the page keeps the one it has.
+      const took = !commit || same || (text.trim() !== "" && record(cssValue("css-value", full(field.place), field.property, text), field.place));
       if (!took && !away) {
         shown = true;
         open = self;
@@ -199,7 +217,7 @@ export function createCssEditor(context: CssEditorContext): CssEditor {
       }
       if (input.isConnected) {
         input.replaceWith(field.value);
-        if (took && commit) field.value.textContent = text.trim();
+        if (took && commit && !same) field.value.textContent = text.trim();
       }
       closed();
       const then = next ? fieldAt(next.place.style, next.property) : undefined;
@@ -342,7 +360,14 @@ export function createCssEditor(context: CssEditorContext): CssEditor {
       return {
         style: block.rule.style,
         element: owner,
-        rule: { selectorText, sheet: origin.sheet, path: [...origin.path], context: [...block.context] },
+        rule: {
+          selectorText,
+          sheet: origin.sheet,
+          owner: origin.owner,
+          sheetId: sheetIdOf(block.rule),
+          path: [...origin.path],
+          context: [...block.context],
+        },
       };
     },
     offs: (place) => offIn(log.recorded(), place.style),

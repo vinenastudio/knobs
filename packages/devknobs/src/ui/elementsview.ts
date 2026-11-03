@@ -14,7 +14,7 @@
  */
 
 import { type EditLog, edits } from "../edit/log";
-import { createChanges } from "./changes";
+import { type Copy, createChanges } from "./changes";
 import { copyText } from "./copytext";
 import { el } from "./dom";
 import { createDomTree, type DomTree, elementOf } from "./domtree";
@@ -28,7 +28,8 @@ export const DOLLAR = "$0";
 export interface ElementsParts {
   page?: StylesPage;
   tree?: (context: Parameters<typeof createDomTree>[0]) => DomTree;
-  copy?: (text: string) => void;
+  /** Copies a text, and says whether it went. */
+  copy?: Copy;
   /** The log the edits go to. Defaults to the page's one. */
   edits?: EditLog;
 }
@@ -86,7 +87,7 @@ export function createElementsView(context: StylesContext, parts: ElementsParts 
   const dollar = createDollar();
   /** The styles are shown from the tree, and need not be revealed in it again. */
   let fromTree = false;
-  const copy = parts.copy ?? ((text: string) => void copyText(text));
+  const copy: Copy = parts.copy ?? copyText;
   const log = parts.edits ?? edits;
   const tree = (parts.tree ?? createDomTree)({
     outline: (element) => context.outline(element),
@@ -99,7 +100,7 @@ export function createElementsView(context: StylesContext, parts: ElementsParts 
         fromTree = false;
       }
     },
-    copy,
+    copy: (text) => void copy(text),
   });
   const styles: StylesView = createStylesView(
     {

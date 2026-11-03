@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import { cssValue } from "../src/edit/css";
 import { createEditLog, type EditLog } from "../src/edit/log";
 import { diffText, promptText } from "../src/edit/text";
-import { COPIED, createChanges, type Changes, undoHint } from "../src/ui/changes";
+import { COPIED, createChanges, type Changes, NOT_COPIED, undoHint } from "../src/ui/changes";
 import { Block, fakeCss } from "./edit-block";
 import { FakeNode, fake } from "./styles-dom";
 
@@ -10,6 +10,8 @@ let log: EditLog;
 let copied: string[];
 let changes: Changes | null = null;
 let style: Block & CSSStyleDeclaration;
+/** Whether the clipboard takes the copy. */
+let clipboard = true;
 
 function edit(property: string, value: string): void {
   const change = cssValue("css-value", { style, element: {} as Element, selector: "a.cta" }, property, value);
@@ -17,7 +19,7 @@ function edit(property: string, value: string): void {
 }
 
 function start(mac = true): FakeNode {
-  changes = createChanges(log, (text) => copied.push(text), mac);
+  changes = createChanges(log, (text) => copied.push(text) > 0 && clipboard, mac);
   return fake(changes.node);
 }
 
@@ -41,6 +43,7 @@ beforeEach(() => {
   });
   log = createEditLog();
   copied = [];
+  clipboard = true;
   style = new Block("color: red; margin: 0;") as Block & CSSStyleDeclaration;
 });
 
@@ -73,17 +76,28 @@ describe("the changes", () => {
     expect(undoHint(true)).toBe("undo Z, redo ⇧Z");
   });
 
-  test("copy the prompt and the diff, and say so for a moment", () => {
+  test("copy the prompt and the diff, and say so for a moment once it went", async () => {
     const node = start();
     edit("color", "blue");
     const prompt = control(node, "copy prompt for agent");
     prompt.fire("click");
+    await Promise.resolve();
     expect(copied).toEqual([promptText(log.list())]);
     expect(prompt.textContent).toBe(COPIED);
     jest.advanceTimersByTime(1200);
     expect(prompt.textContent).toBe("copy prompt for agent");
     control(node, "copy diff").fire("click");
     expect(copied[1]).toBe(diffText(log.list()));
+  });
+
+  test("say so when the clipboard did not take it", async () => {
+    clipboard = false;
+    const node = start();
+    edit("color", "blue");
+    const prompt = control(node, "copy prompt for agent");
+    prompt.fire("click");
+    await Promise.resolve();
+    expect(prompt.textContent).toBe(NOT_COPIED);
   });
 
   test("undo all takes every edit back, and the section goes", () => {

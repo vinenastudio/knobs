@@ -23,6 +23,11 @@ export const locateSource: Locate = (element) => {
       })
       .catch(() => null);
     found.set(element, pending);
+    // A lookup that found nothing, or gave up, goes, so the next edit asks again.
+    const own = pending;
+    void own.then((source) => {
+      if (source === null && found.get(element) === own) found.delete(element);
+    });
   }
   return pending;
 };

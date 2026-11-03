@@ -14,8 +14,12 @@ import { isMac } from "../engine/ua";
 import { button, el } from "./dom";
 import { comboLabel, withShift } from "./keys";
 
-/** What the copy buttons say for a moment after a copy. */
+/** What the copy buttons say for a moment after a copy, and after one that did not go. */
 export const COPIED = "copied";
+export const NOT_COPIED = "could not copy";
+
+/** Copies a text, and says whether it went, at once or once the clipboard answers. */
+export type Copy = (text: string) => boolean | Promise<boolean>;
 
 /** How long a copy button says it copied, in ms. */
 const COPIED_FOR = 1200;
@@ -34,7 +38,7 @@ export function undoHint(mac: boolean): string {
   return `undo ${undo}, redo ${comboLabel(withShift("z"), mac)}`;
 }
 
-export function createChanges(log: EditLog, copy: (text: string) => void, mac = isMac()): Changes {
+export function createChanges(log: EditLog, copy: Copy, mac = isMac()): Changes {
   const node = el("section", "changes");
   node.setAttribute("aria-label", "changes");
   const head = el("div", "changes-head");
@@ -48,13 +52,18 @@ export function createChanges(log: EditLog, copy: (text: string) => void, mac = 
   const timers = new Map<HTMLButtonElement, number>();
   const labels = new Map<HTMLButtonElement, string>();
 
-  /** Copy a text, and let the button say so for a moment. */
-  function copied(control: HTMLButtonElement, text: string): void {
+  /** Copy a text, and let the button say for a moment whether it went. */
+  async function copied(control: HTMLButtonElement, text: string): Promise<void> {
     if (text === "") return;
-    copy(text);
     const label = labels.get(control) ?? control.textContent ?? "";
     labels.set(control, label);
-    control.textContent = COPIED;
+    let went = false;
+    try {
+      went = await copy(text);
+    } catch {
+      went = false;
+    }
+    control.textContent = went ? COPIED : NOT_COPIED;
     clearTimeout(timers.get(control));
     timers.set(
       control,
@@ -64,8 +73,8 @@ export function createChanges(log: EditLog, copy: (text: string) => void, mac = 
     );
   }
 
-  prompt.addEventListener("click", () => copied(prompt, promptText(log.list())));
-  diff.addEventListener("click", () => copied(diff, diffText(log.list())));
+  prompt.addEventListener("click", () => void copied(prompt, promptText(log.list())));
+  diff.addEventListener("click", () => void copied(diff, diffText(log.list())));
   undoAll.addEventListener("click", () => log.undoAll());
 
   function draw(): void {

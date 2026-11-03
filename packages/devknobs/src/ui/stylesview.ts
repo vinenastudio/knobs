@@ -200,6 +200,8 @@ interface Built {
   node: HTMLElement;
   lines: Line[];
   group: HTMLElement | null;
+  /** The element's own style drawn empty, to add a property to: no rule, so not one that reaches it. */
+  blank: boolean;
 }
 
 /** A group of the simple mode's lines, with its label where the groups have one. */
@@ -216,6 +218,9 @@ interface Flat {
   sets: LineSet[];
   inherited: { fold: Fold; lines: Line[] } | null;
 }
+
+/** The id of the element's own style drawn empty, which no inspection gives a block. */
+const BLANK = -1;
 
 function isElement(node: Node): node is Element {
   return node.nodeType === 1;
@@ -698,7 +703,7 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
     section.append(...lines.map((one) => one.node));
     if (place && editor) section.append(editor.addLine(place));
     byId.set(block.id, section);
-    return { node: section, lines, group };
+    return { node: section, lines, group, blank: block.id === BLANK };
   }
 
   /** The blocks in the engine's order, a heading before each group of them. */
@@ -728,7 +733,7 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
     };
     // The element's own style comes first, empty too, so a property can be added to it.
     if (log && pseudo === null && styleOf(element) && !found.blocks.some((block) => block.kind === "inline")) {
-      add({ kind: "inline", id: -1, declarations: [], element }, null);
+      add({ kind: "inline", id: BLANK, declarations: [], element }, null);
     }
     found.blocks.forEach(each);
     for (const hidden of found.hidden) nodes.push(readOnly(el("div", "css-hidden", hiddenLine(hidden))));
@@ -774,7 +779,7 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
     for (const one of applied) places.set(one.declaration, editor?.placeOf(one.block, element) ?? null);
     // The element's own style, empty too, takes the properties added here.
     let inline: OwnBlock | undefined = found.blocks.find((block) => block.kind === "inline");
-    if (log && pseudo === null && !inline && styleOf(element)) inline = { kind: "inline", id: -1, declarations: [], element };
+    if (log && pseudo === null && !inline && styleOf(element)) inline = { kind: "inline", id: BLANK, declarations: [], element };
     if (log) {
       const owned = found.blocks.filter((block) => block.kind === "rule");
       for (const block of inline ? [inline, ...owned] : owned) {
@@ -870,6 +875,10 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
     const groups = new Map<HTMLElement, boolean>();
     let any = false;
     for (const block of built) {
+      if (block.blank && block.lines.length === 0) {
+        block.node.hidden = filtering;
+        continue;
+      }
       let kept = !filtering;
       for (const one of block.lines) {
         const matches = matchesFilter(one.declaration, text);
@@ -881,7 +890,8 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
       if (block.group) groups.set(block.group, (groups.get(block.group) ?? false) || kept);
     }
     for (const [head, kept] of groups) head.hidden = !kept;
-    say(any ? null : built.length === 0 ? NO_RULES : NO_MATCH);
+    const drawn = built.filter((block) => !block.blank || block.lines.length > 0);
+    say(any ? null : drawn.length === 0 ? NO_RULES : NO_MATCH);
   }
 
   /** Read the element's styles and build the view from them, once. */

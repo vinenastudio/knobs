@@ -72,7 +72,13 @@ export class Block {
     }
   }
 
+  /** A longhand set or taken out on its own: the shorthand's `var()` value no longer holds. */
+  private drop(long: string): void {
+    for (const [short, longs] of Object.entries(SHORTHANDS)) if (longs.includes(long)) this.pending.delete(short);
+  }
+
   private put(name: string, value: string, important: boolean): void {
+    this.drop(name);
     const found = this.list.find((one) => one.name === name);
     if (found) Object.assign(found, { value, important });
     else this.list.push({ name, value, important });
@@ -87,8 +93,8 @@ export class Block {
       return;
     }
     if (value.includes("var(")) {
-      this.pending.set(name, value);
       for (const long of longs) this.put(long, "", important);
+      this.pending.set(name, value);
       return;
     }
     this.pending.delete(name);
@@ -100,6 +106,7 @@ export class Block {
   removeProperty(name: string): string {
     const longs = SHORTHANDS[name] ?? [name];
     this.pending.delete(name);
+    this.drop(name);
     this.list = this.list.filter((one) => !longs.includes(one.name));
     return "";
   }
