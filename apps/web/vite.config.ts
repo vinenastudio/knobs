@@ -93,7 +93,14 @@ export default defineConfig({
     tuneEndpoint(resolve(import.meta.dirname, '.tune')),
     devknobsSource(),
     cloudflare({ viteEnvironment: { name: 'ssr' } }),
-    tanstackStart(),
+    // Only the llms files are prerendered, at build, from the built Worker.
+    tanstackStart({
+      pages: [
+        { path: '/llms.txt', prerender: { enabled: true } },
+        { path: '/llms-full.txt', prerender: { enabled: true } },
+      ],
+      prerender: { autoStaticPathsDiscovery: false, crawlLinks: false },
+    }),
     react({ compiler: true }),
     // debug:false — StyleX's dev `data-style-src` attribute embeds file:line, and the
     // React Compiler (client-only) shifts line numbers vs the SSR transform, causing a

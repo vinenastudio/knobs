@@ -5,6 +5,7 @@ import { ChevronDownIcon } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { KnobsMark } from '../lib/brand-marks.tsx';
 import { CodeBox } from '../lib/code-box.tsx';
+import { CopyInstallPrompt } from '../lib/copy-install-prompt.tsx';
 import { GitHubButton } from '../lib/github.tsx';
 import { ICON } from '../lib/icon.ts';
 import { asElement, usePanel } from '../lib/panel.ts';
@@ -124,6 +125,10 @@ const styles = create({
     maxWidth: 1200,
     paddingBottom: spacing.s16,
     paddingInline: spacing.s4,
+  },
+  // The installation prompt under the first page's title, apart from the text below it.
+  prompt: {
+    marginTop: spacing.s6,
   },
   // The previous and next pages, at each end of one row.
   pager: {
@@ -330,6 +335,8 @@ export function DocPage({ slug }: { slug: string }) {
       <main {...props(styles.main)}>
         <article onClick={follow}>
           <h1 {...props(styles.title)}>{page.title}</h1>
+          {/* The first page is where a reader sets devknobs up: the agent's prompt first. */}
+          {slug === FIRST && <CopyInstallPrompt name="agent_prompt_docs" style={styles.prompt} />}
           {page.segments.map((segment) =>
             segment.kind === 'code' ? (
               <CodeBox

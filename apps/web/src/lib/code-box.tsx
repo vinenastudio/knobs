@@ -43,10 +43,18 @@ const styles = create({
     outlineWidth: 1,
     textAlign: 'start',
   },
-  // Words in place of the code: the page's font, not the code's, and a step larger.
+  // Words in place of the code: the page's font, not the code's, and a step larger. The label and
+  // "Copied" share one grid cell, so the box keeps the width of the longer one.
   codeLabel: {
+    display: 'grid',
     fontFamily: font.family,
     fontSize: font.sizeSm,
+  },
+  labelOff: {
+    visibility: 'hidden',
+  },
+  labelText: {
+    gridArea: '1 / 1',
   },
   // A long text, such as the install prompt, breaks instead of scrolling.
   codeWrap: {
@@ -117,7 +125,7 @@ const styles = create({
  * selectable by hand. Where the clipboard refuses the write (an insecure
  * context, an old browser), the code is selected instead, ready to copy.
  * With `label`, the box shows the label in place of code too long to show,
- * the whole box one copy button, and shows the code only where the clipboard
+ * the whole box one copy button that says "Copied" for a moment, and shows the code only where the clipboard
  * refuses it. `html` draws the code highlighted (the repo's own markup, never
  * a visitor's); the copy button still copies `code`.
  */
@@ -148,7 +156,7 @@ export function CodeBox({
     if (!copied) {
       return;
     }
-    const timer = setTimeout(() => setCopied(false), 1500);
+    const timer = setTimeout(() => setCopied(false), 2000);
     return () => clearTimeout(timer);
   }, [copied]);
   // The label button is gone once the code shows, so focus moves to the copy button that took its place.
@@ -184,11 +192,17 @@ export function CodeBox({
       <>
         <button
           {...props(styles.code, styles.codeButton, defaultMarker(), style)}
+          aria-label={label}
+          data-copied={copied}
           onClick={copy}
           type="button"
         >
-          <span {...props(styles.codeText, wrap && styles.codeWrap, styles.codeLabel)}>
-            {label}
+          <span
+            {...props(styles.codeText, wrap && styles.codeWrap, styles.codeLabel)}
+            aria-hidden="true"
+          >
+            <span {...props(styles.labelText, copied && styles.labelOff)}>{label}</span>
+            <span {...props(styles.labelText, !copied && styles.labelOff)}>{m.copy_done()}</span>
           </span>
           <span {...props(styles.copy, styles.copyIcon)}>{icon}</span>
         </button>

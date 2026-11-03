@@ -1,11 +1,10 @@
-import { postFrontmatter } from '../blog/frontmatter.ts';
 import { CANONICAL_ORIGIN } from '../lib/canonical.ts';
 import { type Frontmatter, frontmatter, slugify } from './frontmatter.ts';
 
 /**
- * `/llms.txt` and `/llms-full.txt` (llmstxt.org), for agents. They are built
- * once, when this module loads, from `content/reference`: the full text of the
- * docs, kept apart from the human docs pages so those can stay short.
+ * The full text of the docs for agents, from `content/reference`, kept apart
+ * from the human docs pages so those can stay short. It goes first in
+ * `/llms-full.txt` (`src/lib/llms-txt.config.ts`), before every page.
  */
 
 type Doc = Frontmatter & { slug: string };
@@ -35,19 +34,6 @@ const pages = glob(
   }),
 );
 
-/** The blog posts, newest first. */
-const posts = Object.entries(
-  import.meta.glob<string>('../../content/blog/*.md', {
-    eager: true,
-    import: 'default',
-    query: '?raw',
-  }),
-)
-  .map(([path, source]) =>
-    postFrontmatter(path.slice(path.lastIndexOf('/') + 1, -'.md'.length), source),
-  )
-  .toSorted((a, b) => b.date.localeCompare(a.date));
-
 /** The h2 and h3 ids of each human page, outside its code blocks. */
 const anchors = new Map(
   pages.map((page) => [
@@ -61,18 +47,11 @@ const anchors = new Map(
   ]),
 );
 
-const header = `# knobs
-
-> devknobs is a dev-only panel inside the page that shows your site on an iPhone or a Pixel, tomorrow morning, in Arabic or in dark mode.
-
-It emulates devices, locales, time, color schemes, network and motion settings from inside the page. Grab hands a coding agent an element with its html, components and source places, and an agent api lets a browser tool drive the knobs. A Chrome extension puts the same panel on any site and sets some knobs for real.
-`;
-
 /**
  * The reference links at the human pages, with the origin. A fragment stays
  * only where that page still has the heading; a bare `#x` is on the same page.
  */
-const absolute = (slug: string, body: string) =>
+export const absolute = (slug: string, body: string) =>
   body
     .replaceAll(
       /\]\((?:\/docs\/([a-z0-9-]+))?#([a-z0-9-]+)\)/g,
@@ -84,44 +63,18 @@ const absolute = (slug: string, body: string) =>
     )
     .replaceAll('](/', `](${CANONICAL_ORIGIN}/`);
 
-export const llmsTxt = `${header}
-## Docs
+/** Every heading one level down, outside code blocks, so a page's `##` sits under its own `##` title. */
+export const demote = (body: string) =>
+  body
+    .split(/(^```[\s\S]*?^```)/gm)
+    .map((part) => (part.startsWith('```') ? part : part.replaceAll(/^(#{1,5}) /gm, '#$1 ')))
+    .join('');
 
-${pages
-  .map((page) => `- [${page.title}](${CANONICAL_ORIGIN}/docs/${page.slug}): ${page.description}`)
-  .join('\n')}
-
-## Blog
-
-- [Blog](${CANONICAL_ORIGIN}/blog): every post, newest first
-${posts
-  .map((post) => `- [${post.title}](${CANONICAL_ORIGIN}/blog/${post.slug}): ${post.description}`)
-  .join('\n')}
-
-## Full reference
-
-- [llms-full.txt](${CANONICAL_ORIGIN}/llms-full.txt): every docs page in full, in one file
-
-## Optional
-
-- [npm](https://www.npmjs.com/package/@vinena/knobs): the @vinena/knobs package
-- [Chrome Web Store](https://chromewebstore.google.com/detail/knobs/cpdmafeojnbdnnhldafobkaajiemcidj): the knobs extension
-- [GitHub](https://github.com/vinenastudio/knobs): the source of the package, the extension and this site
-`;
-
-export const llmsFullTxt = `${header}
-${references
-  .map(
-    (page) =>
-      `# ${page.title}\n\n${page.description}\n\n${absolute(page.slug, page.body).trim()}\n`,
-  )
-  .join('\n')}`;
-
-export function textResponse(body: string): Response {
-  return new Response(body, {
-    headers: {
-      'cache-control': 'public, max-age=3600',
-      'content-type': 'text/plain; charset=utf-8',
-    },
-  });
-}
+/** Each reference page as `## Reference: <title>`, its description, and its text. */
+export const reference = (): string =>
+  references
+    .map(
+      (page) =>
+        `## Reference: ${page.title}\n\n${page.description}\n\n${demote(absolute(page.slug, page.body)).trim()}`,
+    )
+    .join('\n\n');

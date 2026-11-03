@@ -1,5 +1,5 @@
 import { colors, font, radius, spacing } from '@knobs/ui/tokens.stylex';
-import { create, defaultMarker, props, type StyleXStyles, when } from '@stylexjs/stylex';
+import { create, defaultMarker, props, when } from '@stylexjs/stylex';
 import { createFileRoute, useLocation } from '@tanstack/react-router';
 import { StarIcon } from 'lucide-react';
 import { lazy, Suspense, useEffect } from 'react';
@@ -7,7 +7,7 @@ import { Stage } from '../demo/stage.tsx';
 import { track } from '../lib/analytics.ts';
 import { ChromeMark, GitHubMark, KnobsMark, NpmMark } from '../lib/brand-marks.tsx';
 import { CANONICAL_ORIGIN, canonicalLink } from '../lib/canonical.ts';
-import { CodeBox } from '../lib/code-box.tsx';
+import { CopyInstallPrompt } from '../lib/copy-install-prompt.tsx';
 import { CraftedAtVinena } from '../lib/crafted-at-vinena.tsx';
 import { GitHubButton, onGitHub, REPO } from '../lib/github.tsx';
 import { ICON } from '../lib/icon.ts';
@@ -118,7 +118,7 @@ const styles = create({
     justifyContent: 'center',
     marginTop: spacing.s4,
   },
-  // The hero's two ways in, one row of equal height: the extension, then the setup prompt. On a
+  // The hero's two ways in, one row of equal height: the extension, then the installation prompt. On a
   // narrow screen the prompt goes under the extension.
   cta: {
     alignItems: 'stretch',
@@ -279,20 +279,6 @@ const styles = create({
   },
 });
 
-// The same prompt is in packages/devknobs/README.md under install; change both together.
-function promptBox(name: string, style?: StyleXStyles) {
-  return (
-    <CodeBox
-      code={m.install_prompt()}
-      copyLabel={m.copy_install_prompt()}
-      label={m.copy_install_prompt()}
-      name={name}
-      style={style}
-      wrap
-    />
-  );
-}
-
 // The tour, opened before the panel mounts and watching its knobs once it does.
 const TOUR: PanelTour = { open: openTour, watch: watchKnobs };
 
@@ -323,20 +309,24 @@ function Landing() {
               {m.extension_cta()}
             </span>
           </a>
-          {promptBox('install_prompt')}
+          <CopyInstallPrompt name="install_prompt" />
         </div>
         <p {...props(styles.note)}>{m.extension_line()}</p>
       </header>
 
-      <Tour install={promptBox('install_prompt_tour', styles.fill)} />
+      <Tour install={<CopyInstallPrompt name="install_prompt_tour" style={styles.fill} />} />
 
       <section {...props(styles.section)} id="try">
         <h2 {...props(styles.sectionHeading)}>{m.stage_title()}</h2>
         <p {...props(styles.text)}>{m.stage_line()}</p>
-        <Stage />
+        {/* Live readouts, empty when the llms files are built: left out of them. */}
+        <div data-llms="skip">
+          <Stage />
+        </div>
       </section>
 
-      <footer {...props(styles.footer)}>
+      {/* Site links, not page content: left out of llms-full.txt. */}
+      <footer data-llms="skip" {...props(styles.footer)}>
         <a href={DOCS} {...props(styles.link)}>
           {m.link_docs()}
         </a>

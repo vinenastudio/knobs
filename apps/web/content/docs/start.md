@@ -16,7 +16,7 @@ want it on any site with no install? use the [chrome extension](/docs/extension)
 npm i -D @vinena/knobs
 ```
 
-or let your agent do it: the copy setup prompt button on the home page gives claude code, codex or cursor the steps to install it and mount it in development only.
+or let your agent do it: the copy installation prompt button at the top of this page gives claude code, codex or cursor the steps to install it and mount it in development only.
 
 ## mount it
 

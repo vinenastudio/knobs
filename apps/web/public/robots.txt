@@ -2,3 +2,5 @@ User-agent: *
 Allow: /
 
 Sitemap: https://knobs.dev/sitemap.xml
+
+# LLM-friendly content: https://knobs.dev/llms.txt
