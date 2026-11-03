@@ -113,9 +113,3 @@ export function newRulesFor(recorded: readonly Pick<Recorded, "change">[], eleme
   }
   return rules;
 }
-
-/** Whether a rule is one added from the styles view. */
-export function isNewRule(rule: CSSRule | CSSNestedDeclarations): boolean {
-  const sheet: unknown = Reflect.get(rule, "parentStyleSheet");
-  return typeof sheet === "object" && sheet !== null && Reflect.get(sheet, NEW_RULE) === true;
-}

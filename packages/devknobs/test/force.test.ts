@@ -104,6 +104,31 @@ describe("forcing a state", () => {
     expect(copiedText(doc)).toBe(`@layer base { @supports (display: grid) { a:is(:focus, [${FORCE_ATTRIBUTE}~="focus"]) { outline: none; } } }`);
   });
 
+  test("copies only the selectors of a list that have the state, so the others keep their place", () => {
+    const { doc, cta } = hero();
+    cta.setAttribute("class", "btn");
+    doc.styleSheets = [sheet([rule(".btn:hover, .note, .x:focus", "color: red;"), rule(".note", "color: blue;"), rule(".a:hover, .b", "", [rule(".icon", "fill: red;")])])];
+    forceState(asElement(cta), ["hover"]);
+    const is = `:is(:hover, [${FORCE_ATTRIBUTE}~="hover"])`;
+    expect(copiedText(doc).split("\n")).toEqual([
+      `.btn${is} { color: red; }`,
+      // Nested under a list with the state in only some of it: under the whole list, as documented.
+      `:is(.a${is}, .b) .icon { fill: red; }`,
+    ]);
+    expect(copiedText(doc)).not.toContain(".note");
+  });
+
+  test("copies a shadow host's own rules too, for `:host(:hover)`", () => {
+    const { doc, cta } = hero();
+    const shadow = { host: cta, ownerDocument: doc, styleSheets: [sheet([rule(":host(:hover)", "color: red;"), rule(".inner", "color: blue;")])], adoptedStyleSheets: [] as object[] };
+    Object.assign(cta, { shadowRoot: shadow });
+    forceState(asElement(cta), ["hover"]);
+    const own = shadow.adoptedStyleSheets[0] as PageSheet | undefined;
+    expect(own?.text).toBe(`:host(:is(:hover, [${FORCE_ATTRIBUTE}~="hover"])) { color: red; }`);
+    clearForced();
+    expect(shadow.adoptedStyleSheets).toEqual([]);
+  });
+
   test("copies the new rules, but none of devknobs' other stylesheets", () => {
     const { doc, cta } = hero();
     const log = createEditLog();

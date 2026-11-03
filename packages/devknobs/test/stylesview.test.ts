@@ -36,6 +36,7 @@ import {
 } from "./styles-dom";
 import { Block, fakeCss } from "./edit-block";
 import { PageDocument } from "./force-dom";
+import { newRulesFor } from "../src/edit/rule";
 
 function declaration(
   name: string,
@@ -1226,6 +1227,35 @@ describe("editing", () => {
     expect(shown?.find("css-decl").map((one) => one.textContent)).toContain("background: #2f6df6;");
     log.undoAll();
     expect(node.find("css-source").map((one) => one.textContent)).not.toContain("new rule");
+  });
+
+  test("in simple mode, a new rule made for one element applies to another it matches", () => {
+    Object.assign(save, { getRootNode: () => new PageDocument() });
+    view = createStylesView(
+      { tips, title: () => undefined, outline: () => undefined, edits: log, mode: { get: () => "simple", set: () => undefined } },
+      page,
+    );
+    const paneBody = new FakeNode("div");
+    paneBody.root = true;
+    paneBody.append(fake(view.node));
+    const node = fake(view.node);
+    view.show(as(save));
+    node.find("css-new-rule")[0]?.fire("click");
+    const [selector] = node.find("css-edit");
+    if (!selector) throw new Error("no field");
+    Reflect.set(selector, "value", ".primary");
+    selector.fire("keydown", { key: "Enter" });
+    const made = log.recorded()[0]?.edit.target.rule;
+    const ruleObject = newRulesFor(log.recorded(), as(save))[0];
+    if (!made || !ruleObject) throw new Error("no rule");
+    ruleObject.style.setProperty("background", "#2f6df6");
+    // Another element the rule matches: the engine lists the rule for it, which no rule made for it shows.
+    answer = () =>
+      found([
+        rule(".primary", [declaration("background", "#2f6df6")], { rule: ruleObject, origin: { sheet: "new rule", owner: null, path: [0] } }),
+      ]);
+    view.show(as(app));
+    expect(node.find("css-applied")[0]?.find("css-decl").map((one) => one.textContent)).toContain("background: #2f6df6");
   });
 
   test("a selector the page does not take keeps the new rule's field open, marked", () => {

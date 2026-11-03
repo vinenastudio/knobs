@@ -23,7 +23,9 @@
  * and nowhere else, as with a real hover; a selector the browser will not
  * take once written so is left out; an `@scope` with no start is scoped to
  * the whole document; and `:visited` is not forced, as browsers hide it from
- * a page.
+ * a page. A rule nested in a list that has a state in only some of its
+ * selectors, as `.a:hover, .b { .icon { } }`, is copied under the whole list,
+ * `:is(.a:hover, .b) .icon`, so it applies again to `.b .icon` too.
  */
 
 import { addStyle, ensureStyle, isOwnSheet, type OwnStyle, removeStyle } from "../engine/style";
@@ -175,9 +177,14 @@ function copies(rules: CSSRuleList, parent: string | null, wanted: ReadonlySet<F
   const wrap = (head: string, inner: string[]): void => {
     if (inner.length > 0) out.push(`${head} { ${inner.join(" ")} }`);
   };
+  // Only the selectors of a list with a state wanted: the others would apply again, after the page's rules.
   const copy = (selector: string, body: string): void => {
-    const { text, states } = rewrite(selector);
-    if (body.trim() !== "" && [...states].some((state) => wanted.has(state))) out.push(`${text} { ${body} }`);
+    if (body.trim() === "") return;
+    const kept = splitList(selector)
+      .map(rewrite)
+      .filter(({ states }) => [...states].some((state) => wanted.has(state)))
+      .map(({ text }) => text);
+    if (kept.length > 0) out.push(`${kept.join(", ")} { ${body} }`);
   };
   for (let i = 0; i < rules.length; i++) {
     const rule = rules[i];
@@ -277,6 +284,8 @@ export function syncForced(): void {
   for (const element of forced.marked) {
     for (const state of (element.getAttribute(FORCE_ATTRIBUTE) ?? "").split(" ")) if (isState(state)) wanted.add(state);
     scopes.add(scopeOf(element));
+    // A host's own shadow root holds its `:host(:hover)` rules.
+    if (element.shadowRoot) scopes.add(element.shadowRoot);
   }
   for (const scope of scopes) {
     const text = mirrorText(scope, wanted);

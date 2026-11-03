@@ -34,7 +34,7 @@
 import * as engine from "../engine";
 import type { Off } from "../edit/css";
 import type { EditLog } from "../edit/log";
-import { isNewRule, NEW_RULE_SHEET, newRulesFor } from "../edit/rule";
+import { NEW_RULE_SHEET, newRulesFor } from "../edit/rule";
 import type { Locate } from "../edit/source";
 import { inspect, invalidate } from "../styles";
 import { parseDeclarations, variableNames } from "../styles/declarations";
@@ -883,13 +883,14 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
     const places = new Map<StyleDeclaration, Place | null>();
     const offs = new Map<StyleDeclaration, Off>();
     // The new rules show as blocks of their own, under the list.
-    const applied = appliedOwn(found).filter((one) => one.block.kind !== "rule" || !isNewRule(one.block.rule));
+    const mine = new Set<CSSStyleRule | CSSNestedDeclarations>(editor && pseudo === null ? newRules(element) : []);
+    const applied = appliedOwn(found).filter((one) => one.block.kind !== "rule" || !mine.has(one.block.rule));
     for (const one of applied) places.set(one.declaration, editor?.placeOf(one.block, element) ?? null);
     // The element's own style, empty too, takes the properties added here.
     let inline: OwnBlock | undefined = found.blocks.find((block) => block.kind === "inline");
     if (log && pseudo === null && !inline && styleOf(element)) inline = { kind: "inline", id: BLANK, declarations: [], element };
     if (log) {
-      const owned = found.blocks.filter((block): block is RuleBlock => block.kind === "rule" && !isNewRule(block.rule));
+      const owned = found.blocks.filter((block): block is RuleBlock => block.kind === "rule" && !mine.has(block.rule));
       for (const block of inline ? [inline, ...owned] : owned) {
         const place = editor?.placeOf(block, element);
         if (!place || !editor) continue;

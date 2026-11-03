@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { cssOff, cssValue } from "../src/edit/css";
 import { createEditLog, type Edit, type EditLog } from "../src/edit/log";
-import { isNewRule, isNewRuleSheet, NEW_RULE_SHEET, newRule, newRulesFor, ruleOf } from "../src/edit/rule";
+import { isNewRuleSheet, NEW_RULE_SHEET, newRule, newRulesFor, ruleOf } from "../src/edit/rule";
 import { diffText, NEW_RULE_NOTE, netChanges, promptText } from "../src/edit/text";
 import { isOwnSheet } from "../src/engine/style";
 import { invalidate } from "../src/styles";
@@ -107,7 +107,6 @@ describe("a new rule", () => {
     log.undo();
     log.undo();
     expect(newRulesFor(log.recorded(), asElement(element))).toEqual([one.rule] as unknown as globalThis.CSSStyleRule[]);
-    expect(isNewRule(one.rule as unknown as globalThis.CSSStyleRule)).toBe(true);
   });
 
   test("is shown in the styles engine as from the stylesheet `new rule`, as the stylesheet of copies is not", () => {

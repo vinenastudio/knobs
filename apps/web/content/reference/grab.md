@@ -356,6 +356,10 @@ where that falls short:
   the page's order would have lost
 - `:has()` finds a state only on the element and its ancestors, and an
   `@scope` with no start is scoped to the whole document
+- only the selectors of a list that have the state are copied, but a rule
+  nested in such a list, as `.a:hover, .b { .icon { } }`, is copied under
+  the whole list, `:is(.a:hover, .b) .icon`, so it comes again after the
+  page's rules for `.b .icon` too
 - `:visited` is not forced: browsers hide it from a page
 
 `devknobs.forceState()` does the same for an agent (see
