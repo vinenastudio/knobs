@@ -22,6 +22,13 @@ the page, such as playwright's `page.evaluate` or the chrome devtools mcp's
   seconds, so a timeout never passes for success.
 - [`grab()`](/docs/grab) takes an element, an array or a NodeList of them, and skips entries
   that are not elements, such as a `querySelector` that found nothing.
+- `edits()` gives the style edits made in inspect's view that are in force,
+  oldest first, as json: each one's `kind` (`css-value`, `css-toggle` or
+  `css-add`), its `target` (the element's `selector`, its `source` file and
+  line where grab finds it, and the `rule`'s `selectorText`, `sheet`,
+  `path` and `context`, the `@media`, `@layer` or outer rule it sits in,
+  left out for the element's own style), the `property`, and its
+  value `before` and `after`, null where it is not set. put them in the code.
 - `reset()` leaves the panel as it is: open or closed, docked or not, its
   handle shown or hidden, its dev tab icon (`devIcon`) and real phone mode (`realPhone`) as set.
 - `setState({ panel: { realPhone } })` with the extension: a change made during a user gesture, such as a click (the panel's switch included), is saved for every tab and site; a change a script makes without one stays in that tab, so a page's script cannot turn it for the others.

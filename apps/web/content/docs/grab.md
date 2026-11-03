@@ -3,7 +3,7 @@ title: grab and inspect
 meta_title: Grab and inspect elements for a coding agent with devknobs
 description: Grab any element on the page and copy its html, the components that rendered it and their source files for a coding agent, or inspect its box and css.
 order: 5
-updated: 2026-10-25
+updated: 2026-11-03
 ---
 
 ## grab
@@ -50,4 +50,9 @@ panel, as the browser's Elements panel shows it:
   cascade order)
 
 while you pick, the box is drawn on the page in the browser's colors, and a
-card shows the color, font, contrast and spacing. inspect is read only.
+card shows the color, font, contrast and spacing.
+
+click a value to edit it, the box at a line's start turns it off and on, and
+`+ add property` adds one. the changes at the foot list each edit as `-` and
+`+` lines: `Z` undoes, `⇧Z` (`Shift Z` off a Mac) redoes, and `copy prompt for agent` copies a
+prompt that asks your agent to put them in the code.

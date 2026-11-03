@@ -7,6 +7,7 @@ import { GEO_PRESETS } from "./engine/geo";
 import { LOCALE_PRESETS } from "./engine/locale";
 import { TIME_ZONE_PRESETS } from "./engine/time";
 import { UA_PRESETS } from "./engine/ua";
+import { type Edit, edits as editLog } from "./edit/log";
 import { createGrab, type GrabControl } from "./grab/control";
 import { createInspect, type InspectControl, oneAtATime } from "./grab/inspect";
 import type { GrabOptions, GrabResult } from "./grab/types";
@@ -76,6 +77,7 @@ export type {
   KnobValue,
 } from "./engine/describe";
 export type { DeviceKind, DevicePreset } from "./engine/devices";
+export type { Edit, EditKind, EditTarget } from "./edit/log";
 export type { GeoPreset } from "./engine/geo";
 export type { UaBrand, UaHints, UaPreset } from "./engine/ua";
 export type { EngineOptions } from "./engine";
@@ -411,6 +413,8 @@ export function unmount(): void {
   waiting = null;
   if (superseded(window, unmount)) return;
   detach();
+  // The page goes back to how it was written.
+  editLog.undoAll();
   // A host keeps its switch's choice through a take-back: off stays off.
   const native = mounted?.host ? engine.nativeSwitch() : null;
   engine.stop();
@@ -531,7 +535,19 @@ export async function grab(
   return loaded.grab(elements, options);
 }
 
-const api = { mount, unmount, getState, setState, reset, replay, grab, describe, ready };
+/**
+ * The edits made in inspect's Elements view that are in force, oldest first,
+ * as plain data: each one's kind, the element's selector, its source file and
+ * line where grab finds it, the rule and stylesheet, the property and its
+ * value before and after (null where it is not set). Undo and the panel's
+ * reset take edits back, and so does `unmount`. `reset()` leaves them, so an
+ * agent can loop over conditions with the edits on.
+ */
+export function edits(): Edit[] {
+  return (hosted("edits") ?? editLog.list)();
+}
+
+const api = { mount, unmount, getState, setState, reset, replay, grab, describe, ready, edits };
 
 /** What `mount` puts at `window.devknobs`, for agents that run code in the page. */
 export type DevknobsApi = typeof api;

@@ -1166,14 +1166,14 @@ describe("the styles view at any width", () => {
     expect(widthIn("view", 2000, 1440)).toBe(720);
   });
 
-  test("has no width of its own to outgrow the narrowest: only the swatch is sized, in px", () => {
+  test("has no width of its own to outgrow the narrowest: only the swatch and the box that turns a line off are sized, in px", () => {
     const narrowest = 240 - PANEL_EDGES - BLOCK_EDGES;
     for (const width of [240, 340, 720]) {
       const room = width - PANEL_EDGES - BLOCK_EDGES;
       for (const rule of own()) {
         const sizes = [...rule.body.matchAll(/(?:^|[\s;])(?:min-)?width:\s*([\d.]+)px/g)];
         for (const [, px] of sizes) {
-          expect(rule.selector).toBe(".css-swatch");
+          expect([".css-swatch", ".css-toggle"]).toContain(rule.selector);
           expect(Number(px)).toBeLessThan(room);
         }
         expect(rule.body).not.toMatch(/min-width:\s*[1-9]/);

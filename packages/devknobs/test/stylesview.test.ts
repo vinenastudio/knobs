@@ -7,12 +7,16 @@ import type {
   StyleDeclaration,
 } from "../src/styles/types";
 import type { DevknobsState } from "../src/types";
+import { createEditLog, type EditLog } from "../src/edit/log";
+import { parseDeclarations } from "../src/styles/declarations";
+import { ADD, HOLD } from "../src/ui/cssedit";
 import {
   createStylesView,
   EMPTY,
   GONE,
   NO_MATCH,
   NO_RULES,
+  READ_ONLY,
   SETTLE,
   type StylesPage,
   type StylesView,
@@ -28,6 +32,7 @@ import {
   fake,
   pageDocument,
 } from "./styles-dom";
+import { Block, fakeCss } from "./edit-block";
 
 function declaration(
   name: string,
@@ -846,5 +851,239 @@ describe("an element of the device frame's page", () => {
     doc.defaultView?.dispatchEvent(new Event("resize"));
     wait(SETTLE);
     expect(asked).toHaveLength(2);
+  });
+});
+
+describe("editing", () => {
+  let log: EditLog;
+  let style: Block & CSSStyleDeclaration;
+
+  beforeEach(() => {
+    Object.defineProperty(globalThis, "CSS", { configurable: true, value: fakeCss });
+    log = createEditLog();
+    style = new Block("color: red; margin: 0; padding: 4px;") as Block & CSSStyleDeclaration;
+    // The engine reads the rule's text as it is now.
+    answer = () =>
+      found([
+        rule(
+          ".primary",
+          parseDeclarations(style.cssText).map((one) => declaration(one.name, one.value, { important: one.important })),
+          { rule: { style } as unknown as CSSStyleRule },
+        ),
+      ]);
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(globalThis, "CSS");
+  });
+
+  function editing(): FakeNode {
+    view = createStylesView(
+      { tips, title: (text) => titles.push(text), outline: (target) => outlined.push(target), edits: log },
+      page,
+    );
+    const paneBody = new FakeNode("div");
+    paneBody.root = true;
+    paneBody.append(fake(view.node));
+    const node = fake(view.node);
+    view.show(as(save));
+    return node;
+  }
+
+  /** The value field of a property's line, as a click opens it. */
+  function open(node: FakeNode, property: string): FakeNode {
+    const value = node.find("css-editable").find((one) => one.getAttribute("aria-label")?.startsWith(`edit ${property}:`));
+    if (!value) throw new Error(`no value for ${property}`);
+    value.fire("click", { target: value });
+    return field(node);
+  }
+
+  function field(node: FakeNode): FakeNode {
+    const [input] = node.find("css-edit");
+    if (!input) throw new Error("no field");
+    return input;
+  }
+
+  function type(input: FakeNode, text: string): void {
+    Reflect.set(input, "value", text);
+  }
+
+  test("Enter puts a value on the page, and the view reads it again at once", () => {
+    const node = editing();
+    const reads = asked.length;
+    const input = open(node, "margin");
+    expect(Reflect.get(input, "value")).toBe("0");
+    type(input, "8px");
+    input.fire("keydown", { key: "Enter" });
+    expect(style.cssText).toBe("color: red; margin: 8px; padding: 4px;");
+    expect(log.list()).toMatchObject([{ kind: "css-value", property: "margin", before: "0", after: "8px" }]);
+    expect(asked.length).toBe(reads + 1);
+    expect(node.find("css-edit")).toEqual([]);
+    expect(lines(node)).toEqual([["color: red;", "margin: 8px;", "padding: 4px;"]]);
+    expect(node.focused).toBe(true);
+  });
+
+  test("escape leaves the value as it was", () => {
+    const node = editing();
+    const input = open(node, "margin");
+    type(input, "8px");
+    input.fire("keydown", { key: "Escape" });
+    expect(log.list()).toEqual([]);
+    expect(node.find("css-edit")).toEqual([]);
+    expect(lines(node)).toEqual([["color: red;", "margin: 0;", "padding: 4px;"]]);
+  });
+
+  test("escape in the panel closes the field before it clears the filter", () => {
+    const node = editing();
+    open(node, "margin");
+    expect(view?.escape()).toBe(true);
+    expect(node.find("css-edit")).toEqual([]);
+  });
+
+  test("Tab puts the value on and goes to the next one, shift Tab to the one before", () => {
+    const node = editing();
+    const input = open(node, "margin");
+    type(input, "2px");
+    input.fire("keydown", { key: "Tab" });
+    const next = field(node);
+    expect(Reflect.get(next, "value")).toBe("4px");
+    next.fire("keydown", { key: "Tab", shiftKey: true });
+    expect(Reflect.get(field(node), "value")).toBe("2px");
+    expect(log.list().map((one) => one.after)).toEqual(["2px"]);
+  });
+
+  test("a value the page does not take keeps the field open, marked", () => {
+    const node = editing();
+    const input = open(node, "margin");
+    type(input, "nope");
+    input.fire("keydown", { key: "Enter" });
+    expect(field(node)).toBe(input);
+    expect(input.classList.contains("bad")).toBe(true);
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(log.list()).toEqual([]);
+  });
+
+  test("a click elsewhere puts the value on, and the view waits for that click to land", () => {
+    const node = editing();
+    const reads = asked.length;
+    const input = open(node, "margin");
+    type(input, "8px");
+    input.fire("blur");
+    expect(log.list().map((one) => one.after)).toEqual(["8px"]);
+    // The pointer comes up, and the click that took the focus lands on the value it was pressed on.
+    expect(asked.length).toBe(reads);
+    window.dispatchEvent(new Event("pointerup"));
+    const next = open(node, "padding");
+    expect(Reflect.get(next, "value")).toBe("4px");
+    wait(0);
+    expect(asked.length).toBe(reads);
+    next.fire("keydown", { key: "Escape" });
+    expect(asked.length).toBe(reads + 1);
+    expect(lines(node)).toEqual([["color: red;", "margin: 8px;", "padding: 4px;"]]);
+  });
+
+  test("with no click after it, the view reads again once the pointer is up, or after a while", () => {
+    const node = editing();
+    const reads = asked.length;
+    const input = open(node, "margin");
+    type(input, "8px");
+    input.fire("blur");
+    window.dispatchEvent(new Event("pointerup"));
+    wait(0);
+    expect(asked.length).toBe(reads + 1);
+    const other = open(node, "color");
+    type(other, "blue");
+    other.fire("blur");
+    expect(asked.length).toBe(reads + 1);
+    wait(HOLD);
+    expect(asked.length).toBe(reads + 2);
+    expect(style.cssText).toBe("color: blue; margin: 8px; padding: 4px;");
+  });
+
+  test("a value the page does not take is let go when the focus leaves", () => {
+    const node = editing();
+    const input = open(node, "margin");
+    type(input, "nope");
+    input.fire("blur");
+    expect(log.list()).toEqual([]);
+    expect(node.find("css-edit")).toEqual([]);
+  });
+
+  test("adds a property: a name, then a value", () => {
+    const node = editing();
+    const [add] = node.find("css-add");
+    if (!add) throw new Error("no add line");
+    expect(add.textContent).toBe(ADD);
+    add.fire("click");
+    const [name, value] = node.find("css-edit");
+    if (!name || !value) throw new Error("no fields");
+    expect(name.focused).toBe(true);
+    type(name, "Gap");
+    name.fire("keydown", { key: "Enter" });
+    expect(value.focused).toBe(true);
+    type(value, "6px");
+    value.fire("keydown", { key: "Enter" });
+    expect(log.list()).toMatchObject([{ kind: "css-add", property: "gap", before: null, after: "6px" }]);
+    expect(style.cssText).toBe("color: red; margin: 0; padding: 4px; gap: 6px;");
+    expect(node.find("css-adding")).toEqual([]);
+  });
+
+  test("escape in the name leaves the block as it was", () => {
+    const node = editing();
+    node.find("css-add")[0]?.fire("click");
+    const [name] = node.find("css-edit");
+    name?.fire("keydown", { key: "Escape" });
+    expect(node.find("css-adding")).toEqual([]);
+    expect(node.find("css-add")).toHaveLength(1);
+    expect(log.list()).toEqual([]);
+  });
+
+  test("a declaration's box turns it off through the log, and the line stays, struck through, where it stood", () => {
+    const node = editing();
+    const box = node.find("css-toggle")[1];
+    if (!box) throw new Error("no box");
+    Reflect.set(box, "checked", false);
+    box.fire("change");
+    expect(style.cssText).toBe("color: red; padding: 4px;");
+    expect(log.list()).toMatchObject([
+      {
+        kind: "css-toggle",
+        property: "margin",
+        before: "0",
+        after: null,
+        target: { rule: { selectorText: ".primary", sheet: "https://example.com/assets/app.css", path: [0], context: [] } },
+      },
+    ]);
+    expect(lines(node)).toEqual([["color: red;", "margin: 0;", "padding: 4px;"]]);
+    const [struck] = node.find("off");
+    expect(struck?.tag).toBe("s");
+    const again = struck?.find("css-toggle")[0];
+    if (!again) throw new Error("no box on the struck line");
+    Reflect.set(again, "checked", true);
+    again.fire("change");
+    expect(style.cssText).toBe("color: red; margin: 0; padding: 4px;");
+    expect(node.find("off")).toEqual([]);
+  });
+
+  test("puts a line to add a property under each rule it can edit", () => {
+    const node = editing();
+    expect(node.find("css-add").map((one) => one.textContent)).toEqual([ADD]);
+  });
+
+  test("says why the stylesheets it may not read cannot be edited", () => {
+    answer = () => found([rule(".primary", [declaration("color", "red")])], { hidden: [{ sheet: "https://cdn.example.com/theme.css", reason: "cross-origin" }] });
+    const node = editing();
+    const [line] = node.find("css-hidden");
+    expect(tipped.filter(([at]) => at === line).map(([, text]) => text)).toEqual([READ_ONLY]);
+  });
+
+  test("is read only without a log: no box, no field and no line to add", () => {
+    answer = () => found([rule(".primary", [declaration("color", "red")])], { hidden: [{ sheet: "https://cdn.example.com/theme.css", reason: "cross-origin" }] });
+    const node = start();
+    view?.show(as(save));
+    expect(node.find("css-toggle")).toEqual([]);
+    expect(node.find("css-editable")).toEqual([]);
+    expect(node.find("css-add")).toEqual([]);
+    expect(tipped.map(([, text]) => text)).not.toContain(READ_ONLY);
   });
 });

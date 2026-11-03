@@ -226,11 +226,48 @@ element does. the tree follows the page as it changes, and a node that
 changed lights for a moment. drag the tree's bottom corner for more or less
 of it.
 
+### edit the styles
+
+the styles can be edited in place, as in the browsers' own tools, in both
+modes, and each edit goes on the page at once:
+
+- a click on a value makes it a field. a click elsewhere puts its value on
+  the page, and lands on what it was pressed on. enter puts the new value on the page,
+  escape leaves it as it was, and tab puts it on and goes to the next value,
+  shift and tab to the one before. a value the page does not take turns red
+  and stays open. `!important` at its end is kept
+- the box at a line's start, shown with the pointer on the line, turns the
+  declaration off and on. a line that is off stays where it stood, struck
+  through, and goes back there when it is turned on
+- `+ add property` under `element.style` and under each rule takes a name,
+  then a value. `element.style` shows even with no `style` attribute, so a
+  property can be added to the element itself. in `simple` mode the line is
+  under the list and adds to the element's own style
+
+the changes at the foot of the view count the edits and list them as diff
+lines, `-` the value before and `+` the value after, under the rule, what
+it sits in (`@media`, `@layer`, the rule a nested `&` is in) and its
+stylesheet, or `style=""` and the element for its own style.
+several edits of one property come to one change, and one that went back to
+where it started to none. `Z` undoes the last edit and `⇧Z` (`Shift Z` off
+a Mac) does it again, while the focus is in the view and not in a field. `copy prompt for
+agent` copies a prompt that asks a coding agent to put the edits in the
+code: each element's selector, its file and line where grab finds them, the
+rule and its stylesheet, and each property from its value before to its
+value after. `copy diff` copies the diff lines alone, and `undo all` takes
+every edit back. reset in the footer undoes the edits with the knobs, and so
+does `unmount()`; `devknobs.reset()` leaves them. an edit whose page goes, as
+a frame's reloads, stays in the list as text, and undo then only takes it
+out. `window.devknobs.edits()` gives the edits in force as json
+(see [agents](/docs/agents)). the edits are not kept: a reload of the page
+loses them.
+
 ### what inspect cannot show
 
 - the rules of a stylesheet from another origin. the page may not read them,
-  so the view says `rules hidden` with the file's name and guesses nothing
-- the browser's own default styles
+  so the view says `rules hidden` with the file's name and guesses nothing,
+  and its tooltip says they cannot be edited
+- the browser's own default styles, which cannot be edited either
 - a forced state such as `:hover`: a rule shows while it applies
 - a rule in a `@container` it could not confirm is marked `container`, and
   may not apply
@@ -239,5 +276,5 @@ of it.
 - a closed shadow root, a frame's document inside the tree, and a
   `<template>`'s content
 
-it is read only for now, with no line numbers: no attribute is edited, no
-node is dragged, and the tree has no menu.
+the tree is read only for now, with no line numbers: no attribute is
+edited, no node is dragged, and the tree has no menu.

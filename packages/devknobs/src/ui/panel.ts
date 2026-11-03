@@ -10,6 +10,7 @@ import { rewriteMediaText } from "../engine/media";
 import { keepMounted } from "../engine/remount";
 import { HOST_RESET, holdInTopLayer, LAYER } from "../engine/toplayer";
 import { devIconFor, devIconShown } from "../engine/tabicon";
+import { type EditLog, edits } from "../edit/log";
 import { type SystemMedia, watchSystemMedia } from "../engine/system";
 import type { GrabControl } from "../grab/control";
 import type { InspectControl } from "../grab/inspect";
@@ -129,6 +130,12 @@ export function ownCss(media: SystemMedia): string {
     "color-scheme: light dark",
     `color-scheme: ${media.scheme}`,
   );
+}
+
+/** What reset all does to the page: every edit of inspect's view undone, then every knob to its default. */
+export function resetPage(log: EditLog = edits, reset: () => void = engine.reset): void {
+  log.undoAll();
+  reset();
 }
 
 export function createPanel(options: PanelOptions = {}): Panel {
@@ -406,7 +413,7 @@ export function createPanel(options: PanelOptions = {}): Panel {
     empty.hidden = anyShown;
     rows.hidden = !anyShown;
     const resetHint = hints.get("reset");
-    if (resetHint) resetHint.disabled = isReset(state);
+    if (resetHint) resetHint.disabled = isReset(state) && edits.list().length === 0;
     badge.textContent = overflowBadge(state.overflow, live.overflow);
     badge.hidden = badge.textContent === "";
     badge.classList.toggle("hot", hot);
@@ -488,7 +495,7 @@ export function createPanel(options: PanelOptions = {}): Panel {
     knobRows.clearOpen();
     searchInput.value = "";
     for (const action of actionsHere) stopAction(action);
-    engine.reset();
+    resetPage();
   }
 
   /** Inspect going on leaves the search as grab does, and keeps a focus that is in its view. */
@@ -726,6 +733,7 @@ export function createPanel(options: PanelOptions = {}): Panel {
   // A mode that goes on or off, by its key too, shows on its row, as the element inspect holds does.
   const stopModes = actionsHere.flatMap((action) => action.watch?.(render) ?? []);
   const stopCount = onCount(render);
+  const stopEdits = edits.subscribe(render);
   window.addEventListener("keydown", onKeydown, true);
   window.addEventListener("pointerdown", onPointerDown, true);
   window.addEventListener("pointerup", onPointerUp, true);
@@ -775,6 +783,7 @@ export function createPanel(options: PanelOptions = {}): Panel {
       if (stage.flip === flip) stage.flip = null;
       if (stage.inspector === inspector) stage.inspector = null;
       stopCount();
+      stopEdits();
       clearInterval(ticker);
       tips.destroy();
       settings.destroy();

@@ -1578,6 +1578,81 @@ s.css-decl, s.css-decl .css-var, s.css-decl .css-name { color: var(--faint); tex
 .css-label { font-size: 10.5px; color: var(--faint); }
 .css-comes { color: var(--faint); }
 .css-hidden { padding: 2px var(--view-end) 2px var(--view-start); font-size: 10.5px; color: var(--faint); overflow-wrap: anywhere; }
+/* Editing, as in the browsers' tools: a box at a line's start turns it off
+   and on, shown on hover, on focus and on a line that is off, filled while
+   the line is on. A value is a
+   field on a click, as wide as what it holds, on the track's fill, its text
+   red where the page did not take it. Adding a property is a quiet line
+   under a block, in from its edge as a declaration's first line is. */
+.css-decl.can-edit { position: relative; }
+.css-applied .css-decl.can-edit { padding-left: 24px; }
+.css-toggle {
+  position: absolute;
+  top: 3px;
+  left: 0;
+  width: 11px;
+  height: 11px;
+  opacity: 0;
+  background: var(--track);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: opacity 120ms ease-out;
+}
+.css-toggle:checked { background: var(--faint); }
+.css-decl.can-edit:hover > .css-toggle, .css-toggle:focus-visible, .css-decl.off > .css-toggle { opacity: 1; }
+.css-editable { border-radius: 2px; cursor: text; }
+.css-editable:hover, .css-editable:focus-visible { background: var(--track); }
+.css-edit {
+  max-width: 100%;
+  padding: 0;
+  font: inherit;
+  text-indent: 0;
+  color: var(--fg);
+  background: var(--track);
+  border-radius: 2px;
+}
+.css-edit.bad { color: var(--hot); }
+/* The field's ring, as a chip's field has it while focused, in place of the browser's border. */
+.inline-field { border: 0; box-shadow: inset 0 0 0 1px var(--faint); }
+.css-add, .css-adding { padding-left: 12px; }
+.css-add {
+  display: block;
+  font: 11px/1.5 var(--mono);
+  color: var(--faint);
+  border-radius: 2px;
+  transition: color 120ms ease-out;
+}
+.css-add:hover { color: var(--fg); }
+.css-adding { text-indent: 0; }
+
+/* The changes at the foot of the Elements view, which stay in sight while
+   the styles scroll: a quiet head, each edit as diff lines tinted for what
+   went and what came, then the buttons, the prompt the filled one. */
+.changes {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding: 8px var(--view-end) 8px var(--view-start);
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+}
+.changes-head, .changes-note { font-size: 10.5px; color: var(--faint); }
+.changes-list {
+  max-height: 30vh;
+  overflow: auto;
+  font: 11px/1.5 var(--mono);
+  overflow-wrap: anywhere;
+  scrollbar-width: thin;
+}
+.diff-place { padding: 4px var(--col-pad) 0; color: var(--faint); }
+.diff-place:first-child { padding-top: 0; }
+.diff-del, .diff-add { padding: 0 var(--col-pad); border-radius: 2px; }
+.diff-del { background: color-mix(in srgb, var(--hot) 14%, transparent); }
+.diff-add { background: color-mix(in srgb, var(--ok) 14%, transparent); }
+.changes-acts { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip.changes-go, .chip.changes-go:hover { color: var(--bg); background: var(--fg); }
 
 /* The element's box, in a fold of the kit's: a picture of the element, so
    its areas are filled, each in the hue the page's own tint of it has, mixed
