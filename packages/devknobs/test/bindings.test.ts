@@ -4,6 +4,7 @@ import {
   comboProblem,
   createKeys,
   isReserved,
+  keysListed,
   type KeysStore,
   KEYS_KEY,
   KEYS_VERSION,
@@ -11,7 +12,7 @@ import {
   recordStep,
   resolveKeys,
 } from "../src/ui/bindings";
-import { type Combo, comboText, defaultKeys, type KeyLike, parseCombo } from "../src/ui/keys";
+import { type Combo, comboText, defaultKeys, type KeyLike, keyAction, parseCombo } from "../src/ui/keys";
 
 function press(patch: Partial<KeyLike>): KeyLike {
   return {
@@ -522,5 +523,23 @@ describe("createKeys with a store", () => {
     change({ v: KEYS_VERSION, panel: "alt+k" });
     expect(comboText(keys.get().panel)).toBe("shift+y");
     keys.destroy();
+  });
+});
+
+describe("keysListed", () => {
+  test("a binding the panel does not list has no key, so its key is the page's", () => {
+    const keys = resolveKeys(defaultKeys(), {});
+    const listed = keysListed(keys, ["panel", "grab", "replay", "requests", "storage", "settings", "reset"]);
+    expect(listed.elements).toBeNull();
+    expect(listed.inspect).toBeNull();
+    expect(textOf(listed.settings)).toBe("shift+o");
+    const event = { key: "E", code: "KeyE", altKey: false, ctrlKey: false, metaKey: false, shiftKey: true, target: null, composedPath: () => [] };
+    expect(keyAction(event, listed)).toBeNull();
+    expect(keyAction(event, keys)).toBe("elements");
+  });
+
+  test("the panel's key stays, listed or not", () => {
+    const keys = resolveKeys(defaultKeys(), {});
+    expect(comboText(keysListed(keys, []).panel)).toBe("shift+k");
   });
 });

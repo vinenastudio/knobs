@@ -18,7 +18,7 @@ import type { DevknobsState } from "../types";
 import { runAction, stopAction } from "./actions";
 import { type Action, availableActions, type Live } from "./catalog";
 import { readColumn, wrapSliding } from "./column";
-import { BINDINGS, createKeys, type LiveKeys } from "./bindings";
+import { BINDINGS, createKeys, keysListed, type LiveKeys } from "./bindings";
 import { createDockSlide } from "./dockslide";
 import { button, el, lay } from "./dom";
 import { createDrag } from "./drag";
@@ -558,8 +558,13 @@ export function createPanel(options: PanelOptions = {}): Panel {
 
   /** Whether a key's action opens a closed panel, so it is the panel's there too. */
   function opensPanel(action: KeyAction): boolean {
-    if (action === "elements") return inspector !== null;
-    return action === "toggle" || action === "storage" || action === "requests" || action === "settings";
+    return (
+      action === "toggle" ||
+      action === "storage" ||
+      action === "requests" ||
+      action === "settings" ||
+      action === "elements"
+    );
   }
 
   /**
@@ -657,7 +662,8 @@ export function createPanel(options: PanelOptions = {}): Panel {
       event.stopPropagation();
       return;
     }
-    const action = keyAction(event, keys.get());
+    // A binding the panel does not list, such as the elements view's without inspect, leaves its key to the page.
+    const action = keyAction(event, keysListed(keys.get(), bindingsHere));
     // A key the panel acts on does only that, not the browser's own as well:
     // the toggle and the views' keys unless a drag holds it, replay and reset
     // while the panel is open. In the search no key the panel took is typed.

@@ -38,7 +38,7 @@ the extension's own code makes no network requests: no `fetch`, no `XMLHttpReque
 what it keeps, in `chrome.storage`:
 
 - session storage, which Chrome clears when it closes: each tab's knobs, which tabs have devknobs' frame open on which host, and each tab's user agent with its page's host.
-- local storage: the real or in-page switch, prefer, real phone mode, and the shortcuts you set in the panel.
+- local storage: the real or in-page switch, prefer, real phone mode, and the shortcuts you set in the panel. real phone mode and the shortcuts are saved there only when set with a click or a key press of yours; a page script that sets them otherwise changes them in its own tab alone.
 
 the panel it puts on a page keeps the same `devknobs` and `devknobs:` keys in that page's own storage as the npm package does, but for the shortcuts, which it keeps in the extension's storage, the same on every site.
 

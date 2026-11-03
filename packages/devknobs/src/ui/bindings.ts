@@ -282,6 +282,19 @@ export interface KeysStore {
   subscribe(listener: () => void): () => void;
 }
 
+/**
+ * The keys a panel acts on: those of the bindings it lists, such as no
+ * elements view's without inspect. One it does not list has none, so its key
+ * goes to the page. The panel's always keeps its own.
+ */
+export function keysListed(keys: Keys, listed: readonly Binding[]): Keys {
+  const here: Keys = { ...keys };
+  for (const binding of BINDINGS) {
+    if (binding !== "panel" && !listed.includes(binding)) here[binding] = null;
+  }
+  return here;
+}
+
 /** The keys in force, kept in step with the ones the user sets, here or in another tab. */
 export interface LiveKeys {
   get(): Keys;

@@ -243,7 +243,13 @@ export function createInspector(
       else inspect.set(true);
     },
     elements(): void {
-      if (!current()) hold(pageBody());
+      // Picking that is on ends: the view shows what it holds, and the page takes clicks again.
+      if (inspect.isOn()) inspect.set(false);
+      if (!current()) {
+        const body = pageBody();
+        if (view) view.show(body);
+        else hold(body);
+      }
       reveal();
     },
     picked(): string | null {

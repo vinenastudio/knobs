@@ -312,7 +312,17 @@ const keysStore: KeysStore = {
   load: () => keptKeys,
   save: (keys) => {
     if (top && navigator.userActivation.isActive) {
-      void ask({ keys, type: 'keys' });
+      void ask({ keys, type: 'keys' }).then(({ error }) => {
+        if (error === undefined) {
+          return;
+        }
+        // Not kept, as with the extension reloaded since the page loaded: the panel goes back
+        // to the keys that are, and the error is reported as any other of the page's.
+        heardKeys(keptKeys);
+        queueMicrotask(() => {
+          throw new Error(`knobs: the shortcut was not kept for every site: ${error}`);
+        });
+      });
     }
   },
   subscribe: (listener) => {
@@ -328,9 +338,11 @@ function heardKeys(keys: Keys | null) {
   for (const listener of keysHeard) {
     try {
       listener();
-    } catch {
-      // The copy of a frame that went: it hears nothing more.
-      keysHeard.delete(listener);
+    } catch (error) {
+      // One copy's error is its own: the others still hear the keys, and it is reported as ever.
+      queueMicrotask(() => {
+        throw error;
+      });
     }
   }
 }
@@ -351,9 +363,21 @@ function keysAbove(): KeysStore | null {
     load: () => store.load(),
     save: (keys) => store.save(keys),
     subscribe: (listener) => {
-      const stop = store.subscribe(listener);
       // The frame's page can go without its copy unmounting: the page above stops calling it.
-      window.addEventListener('pagehide', stop, { once: true });
+      let gone = false;
+      const stop = store.subscribe(() => {
+        if (!gone) {
+          listener();
+        }
+      });
+      window.addEventListener(
+        'pagehide',
+        () => {
+          gone = true;
+          stop();
+        },
+        { once: true },
+      );
       return stop;
     },
   };
