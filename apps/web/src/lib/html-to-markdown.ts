@@ -271,6 +271,9 @@ function isHidden(element: HtmlElement, context: Context): boolean {
   if (element.attrs['data-llms'] === 'skip' || PAGE_CHROME_ROLES.has(element.attrs['role'] ?? '')) {
     return true;
   }
+  if ('hidden' in element.attrs || element.attrs['aria-hidden'] === 'true') {
+    return true;
+  }
   if (element.tag === 'button' && context.inHeading) {
     return false;
   }
@@ -280,7 +283,7 @@ function isHidden(element: HtmlElement, context: Context): boolean {
   if ((element.tag === 'header' || element.tag === 'footer') && !context.inContent) {
     return true;
   }
-  return 'hidden' in element.attrs || element.attrs['aria-hidden'] === 'true';
+  return false;
 }
 
 function isBlock(node: HtmlNode): node is HtmlElement {
@@ -481,7 +484,9 @@ function cells(row: HtmlElement, context: Context): Array<string> {
   return row.children
     .filter(
       (cell): cell is HtmlElement =>
-        typeof cell !== 'string' && (cell.tag === 'td' || cell.tag === 'th'),
+        typeof cell !== 'string' &&
+        (cell.tag === 'td' || cell.tag === 'th') &&
+        !isHidden(cell, context),
     )
     .map((cell) =>
       paragraph(cell.children, context)
@@ -494,7 +499,7 @@ function table(element: HtmlElement, context: Context): string {
   const rows: Array<HtmlElement> = [];
   const collect = (node: HtmlElement) => {
     for (const child of node.children) {
-      if (typeof child !== 'string') {
+      if (typeof child !== 'string' && !isHidden(child, context)) {
         if (child.tag === 'tr') {
           rows.push(child);
         } else if (child.tag === 'thead' || child.tag === 'tbody' || child.tag === 'tfoot') {

@@ -104,6 +104,22 @@ describe('toMarkdown', () => {
     ).toBe('## Questions\n\n### Is it free?\n\nYes, always.');
   });
 
+  test('a hidden, aria-hidden or skipped button in a heading is left out', () => {
+    expect(
+      markdown(
+        '<main><h2>Title<button hidden>A</button><button aria-hidden="true">B</button><button data-llms="skip">C</button></h2></main>',
+      ),
+    ).toBe('## Title');
+  });
+
+  test('hidden and aria-hidden table rows and cells are left out', () => {
+    expect(
+      markdown(
+        '<main><table><thead><tr><th>Plan</th><th aria-hidden="true">Icon</th><th>Price</th></tr></thead><tbody><tr><td>Pro</td><td hidden>x</td><td>$5</td></tr><tr hidden><td>Old</td><td>$1</td></tr><tr aria-hidden="true"><td>Gone</td><td>$2</td></tr></tbody></table></main>',
+      ),
+    ).toBe('| Plan | Price |\n| --- | --- |\n| Pro | $5 |');
+  });
+
   test('a header or footer inside main, section or aside stays', () => {
     expect(
       markdown(
