@@ -66,6 +66,54 @@ export class PageNode {
     }
     return this;
   }
+
+  removeAttribute(name: string): void {
+    this.attributes = this.attributes.filter((attr) => attr.name !== name);
+  }
+
+  /** On the page: its document above it, through a shadow root's host too. */
+  get isConnected(): boolean {
+    let at: PageNode | null = this;
+    while (at) {
+      if (at.nodeType === 9) return true;
+      at = at.parentNode ?? Reflect.get(at, "host") ?? null;
+    }
+    return false;
+  }
+
+  get nextSibling(): PageNode | null {
+    const list = this.parentNode?.childNodes ?? [];
+    return list[list.indexOf(this) + 1] ?? null;
+  }
+
+  get previousSibling(): PageNode | null {
+    const list = this.parentNode?.childNodes ?? [];
+    return list[list.indexOf(this) - 1] ?? null;
+  }
+
+  insertBefore(node: PageNode, before: PageNode | null): PageNode {
+    node.parentNode?.removeChild(node);
+    const at = before ? this.childNodes.indexOf(before) : -1;
+    this.childNodes.splice(at < 0 ? this.childNodes.length : at, 0, node);
+    node.parentNode = this;
+    return node;
+  }
+
+  removeChild(node: PageNode): PageNode {
+    this.childNodes = this.childNodes.filter((one) => one !== node);
+    node.parentNode = null;
+    return node;
+  }
+
+  remove(): void {
+    this.parentNode?.removeChild(this);
+  }
+
+  getRootNode(): PageNode {
+    let at: PageNode = this;
+    while (at.parentNode) at = at.parentNode;
+    return at;
+  }
 }
 
 /** A page node as the tree takes it. */

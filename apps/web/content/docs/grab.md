@@ -57,3 +57,9 @@ click a value to edit it, the box at a line's start turns it off and on, and
 `+` lines: `Z` undoes and `⇧Z` (`Shift Z` off a Mac) redoes while the focus
 is in the view and not in a field (⌘Z and Ctrl Z do not), and `copy prompt
 for agent` copies a prompt that asks your agent to put them in the code.
+
+the DOM tree can be edited too: double-click a text or an attribute to edit
+it, and on the selected line `a` adds an attribute, `F2` edits it as html,
+`h` hides it and Delete deletes it, or use the bar under the tree. those
+edits go into the same changes, and the prompt asks your agent to change the
+component, as a re-render may undo an edit of the DOM.

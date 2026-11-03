@@ -12,8 +12,12 @@
  * A new kind of edit only brings its own `Change`: the log stays the same.
  */
 
-/** What an edit changes. */
-export type EditKind = "css-value" | "css-toggle" | "css-add";
+/**
+ * What an edit changes: a css declaration's value, a declaration turned off
+ * or on, a property added, or in the html a text, an attribute, an element
+ * written anew as html, an element hidden, a node deleted.
+ */
+export type EditKind = "css-value" | "css-toggle" | "css-add" | "text" | "attr" | "html" | "hide" | "delete";
 
 /** Where an edit is, for an agent to find it in the code. */
 export interface EditTarget {
@@ -41,9 +45,13 @@ export interface Edit {
   id: number;
   kind: EditKind;
   target: EditTarget;
-  /** The css property, as written. */
+  /**
+   * What in its place it changes: the css property, as written, the
+   * attribute's name, `text` for the element's text (`text 2` for its second
+   * text), `html` for its markup, `hidden` for a hide, `node` for a delete.
+   */
   property: string;
-  /** The value before, `!important` and all, or null where it was not set. */
+  /** The value before, `!important` and all, or null where it was not set. For `html` and `delete`, the markup. */
   before: string | null;
   /** The value after, or null where the edit took it away. */
   after: string | null;

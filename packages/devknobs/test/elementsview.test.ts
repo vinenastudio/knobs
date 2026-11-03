@@ -158,7 +158,9 @@ describe("the elements view", () => {
     const stub: DomTree = {
       node: new FakeNode("div") as unknown as HTMLElement,
       reveal: (node) => revealed.push(node),
+      select: (node) => revealed.push(node),
       selected: () => null,
+      escape: () => false,
       destroy: () => {
         destroyed++;
       },

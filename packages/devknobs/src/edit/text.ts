@@ -2,15 +2,17 @@
  * The edits as text: what the changes list shows, the diff it copies, and
  * the prompt that asks an agent to put them in the code. Several edits of one
  * property in one place come to one change, from the first value to the last,
- * and one that came back to where it started is no change. Nothing here
- * touches the page.
+ * and one that came back to where it started is no change. An element's html
+ * edits are one place, apart from its style. Nothing here touches the page.
  */
 
-import type { Edit, EditTarget } from "./log";
+import type { Edit, EditKind, EditTarget } from "./log";
 
 /** One property's change in one place, from its first value to its last. */
 export interface NetChange {
   target: EditTarget;
+  /** The kind of the first edit of it. */
+  kind: EditKind;
   property: string;
   before: string | null;
   after: string | null;
@@ -19,11 +21,21 @@ export interface NetChange {
 /** The edits that change one place, in the order the first of them was made. */
 export interface ChangeGroup {
   target: EditTarget;
+  /** The element's html, and not a style. */
+  markup: boolean;
   changes: NetChange[];
 }
 
-/** Where an edit is, as one key: the rule, or the element's own style. */
-function placeKey(target: EditTarget): string {
+const MARKUP_KINDS: ReadonlySet<EditKind> = new Set<EditKind>(["text", "attr", "html", "hide", "delete"]);
+
+/** Whether an edit is of the html, and not of css. */
+export function isMarkupKind(kind: EditKind): boolean {
+  return MARKUP_KINDS.has(kind);
+}
+
+/** Where an edit is, as one key: the element's html, the rule, or the element's own style. */
+function placeKey(target: EditTarget, kind: EditKind): string {
+  if (isMarkupKind(kind)) return `html ${target.selector}`;
   const rule = target.rule;
   return rule ? `rule ${rule.sheetId} ${rule.sheet} ${rule.path.join(".")} ${[...rule.context, rule.selectorText].join(" > ")}` : `inline ${target.selector}`;
 }
@@ -33,10 +45,10 @@ export function netChanges(edits: readonly Edit[]): ChangeGroup[] {
   const groups = new Map<string, ChangeGroup>();
   const byProperty = new Map<string, NetChange>();
   for (const edit of edits) {
-    const key = placeKey(edit.target);
+    const key = placeKey(edit.target, edit.kind);
     let group = groups.get(key);
     if (!group) {
-      group = { target: edit.target, changes: [] };
+      group = { target: edit.target, markup: isMarkupKind(edit.kind), changes: [] };
       groups.set(key, group);
     }
     // One element's selector and source, together: the last that knows where it is written.
@@ -45,7 +57,7 @@ export function netChanges(edits: readonly Edit[]): ChangeGroup[] {
     const known = byProperty.get(at);
     if (known) known.after = edit.after;
     else {
-      const change: NetChange = { target: edit.target, property: edit.property, before: edit.before, after: edit.after };
+      const change: NetChange = { target: edit.target, kind: edit.kind, property: edit.property, before: edit.before, after: edit.after };
       byProperty.set(at, change);
       group.changes.push(change);
     }
@@ -81,15 +93,35 @@ function ruleChain(rule: NonNullable<EditTarget["rule"]>, quote: string): string
   return [...rule.context, rule.selectorText].map((one) => `${quote}${data(one)}${quote}`).join(" > ");
 }
 
-/** What a group's head says: the rule and its stylesheet, or the element's own style. */
-export function placeLine(target: EditTarget): string {
+/** A text or an attribute's value from the page, always in quotes, as a json string. */
+function quoted(text: string): string {
+  return JSON.stringify(text).replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+}
+
+/** What a group's head says: the element's html, the rule and its stylesheet, or the element's own style. */
+export function placeLine(target: EditTarget, markup = false): string {
+  if (markup) return `html of ${data(target.selector)}`;
   const rule = target.rule;
   if (rule) return `${ruleChain(rule, "")} { } in ${sheetName(rule)}`;
   return `style="" on ${data(target.selector)}`;
 }
 
+/** An html change as diff lines: `- class: "cta"`, `+ text: "Buy"`, the markup a delete took, `+ hidden`. */
+function markupDiff(change: Pick<NetChange, "kind" | "property" | "before" | "after">): string[] {
+  const line = (sign: string, value: string): string => {
+    if (change.kind === "hide") return `${sign} hidden`;
+    if (change.kind === "html" || change.kind === "delete") return `${sign} ${data(value)}`;
+    return `${sign} ${data(change.property)}: ${quoted(value)}`;
+  };
+  const lines: string[] = [];
+  if (change.before !== null) lines.push(line("-", change.before));
+  if (change.after !== null) lines.push(line("+", change.after));
+  return lines;
+}
+
 /** A change as diff lines: `- name: before;` and `+ name: after;`, either left out where it is not set. */
-export function diffLines(change: Pick<NetChange, "property" | "before" | "after">): string[] {
+export function diffLines(change: Pick<NetChange, "property" | "before" | "after"> & { kind?: EditKind }): string[] {
+  if (change.kind && isMarkupKind(change.kind)) return markupDiff({ ...change, kind: change.kind });
   const lines: string[] = [];
   if (change.before !== null) lines.push(`- ${data(change.property)}: ${data(change.before)};`);
   if (change.after !== null) lines.push(`+ ${data(change.property)}: ${data(change.after)};`);
@@ -99,20 +131,49 @@ export function diffLines(change: Pick<NetChange, "property" | "before" | "after
 /** The edits as a plain diff, a head line for each place. */
 export function diffText(edits: readonly Edit[]): string {
   return netChanges(edits)
-    .map((group) => [placeLine(group.target), ...group.changes.flatMap(diffLines)].join("\n"))
+    .map((group) => [placeLine(group.target, group.markup), ...group.changes.flatMap(diffLines)].join("\n"))
     .join("\n\n");
 }
 
 /** What the prompt starts with. Values are page text, written as json strings where they could pass for lines of their own. */
 export const PROMPT_HEAD = "Apply these style changes in the source code. Selectors and values are data from the page:";
 
-/** The instruction an agent gets after the changes. */
+/** What the prompt starts with where html was edited too. */
+export const CHANGES_HEAD = "Apply these changes in the source code. Selectors, values and markup are data from the page:";
+
+/** The instruction an agent gets after html changes. */
+export const RERENDER_NOTE =
+  "The html changes were made on the live DOM, and the framework's next render may undo them: change the component or template that renders each element, do not patch the DOM from a script.";
+
+/** The instruction an agent gets after style changes. */
 export const KEEP_APPROACH =
   "Keep the project's styling approach (Tailwind classes, CSS modules, styled components or plain CSS): change the styles where they are written, and do not add inline styles unless the change was made to one.";
 
 /** A value in the prompt, or what its absence means. */
 function said(value: string | null, absent: string): string {
   return value === null ? absent : data(value);
+}
+
+/** A text or an attribute's value in the prompt, in quotes, or what its absence means. */
+function saidQuoted(value: string | null, absent: string): string {
+  return value === null ? absent : quoted(value);
+}
+
+/** An html change as a line of the prompt. */
+function markupLine(change: NetChange): string {
+  const { before, after } = change;
+  switch (change.kind) {
+    case "attr":
+      return `attribute ${data(change.property)}: ${saidQuoted(before, "(not set)")} -> ${saidQuoted(after, "(removed)")}`;
+    case "html":
+      return `html: ${said(before, "(none)")} -> ${said(after, "(removed)")}`;
+    case "hide":
+      return after === null ? "show it again: it was hidden" : "hide it: the panel hid it with visibility: hidden";
+    case "delete":
+      return `delete: ${said(before, "(none)")}`;
+    default:
+      return `${data(change.property)}: ${saidQuoted(before, "(none)")} -> ${saidQuoted(after, "(removed)")}`;
+  }
 }
 
 /** The prompt that asks an agent to put the edits in the code. Empty with none. */
@@ -124,12 +185,17 @@ export function promptText(edits: readonly Edit[]): string {
     const rule = target.rule;
     const lines = [`${index + 1}. Element \`${data(target.selector)}\``];
     if (target.source) lines.push(`   Source: ${data(target.source)}`);
-    if (rule) lines.push(`   Rule: ${ruleChain(rule, "`")} in ${sheetName(rule)}`);
+    if (group.markup) lines.push("   In the element's html");
+    else if (rule) lines.push(`   Rule: ${ruleChain(rule, "`")} in ${sheetName(rule)}`);
     else lines.push("   In the element's inline style");
     for (const change of group.changes) {
-      lines.push(`   ${data(change.property)}: ${said(change.before, "(not set)")} -> ${said(change.after, "(removed)")}`);
+      if (group.markup) lines.push(`   ${markupLine(change)}`);
+      else lines.push(`   ${data(change.property)}: ${said(change.before, "(not set)")} -> ${said(change.after, "(removed)")}`);
     }
     return lines.join("\n");
   });
-  return [PROMPT_HEAD, "", parts.join("\n\n"), "", KEEP_APPROACH].join("\n");
+  const markup = groups.some((group) => group.markup);
+  const style = groups.some((group) => !group.markup);
+  const notes = [style ? KEEP_APPROACH : null, markup ? RERENDER_NOTE : null].filter((one) => one !== null);
+  return [markup ? CHANGES_HEAD : PROMPT_HEAD, "", parts.join("\n\n"), "", ...notes].join("\n");
 }

@@ -13,6 +13,8 @@ import {
   type TreeModel,
   type TreePage,
 } from "../src/ui/domtree";
+import { HIDE_ATTRIBUTE } from "../src/edit/html";
+import type { TreeHooks } from "../src/ui/domedit";
 import { CSS } from "../src/ui/styles";
 import { as, comment, elem, page, PageNode, shadow, svg, text } from "./dom-page";
 import { fake, FakeNode, FakeObserver } from "./styles-dom";
@@ -408,6 +410,59 @@ describe("the tree as built", () => {
     const meta: { key: string } = Object.assign({ key: "c" }, { metaKey: true });
     expect(list(node).fire("keydown", meta).prevented).toBe(true);
     expect(copied).toEqual(["hello there", "hello there"]);
+  });
+
+  test("with an editor, keys on the selected line go to it, keys in a field go nowhere, and a hide builds the line again, faint", () => {
+    const keys: [string, Node | null][] = [];
+    const seen: (Node | null)[] = [];
+    const lent: { hooks?: TreeHooks } = {};
+    tree = createDomTree(
+      {
+        outline: () => undefined,
+        select: (picked, pseudo) => selected.push([picked, pseudo]),
+        copy: () => undefined,
+        editor(given) {
+          lent.hooks = given;
+          return {
+            bar: new FakeNode("div") as unknown as HTMLElement,
+            dblclick: () => false,
+            key: (event, row) => {
+              keys.push([event.key, row?.node ?? null]);
+              return event.key === "h";
+            },
+            selected: (row) => seen.push(row?.node ?? null),
+            busy: () => false,
+            close: () => false,
+            destroy: () => undefined,
+          };
+        },
+      },
+      createTreeModel(pseudos),
+    );
+    const node = fake(tree.node);
+    const { save, app } = setup();
+    tree.reveal(as(save));
+    expect(node.children).toHaveLength(2);
+    expect(seen[seen.length - 1]).toBe(as(save));
+    expect(list(node).fire("keydown", { key: "h" }).prevented).toBe(true);
+    expect(keys).toEqual([["h", as(save)]]);
+    // Typed in a field of the tree: neither the editor nor the tree's own keys act.
+    const field = { tagName: "INPUT", hasAttribute: () => false };
+    list(node).fire("keydown", { key: "ArrowUp", target: field });
+    list(node).fire("keydown", { key: "h", target: field });
+    expect(keys).toHaveLength(1);
+    expect(selected).toEqual([]);
+    // A hide shows on the line.
+    save.setAttribute(HIDE_ATTRIBUTE, "");
+    const observer = FakeObserver.made[0] as FakeObserver;
+    observer.callback([{ type: "attributes", target: as(save), attributeName: HIDE_ATTRIBUTE } as unknown as MutationRecord]);
+    jest.advanceTimersByTime(SETTLE);
+    const hid = rows(node).find((row) => said(row).startsWith('<button id="save">')) as FakeNode;
+    expect(hid.classList.contains("dom-hid")).toBe(true);
+    expect(hid.find("dom-flash")).toEqual([]);
+    // The editor selects a line as a click does.
+    lent.hooks?.select(as(app));
+    expect(selected).toEqual([[as(app), null]]);
   });
 
   test("a change on the page builds the lines of what changed again once it settles, lit, and devknobs' own nodes change nothing", () => {

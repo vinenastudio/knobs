@@ -87,7 +87,7 @@ export function createChanges(log: EditLog, copy: Copy, mac = isMac()): Changes 
     head.textContent = `changes (${count}) · ${undoHint(mac)}`;
     const lines: HTMLElement[] = [];
     for (const group of netChanges(edits)) {
-      lines.push(el("div", "diff-place", placeLine(group.target)));
+      lines.push(el("div", "diff-place", placeLine(group.target, group.markup)));
       for (const change of group.changes) {
         for (const text of diffLines(change)) lines.push(el("div", text.startsWith("-") ? "diff-del" : "diff-add", text));
       }

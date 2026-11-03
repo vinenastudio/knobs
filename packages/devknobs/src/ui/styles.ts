@@ -1461,6 +1461,21 @@ button:focus-visible { outline: 1px solid var(--faint); outline-offset: -1px; }
 .dom-code { flex: 0 1 auto; min-width: 30ch; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--fg); }
 .dom-ref { white-space: pre; color: var(--faint); }
 .dom-code > .act { margin-left: var(--col-pad); height: 1.6em; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6em; vertical-align: top; }
+/* A line whose element the panel hid, faint as its box on the page is gone. */
+.dom-hid > .dom-code { opacity: 0.5; }
+.dom-code > .dom-html { display: block; width: 100%; min-width: 30ch; resize: vertical; white-space: pre; }
+/* The selected line's actions, kept in sight at the foot of the tree as it scrolls either way. */
+.dom-acts {
+  position: sticky;
+  left: 0;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px var(--view-end) 4px var(--view-start);
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+}
 .dom-flash { animation: dom-flash 900ms ease-out; }
 @keyframes dom-flash {
   from { background: var(--pick); }
