@@ -102,6 +102,8 @@ export function createChanges(log: EditLog, copy: Copy, mac = isMac(), keep: Kee
   const apply = button("chip changes-apply", "apply");
   /** The waiting edits the user showed whole. */
   const shownWhole = new WeakSet<SavedEdit>();
+  /** The `show all` buttons drawn now, in order. */
+  let shows: HTMLButtonElement[] = [];
   // Only the user's own click on this button makes the kept html edits: a page script's click is no trusted one.
   apply.addEventListener("click", (event: Event) => {
     if (event.isTrusted && event.currentTarget === apply && !apply.disabled) keep?.applyWaiting();
@@ -156,6 +158,7 @@ export function createChanges(log: EditLog, copy: Copy, mac = isMac(), keep: Kee
       for (const one of restored.missed) said.push(el("div", "changes-missed", missedLine(one)));
     }
     const waiting = keep?.waiting() ?? [];
+    shows = [];
     if (waiting.length > 0) {
       const html = waiting.filter((one) => one.kind === "html").length;
       const attributes = waiting.filter((one) => one.kind === "attr").length;
@@ -170,8 +173,13 @@ export function createChanges(log: EditLog, copy: Copy, mac = isMac(), keep: Kee
           more.addEventListener("click", () => {
             shownWhole.add(one);
             draw();
+            // The button went with the redraw: the focus goes on to the next `show all`, or to apply once it is on.
+            const next = shows[0];
+            if (next) next.focus({ preventScroll: true });
+            else if (!apply.disabled) apply.focus({ preventScroll: true });
           });
           line.append(" ", more);
+          shows.push(more);
         }
         said.push(line);
       }

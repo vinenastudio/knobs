@@ -205,6 +205,8 @@ describe("kept html edits that wait", () => {
     apply.fire("click", { isTrusted: true, currentTarget: apply });
     expect(applied).toBe(0);
     control(node, "show all").fire("click");
+    // The button went with the redraw: the focus is on apply, now on.
+    expect(control(node, "apply").focused).toBe(true);
     expect(node.all().filter((one) => one.className === "changes-missed")[1]?.textContent).toBe(`html on p: <p>${"x".repeat(200)}</p>`);
     apply = control(node, "apply");
     expect(Reflect.get(apply, "disabled")).toBe(false);
@@ -214,5 +216,33 @@ describe("kept html edits that wait", () => {
     expect(applied).toBe(0);
     apply.fire("click", { isTrusted: true, currentTarget: apply });
     expect(applied).toBe(1);
+  });
+});
+
+describe("show all on a waiting edit", () => {
+  test("moves the focus to the next show all, then to apply", () => {
+    const long = (selector: string) => ({ kind: "html" as const, target: { selector }, property: "html", before: null, after: `<p>${"x".repeat(200)}</p>` });
+    const waiting = [long("p"), long("q")];
+    const keep: Keeper = {
+      known: () => true,
+      on: () => true,
+      set: () => undefined,
+      restored: () => null,
+      waiting: () => waiting,
+      applyWaiting: () => undefined,
+      kept: () => 0,
+      cut: () => 0,
+      subscribe: () => () => undefined,
+      stop: () => undefined,
+    };
+    changes = createChanges(log, () => true, true, keep);
+    const node = fake(changes.node);
+    node.find("changes-show")[0]?.fire("click");
+    const shows = node.find("changes-show");
+    expect(shows).toHaveLength(1);
+    expect(shows[0]?.focused).toBe(true);
+    expect(control(node, "apply").focused).toBe(false);
+    shows[0]?.fire("click");
+    expect(control(node, "apply").focused).toBe(true);
   });
 });

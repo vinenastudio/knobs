@@ -226,10 +226,10 @@ save the list and make it again:
 JSON.stringify(window.devknobs.edits());
 ```
 
-Reload the page, then pass the list you kept back in:
+It comes back as a JSON string. Reload the page, then parse it and pass it back in:
 
 ```js
-const { applied, skipped } = await window.devknobs.setEdits(LIST_YOU_KEPT);
+const { applied, skipped } = await window.devknobs.setEdits(JSON.parse(JSON_YOU_KEPT));
 window.devknobs.undoEdit(); // undoes the last edit in force, returns it or null
 ```
 
