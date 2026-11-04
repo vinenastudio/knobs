@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { riskyAttribute, riskyEdit, riskyNodes, scriptUrl } from "../src/edit/risk";
+import { riskyAttribute, riskyEdit, riskyElement, riskyNodes, scriptUrl } from "../src/edit/risk";
 import { as, elem, page, svg, text } from "./dom-page";
 
 describe("what could run a script", () => {
@@ -26,6 +26,17 @@ describe("what could run a script", () => {
     expect(riskyAttribute("title", "javascript:x")).toBe(false);
     expect(riskyAttribute("href", "/javascript:x")).toBe(false);
     expect(scriptUrl("\u0001 javascript:")).toBe(true);
+    expect(riskyAttribute("values", "x;javascript:alert(1)")).toBe(true);
+    expect(riskyAttribute("values", "; JavaScript:alert(1)")).toBe(true);
+    expect(riskyAttribute("by", "javascript:x")).toBe(true);
+    expect(riskyAttribute("values", "0;1;0")).toBe(false);
+  });
+
+  test("on the page's own elements that run or load a script, in any namespace", () => {
+    page(() => []);
+    for (const tag of ["script", "base", "iframe", "object", "embed", "link", "meta"]) expect(riskyElement(as(elem(tag)) as Element)).toBe(true);
+    expect(riskyElement(as(svg("script")) as Element)).toBe(true);
+    expect(riskyElement(as(elem("div")) as Element)).toBe(false);
   });
 
   test("from text alone, erring to refuse", () => {

@@ -20,7 +20,7 @@ import { type CssPlace, cssOff, cssOn, cssValue, offIn, sheetIdOf } from "./css"
 import { attrEdit, deleteEdit, hideEdit, htmlEdit, moveEdit, nextElementOf, parseHtml, textEdit } from "./html";
 import { REASONS, type Replaying, readSavedEdit, type SavedEdit } from "./keep";
 import type { Change, Edit, EditLog, EditTarget } from "./log";
-import { RISK, riskyAttribute, riskyNodes } from "./risk";
+import { RISK, riskyAttribute, riskyElement, riskyNodes } from "./risk";
 import { NEW_RULE_SHEET, newRule, ruleOf } from "./rule";
 
 /** Why an edit after one that was not made is not made either. */
@@ -141,11 +141,13 @@ function htmlChange(edit: SavedEdit, element: Element): Change | string {
       const node = textAt(element, edit.property);
       if (!node) return REASONS.missing;
       if (edit.after === null) return REASONS.invalid;
+      // A script's text is its code.
+      if (riskyElement(element)) return RISK;
       if ((node.nodeValue ?? "").trim() !== edit.before) return REASONS.changed;
       return textEdit(target, node, edit.after, edit.property) ?? REASONS.changed;
     }
     case "attr": {
-      if (riskyAttribute(edit.property, edit.after)) return RISK;
+      if (riskyElement(element) || riskyAttribute(edit.property, edit.after)) return RISK;
       const change = attrEdit(target, element, edit.property, edit.after);
       return change && change.edit.before === edit.before ? change : REASONS.changed;
     }

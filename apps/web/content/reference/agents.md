@@ -61,7 +61,10 @@ the page, such as playwright's `page.evaluate` or the chrome devtools mcp's
 did not take it`, `not an edit devknobs reads`). anything but a list
   throws a `TypeError`. so an agent can read `edits()`, save the list, and
   make the same edits again on a fresh load, to compare or to screenshot
-  them before they are in the code.
+  them before they are in the code. an html or attribute edit that could run
+  a script, or an attribute or text edit of the page's own `<script>`,
+  `<base>`, frame, `<object>`, `<embed>`, `<link>` or `<meta>`, is skipped
+  with `could run a script`.
 - `undoEdit()` undoes the last edit in force, as `Z` does in the panel, and
   returns it, or null with none.
 - `forceState(element, states)` forces states on an element, so it renders

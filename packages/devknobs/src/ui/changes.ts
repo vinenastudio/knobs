@@ -12,7 +12,7 @@
  *   view.append(changes.node); changes.destroy();
  */
 
-import { type Keeper, readSavedEdit, type Skipped } from "../edit/keep";
+import { type Keeper, readSavedEdit, type SavedEdit, type Skipped } from "../edit/keep";
 import type { EditLog } from "../edit/log";
 import { changeCount, data, diffLines, diffText, netChanges, placeLine, promptText } from "../edit/text";
 import { isMac } from "../engine/ua";
@@ -38,10 +38,26 @@ export function keptLine(kept: number, missed: number): string {
   return missed > 0 ? `${made}, ${missed} could not be found` : made;
 }
 
-/** What the line over the kept edits that wait says. */
-export function waitLine(markup: number, more: number): string {
-  const html = `${markup} kept html ${markup === 1 ? "edit waits" : "edits wait"}`;
-  return more > 0 ? `${html}, with ${more} ${more === 1 ? "edit" : "edits"} after them` : html;
+/** What the line over the kept edits that wait says: how many html and attribute edits, and the edits after them. */
+export function waitLine(html: number, attributes: number, more: number): string {
+  const parts: string[] = [];
+  if (html > 0) parts.push(`${html} kept html ${html === 1 ? "edit" : "edits"}`);
+  if (attributes > 0) parts.push(`${attributes} kept attribute ${attributes === 1 ? "edit" : "edits"}`);
+  const said = `${parts.join(" and ")} ${html + attributes === 1 ? "waits" : "wait"}`;
+  return more > 0 ? `${said}, with ${more} ${more === 1 ? "edit" : "edits"} after them` : said;
+}
+
+/** What the line under them says: a page script may have planted them. */
+export const WAIT_NOTE = "apply only edits you made on this page";
+
+/** The most characters a waiting edit's value shows, cut at its end. */
+export const WAIT_MAX = 120;
+
+/** What a waiting edit makes, as apply would: the markup, `name="value"`, or the value after, cut short, as data. */
+export function waitValue(edit: SavedEdit): string {
+  const after = edit.after === null ? "(removed)" : edit.kind === "attr" ? `${edit.property}="${edit.after}"` : edit.after;
+  const chars = [...after];
+  return data(chars.length > WAIT_MAX ? `${chars.slice(0, WAIT_MAX - 1).join("")}…` : after);
 }
 
 /** An edit that was not made again, or waits: `text on h1.title`, then why where it was not made. */
@@ -129,11 +145,13 @@ export function createChanges(log: EditLog, copy: Copy, mac = isMac(), keep: Kee
     }
     const waiting = keep?.waiting() ?? [];
     if (waiting.length > 0) {
-      const markup = waiting.filter((one) => one.kind === "html" || one.kind === "attr").length;
-      const head = el("div", "changes-kept-line changes-wait", `${waitLine(markup, waiting.length - markup)}: `);
+      const html = waiting.filter((one) => one.kind === "html").length;
+      const attributes = waiting.filter((one) => one.kind === "attr").length;
+      const head = el("div", "changes-kept-line changes-wait", `${waitLine(html, attributes, waiting.length - html - attributes)}: `);
       head.append(apply);
-      said.push(head);
-      for (const one of waiting) said.push(el("div", "changes-missed", editLine(one) ?? ""));
+      said.push(head, el("div", "changes-kept-line changes-wait-note", WAIT_NOTE));
+      // Each with what apply makes, as text: the user sees the markup and the values before making them.
+      for (const one of waiting) said.push(el("div", "changes-missed", `${editLine(one) ?? ""}: ${waitValue(one)}`));
     }
     if (cut > 0) said.push(el("div", "changes-kept-line", `only the first ${keep?.kept() ?? 0} edits are kept after a reload`));
     kept.replaceChildren(...said);

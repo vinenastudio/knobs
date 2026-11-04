@@ -267,6 +267,7 @@ function readEdit(value: unknown): SavedEdit | null {
 /** What a script could run through: devknobs' `URL_ATTRIBUTES` in its edit/risk.ts. */
 const URL_ATTRIBUTES = new Set([
   'action',
+  'by',
   'formaction',
   'from',
   'href',
@@ -294,7 +295,10 @@ export function riskyEdit(edit: { after: string | null; kind: string; property: 
       name === 'srcdoc' ||
       (after !== null &&
         URL_ATTRIBUTES.has(name) &&
-        after.replaceAll(CONTROLS, '').toLowerCase().startsWith('javascript:'))
+        // svg's `values` is a list, `;` between its items, each of which the animation sets.
+        (name === 'values' ? after.split(';') : [after]).some((item) =>
+          item.replaceAll(CONTROLS, '').toLowerCase().startsWith('javascript:'),
+        ))
     );
   }
   if (kind !== 'html' || after === null) {

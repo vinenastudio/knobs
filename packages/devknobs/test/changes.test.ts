@@ -3,7 +3,7 @@ import { cssValue } from "../src/edit/css";
 import { createEditLog, type EditLog } from "../src/edit/log";
 import { diffText, promptText } from "../src/edit/text";
 import type { Keeper, Restored } from "../src/edit/keep";
-import { COPIED, createChanges, type Changes, keptLine, missedLine, NOT_COPIED, undoHint, waitLine } from "../src/ui/changes";
+import { COPIED, createChanges, type Changes, keptLine, missedLine, NOT_COPIED, undoHint, WAIT_MAX, WAIT_NOTE, waitLine, waitValue } from "../src/ui/changes";
 import { Block, fakeCss } from "./edit-block";
 import { FakeNode, fake } from "./styles-dom";
 
@@ -167,7 +167,11 @@ describe("the line of edits kept after a reload", () => {
 
 describe("kept html edits that wait", () => {
   test("are listed with an apply that only the user's own click on it makes", () => {
-    const waiting = [{ kind: "attr" as const, target: { selector: "h1" }, property: "title", before: null, after: "Hi" }, { kind: "hide" as const, target: { selector: "p" }, property: "hidden", before: null, after: "hidden" }];
+    const waiting = [
+      { kind: "attr" as const, target: { selector: "h1" }, property: "title", before: null, after: "Hi" },
+      { kind: "html" as const, target: { selector: "p" }, property: "html", before: "<p>a</p>", after: `<p>${"x".repeat(200)}</p>` },
+      { kind: "hide" as const, target: { selector: "p" }, property: "hidden", before: null, after: "hidden" },
+    ];
     let applied = 0;
     const keep: Keeper = {
       on: () => true,
@@ -183,9 +187,16 @@ describe("kept html edits that wait", () => {
     changes = createChanges(log, () => true, true, keep);
     const node = fake(changes.node);
     const head = node.all().find((one) => one.className.includes("changes-wait"));
-    expect(head?.textContent).toBe(`${waitLine(1, 1)}: apply`);
-    expect(waitLine(1, 1)).toBe("1 kept html edit waits, with 1 edit after them");
-    expect(node.all().filter((one) => one.className === "changes-missed").map((one) => one.textContent)).toEqual(["title on h1", "hide on p"]);
+    expect(head?.textContent).toBe("1 kept html edit and 1 kept attribute edit wait, with 1 edit after them: apply");
+    expect(waitLine(0, 2, 0)).toBe("2 kept attribute edits wait");
+    expect(waitLine(1, 0, 0)).toBe("1 kept html edit waits");
+    expect(node.all().some((one) => one.textContent === WAIT_NOTE)).toBe(true);
+    expect(node.all().filter((one) => one.className === "changes-missed").map((one) => one.textContent)).toEqual([
+      'title on h1: title="Hi"',
+      `html on p: <p>${"x".repeat(WAIT_MAX - 4)}…`,
+      "hide on p: hidden",
+    ]);
+    expect(waitValue({ kind: "html", target: { selector: "p" }, property: "html", before: null, after: "<p>a\nb</p>" })).toBe('"<p>a\\nb</p>"');
     const apply = control(node, "apply");
     apply.fire("click", { isTrusted: false, currentTarget: apply });
     expect(applied).toBe(0);

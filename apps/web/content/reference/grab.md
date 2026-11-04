@@ -374,8 +374,13 @@ edit waits` (with how many edits come after it), until you click its
 can run a script. only your own click on that button makes them, and even
 then an html edit with `<script>`, a frame, `<object>`, `<embed>`, `<base>`,
 `<meta>` or `<link>`, an `on…` handler, a `srcdoc` or a `javascript:`
-address, and such an attribute, is not made (`could run a script`), nor
-kept. while edits wait, nothing new is kept, so what is kept stays as it
+address, such an attribute (a `javascript:` item in an svg `values` list
+too), and any attribute or text of the page's own `<script>` (a data script
+such as `application/ld+json` too, and svg's), `<base>`, frame, `<object>`,
+`<embed>`, `<link>` or `<meta>`, is not made (`could run a script`), nor
+kept. the list shows what `apply` would make: each edit's markup or
+`name="value"`, cut at 120 characters, under `apply only edits you made on
+this page`. while edits wait, nothing new is kept, so what is kept stays as it
 was; turning the switch off forgets them too. edits made in another page
 of the site keep under that page's path, the one it loaded at, also once
 its app's router moved.

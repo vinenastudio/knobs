@@ -347,6 +347,11 @@ describe('kept edits that could run a script', () => {
     expect(riskyEdit({ after: 'x', kind: 'attr', property: 'srcdoc' })).toBe(true);
     expect(riskyEdit({ after: '<script>', kind: 'text', property: 'text' })).toBe(false);
     expect(riskyEdit({ after: '<a onclick = "x">', kind: 'html', property: 'html' })).toBe(true);
+    expect(riskyEdit({ after: 'x;javascript:alert(1)', kind: 'attr', property: 'values' })).toBe(
+      true,
+    );
+    expect(riskyEdit({ after: 'javascript:x', kind: 'attr', property: 'by' })).toBe(true);
+    expect(riskyEdit({ after: '0;1', kind: 'attr', property: 'values' })).toBe(false);
   });
 });
 

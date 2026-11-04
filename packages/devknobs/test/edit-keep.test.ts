@@ -20,7 +20,7 @@ import {
 import { type Change, createEditLog, type Edit, type EditLog } from "../src/edit/log";
 import { AFTER_MISSED, replayEdits } from "../src/edit/replay";
 import { RISK } from "../src/edit/risk";
-import { as, elem, page, type PageNode, text } from "./dom-page";
+import { as, elem, page, type PageNode, svg, text } from "./dom-page";
 import { Block, fakeCss } from "./edit-block";
 
 beforeAll(() => {
@@ -226,6 +226,25 @@ describe("edits made again", () => {
     const result = replayEdits(createEditLog(), risky, false, as(at.doc) as Document);
     expect(result.skipped.map((one) => one.reason)).toEqual(risky.map(() => RISK));
     expect(at.h1.attributes.map((one) => one.name)).toEqual(["data-h1"]);
+  });
+
+  test("never edits an attribute or the text of the page's own script, base or frame, a data script among them", () => {
+    const ld = elem("script", { type: "application/ld+json", id: "ld" }, text('{"@type":"Thing"}'));
+    const base = elem("base", { href: "/" });
+    const doc = page(() => [elem("head", {}, base, ld), elem("body", {}, elem("iframe", { "data-f": "" }), svg("svg", {}, svg("script", { "data-s": "" })))]);
+    const list: SavedEdit[] = [
+      { kind: "attr", target: { selector: "[type]" }, property: "type", before: "application/ld+json", after: "text/javascript" },
+      { kind: "attr", target: { selector: "[type]" }, property: "src", before: null, after: "/evil.js" },
+      { kind: "text", target: { selector: "[type]" }, property: "text", before: '{"@type":"Thing"}', after: "alert(1)" },
+      { kind: "attr", target: { selector: "[href]" }, property: "href", before: "/", after: "https://evil.test/" },
+      { kind: "attr", target: { selector: "[data-f]" }, property: "src", before: null, after: "/x" },
+      { kind: "attr", target: { selector: "[data-s]" }, property: "href", before: null, after: "/evil.js" },
+    ];
+    const result = replayEdits(createEditLog(), list, false, as(doc) as Document);
+    expect(result.skipped.map((one) => one.reason)).toEqual(list.map(() => RISK));
+    expect(ld.getAttribute("type")).toBe("application/ld+json");
+    expect(ld.childNodes[0]?.nodeValue).toBe('{"@type":"Thing"}');
+    expect(base.getAttribute("href")).toBe("/");
   });
 
   test("keep the source an edit had", () => {
