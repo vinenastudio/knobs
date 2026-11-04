@@ -5,19 +5,29 @@
  * of the element's texts it is. An edit is made only where the page has the
  * value it had before it, and goes to the log as one made in the panel. A
  * new rule is made anew, and the edits of its declarations go to the rule
- * made, as told by the id its stylesheet had. Loaded only once there is an
- * edit to make. To use it:
+ * made, as told by the id its stylesheet had. An html or attribute edit that
+ * could run a script is never made, and after a delete, a move or an html edit
+ * that was not made, no later edit is: it may stand on it. As the page loads,
+ * `hold` leaves the first html or attribute edit and all after it waiting for
+ * the user. Loaded only once there is an edit to make. To use it:
  *
- *   const { applied, skipped } = replayEdits(edits, list);
+ *   const { applied, skipped, waiting } = replayEdits(edits, list, hold);
  */
 
 import { rulesOf } from "../styles/collect";
 import { markupOf } from "../ui/domtree";
 import { type CssPlace, cssOff, cssOn, cssValue, offIn, sheetIdOf } from "./css";
 import { attrEdit, deleteEdit, hideEdit, htmlEdit, moveEdit, nextElementOf, parseHtml, textEdit } from "./html";
-import { REASONS, type Replayed, readSavedEdit, type SavedEdit } from "./keep";
+import { REASONS, type Replaying, readSavedEdit, type SavedEdit } from "./keep";
 import type { Change, Edit, EditLog, EditTarget } from "./log";
+import { RISK, riskyAttribute, riskyNodes } from "./risk";
 import { NEW_RULE_SHEET, newRule, ruleOf } from "./rule";
+
+/** Why an edit after one that was not made is not made either. */
+export const AFTER_MISSED = "an earlier edit it may depend on was not made";
+
+/** Edits that change which nodes stand where: one not made leaves the later ones on another page. */
+const STRUCTURE = new Set(["delete", "move", "html"]);
 
 /** What a step of a selector through shadow roots and frames goes into: grab writes `>>>` and `>>iframe>>`. */
 const JOIN = /\s*(>>>|>>iframe>>)\s*/;
@@ -135,13 +145,16 @@ function htmlChange(edit: SavedEdit, element: Element): Change | string {
       return textEdit(target, node, edit.after, edit.property) ?? REASONS.changed;
     }
     case "attr": {
+      if (riskyAttribute(edit.property, edit.after)) return RISK;
       const change = attrEdit(target, element, edit.property, edit.after);
       return change && change.edit.before === edit.before ? change : REASONS.changed;
     }
     case "html": {
       if (edit.before === null || edit.after === null) return REASONS.invalid;
       if (markupOf(element) !== edit.before) return REASONS.changed;
-      return htmlEdit(target, element, edit.before, parseHtml(doc, edit.after)) ?? REASONS.refused;
+      const nodes = parseHtml(doc, edit.after);
+      if (riskyNodes(nodes)) return RISK;
+      return htmlEdit(target, element, edit.before, nodes) ?? REASONS.refused;
     }
     case "hide": {
       const change = hideEdit(target, element);
@@ -175,22 +188,35 @@ function htmlChange(edit: SavedEdit, element: Element): Change | string {
 /**
  * Make edits again, in order, through the log. Each entry is read as
  * `edits()` writes it, and one that is not an edit is skipped. Returns the
- * edits made, as the log has them, and those skipped with the reason.
+ * edits made, as the log has them, those skipped with the reason, and with
+ * `hold` those that wait for the user.
  */
-export function replayEdits(log: EditLog, list: readonly unknown[], doc: Document = document): Replayed {
+export function replayEdits(log: EditLog, list: readonly unknown[], hold = false, doc: Document = document): Replaying {
   const applied: Edit[] = [];
-  const skipped: Replayed["skipped"] = [];
+  const skipped: Replaying["skipped"] = [];
+  const waiting: SavedEdit[] = [];
   /** The new rules made again, by the id their stylesheet had in the edits. */
   const made = new Map<number, CSSStyleRule>();
+  /** An edit that moved nodes was not made: the page is not the one the later edits were made on. */
+  let broken = false;
   for (const entry of list) {
     const edit = readSavedEdit(entry);
     if (!edit) {
       skipped.push({ edit: entry, reason: REASONS.invalid });
       continue;
     }
+    if (waiting.length > 0 || (hold && (edit.kind === "html" || edit.kind === "attr"))) {
+      waiting.push(edit);
+      continue;
+    }
+    if (broken) {
+      skipped.push({ edit, reason: AFTER_MISSED });
+      continue;
+    }
     const element = findElement(doc, edit.target.selector);
     if (!element) {
       skipped.push({ edit, reason: REASONS.missing });
+      if (STRUCTURE.has(edit.kind)) broken = true;
       continue;
     }
     let change: Change | string;
@@ -202,11 +228,12 @@ export function replayEdits(log: EditLog, list: readonly unknown[], doc: Documen
     const recorded = typeof change === "string" ? null : log.record(change);
     if (!recorded) {
       skipped.push({ edit, reason: typeof change === "string" ? change : REASONS.refused });
+      if (STRUCTURE.has(edit.kind)) broken = true;
       continue;
     }
     const source = edit.target.source;
     if (source) log.locate(recorded.id, { source });
     applied.push(source ? { ...recorded, target: { ...recorded.target, source } } : recorded);
   }
-  return { applied, skipped };
+  return { applied, skipped, waiting };
 }

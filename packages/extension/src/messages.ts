@@ -127,7 +127,8 @@ const BINDINGS: Record<keyof StoredKeys, true> = {
   settings: true,
   storage: true,
 };
-const KEY_BINDINGS = Object.keys(BINDINGS) as Array<keyof StoredKeys>;
+/** Whether a name is one of devknobs' bindings. */
+const isBinding = (name: string): name is keyof StoredKeys => Object.hasOwn(BINDINGS, name);
 
 /** The longest key devknobs writes, such as `meta+ctrl+alt+shift+backspace`, with room. */
 const KEY_MAX = 64;
@@ -167,7 +168,9 @@ const EDIT_KINDS: Record<EditKind, true> = {
   move: true,
   text: true,
 };
-const KINDS = Object.keys(EDIT_KINDS) as Array<EditKind>;
+/** Whether a value is one of devknobs' edit kinds. */
+const isKind = (value: unknown): value is EditKind =>
+  typeof value === 'string' && Object.hasOwn(EDIT_KINDS, value);
 
 const isField = (value: unknown): value is string =>
   typeof value === 'string' && value.length <= FIELD_MAX;
@@ -224,7 +227,7 @@ function readEdit(value: unknown): SavedEdit | null {
   if (!isFields(value) || !isFields(value.target)) {
     return null;
   }
-  const kind = oneOf(value.kind, KINDS);
+  const kind = isKind(value.kind) ? value.kind : null;
   const { after, before, property } = value;
   const { rule, selector, source } = value.target;
   if (
@@ -261,10 +264,56 @@ function readEdit(value: unknown): SavedEdit | null {
   return edit;
 }
 
+/** What a script could run through: devknobs' `URL_ATTRIBUTES` in its edit/risk.ts. */
+const URL_ATTRIBUTES = new Set([
+  'action',
+  'formaction',
+  'from',
+  'href',
+  'src',
+  'to',
+  'values',
+  'xlink:href',
+]);
+// Control characters and spaces, which the browser drops from an address before it reads its scheme.
+// oxlint-disable-next-line no-control-regex
+const CONTROLS = /[\u0000-\u0020\u007f]/g;
+
+/**
+ * Whether an edit could run a script, from its text alone, as devknobs' `riskyEdit` reads it
+ * (edit/risk.ts; the two stay the same): an attribute that is an `on…` handler or `srcdoc`, or
+ * a `javascript:` address, or markup that names an element that runs or loads a script, has an
+ * `on…=`, a `srcdoc`, a `javascript:` or a character reference. devknobs never keeps one.
+ */
+export function riskyEdit(edit: { after: string | null; kind: string; property: string }): boolean {
+  const { after, kind, property } = edit;
+  if (kind === 'attr') {
+    const name = property.trim().toLowerCase();
+    return (
+      name.startsWith('on') ||
+      name === 'srcdoc' ||
+      (after !== null &&
+        URL_ATTRIBUTES.has(name) &&
+        after.replaceAll(CONTROLS, '').toLowerCase().startsWith('javascript:'))
+    );
+  }
+  if (kind !== 'html' || after === null) {
+    return false;
+  }
+  return (
+    /<\s*(script|iframe|frame|object|embed|base|meta|link)\b/i.test(after) ||
+    /[\s"'/]on[a-z]+\s*=/i.test(after) ||
+    /srcdoc/i.test(after) ||
+    /javascript\s*:/i.test(after.replaceAll(CONTROLS, '')) ||
+    /&#|&colon;|&tab;|&newline;/i.test(after)
+  );
+}
+
 /**
  * The edits a page sent or storage holds for a page, or null for anything that is no object,
- * has a bad version, more edits than devknobs keeps, more text than it keeps, or an entry that
- * is no edit of a kind it makes. devknobs reads each edit again itself.
+ * has a bad version, more edits than devknobs keeps, more text than it keeps, an entry that
+ * is no edit of a kind it makes, or one that could run a script. devknobs reads each edit again
+ * itself, and makes no html or attribute edit as the page loads.
  */
 export function readKept(value: unknown): KeptEdits | null {
   if (
@@ -281,12 +330,32 @@ export function readKept(value: unknown): KeptEdits | null {
   const edits: Array<SavedEdit> = [];
   for (const one of value.edits) {
     const edit = readEdit(one);
-    if (!edit) {
+    if (!edit || riskyEdit(edit)) {
       return null;
     }
     edits.push(edit);
   }
   return { edits, v: value.v };
+}
+
+/**
+ * The keys of kept pages to forget so `max` stay, `kept` among them: the pages kept longest ago,
+ * by their `at`, past the newest `max - 1` others.
+ */
+export function editsToForget(
+  stored: Record<string, unknown>,
+  kept: string,
+  max = EDITS_PAGES,
+): Array<string> {
+  return Object.entries(stored)
+    .filter(([key]) => key.startsWith(EDITS_PREFIX) && key !== kept)
+    .map(([key, value]) => {
+      const at: unknown = isFields(value) ? value.at : 0;
+      return { at: typeof at === 'number' ? at : 0, key };
+    })
+    .toSorted((a, b) => b.at - a.at)
+    .slice(max - 1)
+    .map(({ key }) => key);
 }
 
 /** A page's path as a page sent it: one that starts with `/`, with no query or hash, or null. */
@@ -517,10 +586,10 @@ export function readKeys(value: unknown): Keys | null {
       keys.v = text;
       continue;
     }
-    const binding = oneOf(name, KEY_BINDINGS);
-    if (!binding) {
+    if (!isBinding(name)) {
       continue;
     }
+    const binding = name;
     if (!isText(text) || text.length > KEY_MAX) {
       return null;
     }

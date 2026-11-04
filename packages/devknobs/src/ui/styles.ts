@@ -1693,6 +1693,7 @@ s.css-decl, s.css-decl .css-var, s.css-decl .css-name { color: var(--faint); tex
 /* What was made again as the page loaded, and the edits that were not. */
 .changes-kept { display: grid; gap: 2px; font-size: 11px; }
 .changes-kept-line { color: var(--fg); }
+.changes-wait { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .changes-missed { padding-left: var(--col-pad); font: 10.5px/1.5 var(--mono); color: var(--faint); overflow-wrap: anywhere; }
 /* The switch that keeps the edits after a reload, over the tree. */
 .keep-line { padding: 4px 0 6px; border-bottom: 1px solid var(--line); }

@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { cssOff, cssOn, cssValue, offIn } from "../src/edit/css";
 import { attrEdit, deleteEdit, hideEdit, moveEdit, textEdit } from "../src/edit/html";
 import {
@@ -18,7 +18,8 @@ import {
   toKept,
 } from "../src/edit/keep";
 import { type Change, createEditLog, type Edit, type EditLog } from "../src/edit/log";
-import { replayEdits } from "../src/edit/replay";
+import { AFTER_MISSED, replayEdits } from "../src/edit/replay";
+import { RISK } from "../src/edit/risk";
 import { as, elem, page, type PageNode, text } from "./dom-page";
 import { Block, fakeCss } from "./edit-block";
 
@@ -72,6 +73,7 @@ describe("kept edits as json", () => {
     expect(readKept({ v: 1, edits: [first, { kind: "nope" }] })).toBeNull();
     expect(readKept({ v: 1, edits: Array(MAX_EDITS + 1).fill(first) })).toBeNull();
     expect(readKept("[]")).toBeNull();
+    expect(readKept({ v: 1, edits: [{ kind: "html", target: { selector: "p" }, property: "html", before: "<p>a</p>", after: '<img src=x onerror="a()">' }] })).toBeNull();
     // One kept before items had a version reads as this one.
     expect(readKept({ edits: [] })).toEqual({ v: EDITS_VERSION, edits: [] });
   });
@@ -85,6 +87,31 @@ describe("kept edits as json", () => {
     expect(kept.edits).toHaveLength(4);
     expect(cut).toBe(6);
     expect(JSON.stringify(kept.edits).length).toBeLessThanOrEqual(MAX_BYTES);
+  });
+
+  test("count the list's json to the character: one that fills it exactly is kept, a character more is cut", () => {
+    const one = (id: number, after = "b".repeat(1500)): Edit => ({ id, kind: "css-value", target: { selector: ".a" }, property: "color", before: "r", after });
+    const size = (edit: Edit): number => JSON.stringify({ ...edit, id: undefined }).length + 1;
+    const step = size(one(1));
+    const list = Array.from({ length: Math.floor((MAX_BYTES - 2000) / step) }, (_, at) => one(at + 1));
+    // The list's json: its opening bracket, then each edit with a comma or the closing bracket.
+    const room = MAX_BYTES - 1 - list.length * step - step;
+    const full = [...list, one(list.length + 1, `${"b".repeat(1500)}${"z".repeat(room)}`)];
+    expect(JSON.stringify(toKept(full).kept.edits).length).toBe(MAX_BYTES);
+    expect(toKept(full).cut).toBe(0);
+    const over = [...list, one(list.length + 1, `${"b".repeat(1500)}${"z".repeat(room + 1)}`)];
+    expect(toKept(over).cut).toBe(1);
+  });
+
+  test("stop at an edit that would not read back, or that could run a script, and count it and all after it", () => {
+    const small: Edit = { id: 1, kind: "css-value", target: { selector: ".a" }, property: "color", before: "red", after: "blue" };
+    const big: Edit = { id: 2, kind: "html", target: { selector: "main" }, property: "html", before: `<main>${"x".repeat(70_000)}</main>`, after: "<main>y</main>" };
+    const { kept, cut } = toKept([small, big, small]);
+    expect(kept.edits).toHaveLength(1);
+    expect(cut).toBe(2);
+    expect(readKept(JSON.parse(JSON.stringify(kept)))).not.toBeNull();
+    const handler: Edit = { id: 3, kind: "attr", target: { selector: "img" }, property: "onerror", before: null, after: "alert(1)" };
+    expect(toKept([small, handler]).cut).toBe(1);
   });
 });
 
@@ -135,7 +162,7 @@ describe("edits made again", () => {
     const again = shop();
     const fresh = shop();
     const replay = createEditLog();
-    const result = replayEdits(replay, list, as(again.doc) as Document);
+    const result = replayEdits(replay, list, false, as(again.doc) as Document);
     expect(result.skipped).toEqual([]);
     expect(result.applied.map((one) => one.kind)).toEqual(["text", "attr", "hide", "move", "css-value", "css-toggle", "css-add", "css-toggle", "delete"]);
     expect(seen(again)).not.toBe(seen(fresh));
@@ -151,19 +178,60 @@ describe("edits made again", () => {
       { kind: "attr", target: { selector: "[data-h1]" }, property: "title", before: "Old", after: "New" },
       { kind: "text", target: { selector: "[data-gone]" }, property: "text", before: "x", after: "y" },
       { kind: "css-value", target: { selector: "[data-cta]" }, property: "padding", before: "9px", after: "1px" },
-      { kind: "move", target: { selector: "[data-c]" }, property: "node", before: "", after: "", from: { parent: "[data-list]", next: "[data-a]" }, to: { parent: "[data-list]", next: "[data-a]" } },
       { kind: "text", target: { selector: "[data-lead]" }, property: "text", before: "Tools", after: "Kit" },
+      { kind: "move", target: { selector: "[data-c]" }, property: "node", before: "", after: "", from: { parent: "[data-list]", next: "[data-a]" }, to: { parent: "[data-list]", next: "[data-a]" } },
     ];
-    const result = replayEdits(createEditLog(), [...list, { kind: "eval" }], as(at.doc) as Document);
+    const result = replayEdits(createEditLog(), [...list, { kind: "eval" }], false, as(at.doc) as Document);
     expect(result.skipped.map((one) => one.reason)).toEqual([REASONS.changed, REASONS.missing, REASONS.changed, REASONS.changed, REASONS.invalid]);
+    // The move that was not made leaves the page another: nothing after it is made.
+    expect(replayEdits(createEditLog(), [list[4], list[3], list[0]], false, as(at.doc) as Document).skipped.map((one) => one.reason)).toEqual([REASONS.changed, AFTER_MISSED, AFTER_MISSED]);
     expect(result.applied.map((one) => one.after)).toEqual(["Kit"]);
     expect(at.lead.childNodes[0]?.nodeValue).toBe("Kit");
+  });
+
+  test("as the page loads, leave the first html or attribute edit and all after it waiting", () => {
+    const at = shop();
+    const list: SavedEdit[] = [
+      { kind: "text", target: { selector: "[data-lead]" }, property: "text", before: "Tools", after: "Kit" },
+      { kind: "attr", target: { selector: "[data-h1]" }, property: "title", before: null, after: "Hi" },
+      { kind: "hide", target: { selector: "[data-lead]" }, property: "hidden", before: null, after: "hidden" },
+    ];
+    const result = replayEdits(createEditLog(), list, true, as(at.doc) as Document);
+    expect(result.applied.map((one) => one.kind)).toEqual(["text"]);
+    expect(result.waiting).toEqual(list.slice(1));
+    expect(at.h1.getAttribute("title")).toBeNull();
+  });
+
+  test("after a delete that was not made, make none of the edits after it", () => {
+    const at = shop();
+    const list: SavedEdit[] = [
+      { kind: "delete", target: { selector: "[data-a]" }, property: "node", before: "<li>gone</li>", after: null },
+      { kind: "hide", target: { selector: "[data-c]" }, property: "hidden", before: null, after: "hidden" },
+    ];
+    const result = replayEdits(createEditLog(), list, false, as(at.doc) as Document);
+    expect(result.skipped.map((one) => one.reason)).toEqual([REASONS.changed, AFTER_MISSED]);
+    expect(at.c.hasAttribute("data-devknobs-hide")).toBe(false);
+  });
+
+  test("never set an attribute that could run a script", () => {
+    const at = shop();
+    const risky: SavedEdit[] = [
+      { kind: "attr", target: { selector: "[data-h1]" }, property: "onclick", before: null, after: "alert(1)" },
+      { kind: "attr", target: { selector: "[data-h1]" }, property: "ONERROR", before: null, after: "x" },
+      { kind: "attr", target: { selector: "[data-h1]" }, property: "srcdoc", before: null, after: "<p>" },
+      { kind: "attr", target: { selector: "[data-cta]" }, property: "href", before: null, after: " Java\tScript:alert(1)" },
+      { kind: "attr", target: { selector: "[data-cta]" }, property: "xlink:href", before: null, after: "javascript:x" },
+      { kind: "attr", target: { selector: "[data-cta]" }, property: "formaction", before: null, after: "javascript:x" },
+    ];
+    const result = replayEdits(createEditLog(), risky, false, as(at.doc) as Document);
+    expect(result.skipped.map((one) => one.reason)).toEqual(risky.map(() => RISK));
+    expect(at.h1.attributes.map((one) => one.name)).toEqual(["data-h1"]);
   });
 
   test("keep the source an edit had", () => {
     const at = shop();
     const log = createEditLog();
-    const result = replayEdits(log, [{ kind: "attr", target: { selector: "[data-h1]", source: "src/H.tsx:3" }, property: "title", before: null, after: "Hi" }], as(at.doc) as Document);
+    const result = replayEdits(log, [{ kind: "attr", target: { selector: "[data-h1]", source: "src/H.tsx:3" }, property: "title", before: null, after: "Hi" }], false, as(at.doc) as Document);
     expect(result.applied[0]?.target.source).toBe("src/H.tsx:3");
     expect(log.list()[0]?.target.source).toBe("src/H.tsx:3");
   });
@@ -191,7 +259,8 @@ function memoryStore(start: unknown): EditsStore & { value: unknown; saved: unkn
   return store;
 }
 
-const VIEW = {} as Window;
+/** The page's window, a new one for each test: one replays its kept edits once. */
+let VIEW = {} as Window;
 
 /** A change that goes on and off, made in `view`. */
 function change(value: string, view: Window | null = VIEW): Change {
@@ -199,6 +268,10 @@ function change(value: string, view: Window | null = VIEW): Change {
 }
 
 describe("the keeper", () => {
+  beforeEach(() => {
+    VIEW = {} as Window;
+  });
+
   const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
   test("off by default keeps nothing; on keeps the edits in force, each change; off forgets them", () => {
@@ -231,7 +304,7 @@ describe("the keeper", () => {
     let settle = () => undefined as void;
     const run: Replay = (into, list) => {
       into.record(change("a"));
-      return { applied: into.list(), skipped: [{ edit: list[1], reason: REASONS.missing }] };
+      return { applied: into.list(), skipped: [{ edit: list[1], reason: REASONS.missing }], waiting: [] };
     };
     const keep = createKeeper({ log, store, view: VIEW, replay: async () => run, settled: () => new Promise((resolve) => (settle = () => resolve())) });
     expect(keep.on()).toBe(true);
@@ -251,7 +324,7 @@ describe("the keeper", () => {
     const store = memoryStore(undefined);
     let runs = 0;
     const view = {} as Window;
-    const options = { log: createEditLog(), store, view, replay: async (): Promise<Replay> => () => ({ applied: [], skipped: [] }), settled: async () => void runs++ };
+    const options = { log: createEditLog(), store, view, replay: async (): Promise<Replay> => () => ({ applied: [], skipped: [], waiting: [] }), settled: async () => void runs++ };
     const keep = createKeeper(options);
     keep.set(true);
     expect(keep.on()).toBe(false);
@@ -264,6 +337,97 @@ describe("the keeper", () => {
     createKeeper(options).stop();
     await flush();
     expect(runs).toBe(1);
+  });
+
+  test("while html edits wait, keeps nothing new, and makes them on apply, then keeps all", async () => {
+    const list = toKept([
+      { id: 1, kind: "attr", target: { selector: "h1" }, property: "title", before: null, after: "a" },
+      { id: 2, kind: "text", target: { selector: "h1" }, property: "text", before: "x", after: "y" },
+    ]).kept;
+    const store = memoryStore(list);
+    const log = createEditLog();
+    const run: Replay = (into, entries, hold) => {
+      if (hold) return { applied: [], skipped: [], waiting: entries.map((one) => readSavedEdit(one)).filter((one) => one !== null) };
+      for (const one of entries) into.record({ ...change(""), edit: readSavedEdit(one) ?? change("").edit });
+      return { applied: into.list(), skipped: [], waiting: [] };
+    };
+    const keep = createKeeper({ log, store, view: VIEW, replay: async () => run, settled: async () => undefined });
+    await flush();
+    await flush();
+    expect(keep.waiting()).toHaveLength(2);
+    log.record(change("mine"));
+    expect(store.saved).toEqual([]);
+    keep.applyWaiting();
+    expect(keep.waiting()).toEqual([]);
+    expect(readKept(store.value)?.edits.map((one) => one.after)).toEqual(["mine", "a", "y"]);
+    keep.stop();
+  });
+
+  test("keeps nothing while the kept edits wait to be made, and the user's edits of that time once they are", async () => {
+    const store = memoryStore(toKept([{ id: 1, ...change("kept").edit }]).kept);
+    const log = createEditLog();
+    let settle = () => undefined as void;
+    const run: Replay = (into) => {
+      into.record(change("kept"));
+      return { applied: [], skipped: [], waiting: [] };
+    };
+    const keep = createKeeper({ log, store, view: VIEW, replay: async () => run, settled: () => new Promise((resolve) => (settle = () => resolve())) });
+    log.record(change("early"));
+    expect(store.saved).toEqual([]);
+    settle();
+    await flush();
+    await flush();
+    expect(readKept(store.value)?.edits.map((one) => one.after)).toEqual(["early", "kept"]);
+    keep.stop();
+  });
+
+  test("a keeper stopped before its replay ran leaves the page to the next one", async () => {
+    const store = memoryStore(toKept([{ id: 1, ...change("kept").edit }]).kept);
+    const view = {} as Window;
+    let runs = 0;
+    let settle = () => undefined as void;
+    const run: Replay = () => {
+      runs++;
+      return { applied: [], skipped: [], waiting: [] };
+    };
+    const first = createKeeper({ log: createEditLog(), store, view, replay: async () => run, settled: () => new Promise((resolve) => (settle = () => resolve())) });
+    first.stop();
+    settle();
+    await flush();
+    await flush();
+    expect(runs).toBe(0);
+    const second = createKeeper({ log: createEditLog(), store, view, replay: async () => run, settled: async () => undefined });
+    await flush();
+    await flush();
+    expect(runs).toBe(1);
+    second.stop();
+  });
+
+  test("an edit made in another window is not kept, also once that window's page went", () => {
+    const store = memoryStore({ v: 1, edits: [] });
+    const log = createEditLog();
+    const frame = new EventTarget() as unknown as Window;
+    const keep = createKeeper({ log, store, view: VIEW, settled: async () => undefined });
+    log.record(change("in frame", frame));
+    frame.dispatchEvent(new Event("pagehide"));
+    log.record(change("main"));
+    expect(readKept(store.value)?.edits.map((one) => one.after)).toEqual(["main"]);
+    expect(keep.kept()).toBe(1);
+    keep.stop();
+  });
+
+  test("an edit too big to keep leaves the switch on, with a store that tells of its own writes", () => {
+    const store = memoryStore(null);
+    const log = createEditLog();
+    const keep = createKeeper({ log, store, view: VIEW, settled: async () => undefined });
+    const subscribed = store.subscribe(() => undefined);
+    keep.set(true);
+    log.record({ ...change(""), edit: { kind: "html", target: { selector: "main" }, property: "html", before: "x".repeat(70 * 1024), after: "<main></main>" } });
+    store.hear();
+    expect(keep.on()).toBe(true);
+    expect(keep.cut()).toBe(1);
+    subscribed();
+    keep.stop();
   });
 
   test("says how many edits are past the caps while on", () => {
@@ -309,17 +473,44 @@ describe("the page's own store", () => {
 
   test("keeps a page's edits under its path, and the pages kept longest ago go past the cap", () => {
     const local = storage();
-    for (let page = 0; page < MAX_PAGES + 2; page++) {
-      at(`/p${page}`, local);
-      localEditsStore().save({ v: 1, edits: [] });
-    }
+    at("/", local);
+    for (let page = 0; page < MAX_PAGES; page++) local.setItem(`${EDITS_KEY}/p${page}`, JSON.stringify({ v: 1, edits: [], at: 1000 + page }));
+    localEditsStore().save({ v: 1, edits: [] });
     const kept = Array.from({ length: local.length }, (_, index) => local.key(index));
     expect(kept).toHaveLength(MAX_PAGES);
-    expect(kept).toContain(`${EDITS_KEY}/p${MAX_PAGES + 1}`);
-    at(`/p${MAX_PAGES + 1}`, local);
+    expect(kept).toContain(`${EDITS_KEY}/`);
+    expect(kept).not.toContain(`${EDITS_KEY}/p0`);
+    expect(kept).toContain(`${EDITS_KEY}/p1`);
     expect(localEditsStore().load()).toMatchObject({ v: 1, edits: [] });
     localEditsStore().save(null);
     expect(localEditsStore().load()).toBeNull();
+  });
+
+  test("keeps the edits under the path the page loaded at, after the app's router moved", () => {
+    const local = storage();
+    at("/shop", local);
+    const store = localEditsStore();
+    window.location.pathname = "/shop/cart";
+    store.save({ v: 1, edits: [] });
+    expect(local.getItem(`${EDITS_KEY}/shop`)).not.toBeNull();
+    expect(local.getItem(`${EDITS_KEY}/shop/cart`)).toBeNull();
+    store.save(null);
+    expect(local.length).toBe(0);
+  });
+
+  test("where the storage is full, forgets the pages kept longest ago until the page fits", () => {
+    const local = storage();
+    const set = local.setItem;
+    local.setItem = (key: string, value: string) => {
+      if (local.length >= 3 && local.getItem(key) === null) throw new Error("QuotaExceededError");
+      set(key, value);
+    };
+    at("/new", local);
+    for (const [page, when] of [["/a", 3], ["/b", 1], ["/c", 2]] as const) set(`${EDITS_KEY}${page}`, JSON.stringify({ v: 1, edits: [], at: when }));
+    localEditsStore().save({ v: 1, edits: [] });
+    expect(local.getItem(`${EDITS_KEY}/new`)).not.toBeNull();
+    expect(local.getItem(`${EDITS_KEY}/b`)).toBeNull();
+    expect(local.getItem(`${EDITS_KEY}/a`)).not.toBeNull();
   });
 
   test("reads and writes nothing in fresh mode", () => {

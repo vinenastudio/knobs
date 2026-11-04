@@ -385,6 +385,9 @@ function keysAbove(): KeysStore | null {
   };
 }
 
+/** The page's path as it loaded, which its kept edits go under: a move of the app's router later keeps them there. */
+const editsPath = location.pathname;
+
 /** The edits kept for this page after a reload, as the bridge last said: undefined until it says. */
 let keptEdits: KeptEdits | null | undefined;
 const editsHeard = new Set<() => void>();
@@ -400,7 +403,7 @@ const editsStore: EditsStore = {
   load: () => keptEdits,
   save: (kept) => {
     if (navigator.userActivation.isActive) {
-      void ask({ kept, path: location.pathname, type: 'edits' }).then(({ error }) => {
+      void ask({ kept, path: editsPath, type: 'edits' }).then(({ error }) => {
         if (error !== undefined) {
           queueMicrotask(() => {
             throw new Error(`knobs: the edits were not kept after a reload: ${error}`);

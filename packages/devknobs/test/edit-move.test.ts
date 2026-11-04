@@ -4,7 +4,7 @@ import { type Change, createEditLog } from "../src/edit/log";
 import { CHANGES_HEAD, diffText, netChanges, promptText } from "../src/edit/text";
 import { actionsFor, treeEditKey } from "../src/ui/domedit";
 import { dropAt, type Row } from "../src/ui/domtree";
-import { as, elem, page, type PageNode, text } from "./dom-page";
+import { as, elem, page, type PageNode, shadow, text } from "./dom-page";
 
 const AT = { selector: "li.c" };
 const PLACES = { from: { parent: "ul", next: null }, to: { parent: "ul", next: "li.a" } };
@@ -109,6 +109,28 @@ describe("a move", () => {
     list.insertBefore(c, b);
     fresh.undo();
     expect(names(list)).toBe("a # c b");
+  });
+
+  test("never goes into an element in a shadow root inside it", () => {
+    const inner = elem("span");
+    const host = elem("x-card");
+    shadow(host, elem("div", {}, inner));
+    const dragged = elem("section", {}, host);
+    page(() => [elem("head"), elem("body", {}, dragged)]);
+    expect(canHold(as(inner), el(dragged))).toBe(false);
+    expect(moveEdit(AT, el(dragged), { parent: el(inner), next: null }, PLACES)).toBeNull();
+    expect(dropAt(row(inner), 0.5, el(dragged), false)).toBeNull();
+  });
+
+  test("never goes into a script, a textarea, the head or the root element, nor before the head", () => {
+    const head = elem("head");
+    const a = elem("div");
+    const script = elem("script");
+    const textarea = elem("textarea");
+    const body = elem("body", {}, a, script, textarea);
+    page(() => [head, body]);
+    for (const parent of [script, textarea, head, body.parentNode as PageNode]) expect(canHold(as(parent), el(a))).toBe(false);
+    expect(dropAt(row(head), 0.1, el(a), false)).toBeNull();
   });
 
   test("finds the elements beside one, devknobs' own left out", () => {

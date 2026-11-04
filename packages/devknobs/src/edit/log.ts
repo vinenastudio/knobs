@@ -87,6 +87,8 @@ export interface Change {
 export interface Recorded {
   edit: Edit;
   change: Change;
+  /** The window the edit was made in, as it was recorded: it stays when the change lets go of its page. */
+  readonly view: Window | null;
 }
 
 export interface EditLog {
@@ -175,7 +177,7 @@ export function createEditLog(): EditLog {
 
   return {
     record(change) {
-      const one: Recorded = { edit: { id: ++ids, ...change.edit }, change };
+      const one: Recorded = { edit: { id: ++ids, ...change.edit }, change, view: change.view ?? null };
       if (!apply(one)) return null;
       watch(change.view);
       done.push(one);

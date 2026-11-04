@@ -3,6 +3,7 @@ import { checkPatch } from "./engine/check";
 import { describe as describeKnobs, type KnobDescription } from "./engine/describe";
 import { DEVICES } from "./engine/devices";
 import { isDevknobsFrame } from "./engine/frame";
+import { fresh } from "./engine/fresh";
 import { GEO_PRESETS } from "./engine/geo";
 import { LOCALE_PRESETS } from "./engine/locale";
 import { TIME_ZONE_PRESETS } from "./engine/time";
@@ -242,8 +243,8 @@ export function mount(options: MountOptions = {}): void {
   engine.start(options);
   mounted = options;
   attach(options);
-  // The edits kept for the page, made again once it settles. The width knob's frame keeps none.
-  if (!isDevknobsFrame()) startKeep(options.editsStore);
+  // The edits kept for the page, made again once it settles. The width knob's frame keeps none, nor does fresh mode, which shows a first visit.
+  if (!isDevknobsFrame() && !fresh()) startKeep(options.editsStore);
 }
 
 /** The panel, its keys, grab and inspect, for the engine that runs. */
@@ -594,7 +595,8 @@ export async function setEdits(list: readonly unknown[]): Promise<Replayed> {
   if (host) return host(list);
   if (!Array.isArray(list)) throw new TypeError("devknobs.setEdits takes a list of edits, as edits() gives them");
   const { replayEdits } = await import("./edit/replay");
-  return replayEdits(editLog, list);
+  const { applied, skipped } = replayEdits(editLog, list);
+  return { applied, skipped };
 }
 
 /** Undo the last edit in force, as Z does in the panel. Returns it, or null with none. */

@@ -5,8 +5,12 @@
  * As the page loads again and settles, the kept edits are made again in
  * order, each only where the page still has its target and the value before
  * it, through the same log as the panel's, so undo and the changes list take
- * them as any other. Turning the switch off forgets them. Forced states are
- * no edits, and are never kept, nor are edits made in the width knob's frame.
+ * them as any other. An html or attribute edit, which could change what a
+ * script of the page does, is never made as the page loads: it and all after
+ * it wait for the user's click on `apply`, as a page script may have planted
+ * them. Turning the switch off forgets them. Forced states are no edits, and
+ * are never kept, nor are edits made in the width knob's frame, nor one that
+ * could run a script (`risk.ts`).
  *
  * Without the extension they are in the page's `localStorage`, one item per
  * page (`EDITS_KEY` and the path), none in fresh mode; the extension keeps
@@ -21,6 +25,7 @@ import { realNow } from "../engine/clock";
 import { webStorage } from "../engine/fresh";
 import { newer, stamped } from "../engine/stored";
 import { type Edit, type EditKind, type EditLog, type EditPlace, edits } from "./log";
+import { riskyEdit } from "./risk";
 
 /** An edit as kept and as `setEdits` takes it: an `edits()` entry, its id left out. */
 export type SavedEdit = Omit<Edit, "id">;
@@ -126,26 +131,36 @@ export function readSavedEdit(value: unknown): SavedEdit | null {
   return read;
 }
 
-/** What a page keeps, or null where it keeps nothing devknobs reads: no object, a newer version, too many edits or one that is none. */
+/**
+ * What a page keeps, or null where it keeps nothing devknobs reads: no
+ * object, a newer version, too many edits, one that is none, or one that
+ * could run a script, which devknobs never keeps, so a script planted it.
+ */
 export function readKept(value: unknown): KeptEdits | null {
   if (!isFields(value) || newer(value, EDITS_VERSION) || !Array.isArray(value.edits) || value.edits.length > MAX_EDITS) return null;
   const list: SavedEdit[] = [];
   for (const one of value.edits) {
     const read = readSavedEdit(one);
-    if (!read) return null;
+    if (!read || riskyEdit(read)) return null;
     list.push(read);
   }
   return { v: EDITS_VERSION, edits: list };
 }
 
-/** Edits as kept: the first that fit in `MAX_EDITS` and `MAX_BYTES`, and how many more there were. */
+/**
+ * Edits as kept: the first that fit in `MAX_EDITS` and `MAX_BYTES`, as the
+ * list's json counts them, up to the first that `readSavedEdit` would not
+ * read back or that could run a script, and how many more there were. A
+ * later edit goes on from those before it, so none past that point is kept.
+ */
 export function toKept(list: readonly Edit[]): { kept: KeptEdits; cut: number } {
   const kept: SavedEdit[] = [];
-  let size = 0;
+  // The list's brackets, and a comma or the closing bracket after each edit.
+  let size = 1;
   for (const edit of list) {
     const { id: _id, ...saved } = edit;
     size += JSON.stringify(saved).length + 1;
-    if (kept.length >= MAX_EDITS || size > MAX_BYTES) break;
+    if (kept.length >= MAX_EDITS || size > MAX_BYTES || !readSavedEdit(saved) || riskyEdit(saved)) break;
     kept.push(saved);
   }
   return { kept: stamped({ edits: kept }, EDITS_VERSION), cut: list.length - kept.length };
@@ -164,10 +179,6 @@ export interface EditsStore {
   subscribe(listener: () => void): () => void;
 }
 
-function pageKey(): string {
-  return `${EDITS_KEY}${window.location.pathname}`;
-}
-
 /** When a kept item was written, 0 where it does not say. */
 function writtenAt(text: string | null): number {
   try {
@@ -178,19 +189,53 @@ function writtenAt(text: string | null): number {
   }
 }
 
-/** Forget the pages kept longest ago, past `MAX_PAGES`, never `kept`, the one just written. */
-function evict(storage: Storage, kept: string): void {
+/** The other pages kept, newest first, never `kept`. */
+function otherPages(storage: Storage, kept: string): string[] {
   const pages: { key: string; at: number }[] = [];
   for (let index = 0; index < storage.length; index++) {
     const key = storage.key(index);
     if (key?.startsWith(EDITS_KEY) && key !== kept) pages.push({ key, at: writtenAt(storage.getItem(key)) });
   }
-  pages.sort((a, b) => b.at - a.at);
-  for (const page of pages.slice(MAX_PAGES - 1)) storage.removeItem(page.key);
+  return pages.sort((a, b) => b.at - a.at).map((page) => page.key);
 }
 
-/** The page's own `localStorage`, an item per path. In fresh mode nothing is read or written. */
-export function localEditsStore(): EditsStore {
+/** Forget the pages kept longest ago, past `MAX_PAGES`, never `kept`, the one just written. */
+function evict(storage: Storage, kept: string): void {
+  for (const key of otherPages(storage, kept).slice(MAX_PAGES - 1)) storage.removeItem(key);
+}
+
+/** Write a page's item; where the storage is full, forget the pages kept longest ago, one at a time, until it fits. */
+function write(storage: Storage, key: string, text: string): void {
+  const older = otherPages(storage, key);
+  for (;;) {
+    try {
+      storage.setItem(key, text);
+      return;
+    } catch (error) {
+      const oldest = older.pop();
+      if (!oldest) throw error;
+      storage.removeItem(oldest);
+    }
+  }
+}
+
+/** The page's path now, `/` where it has none to read. */
+function pathNow(): string {
+  try {
+    return window.location?.pathname ?? "/";
+  } catch {
+    return "/";
+  }
+}
+
+/**
+ * The page's own `localStorage`, an item per path. The path is the one the
+ * page loaded at, read once, so a move of the app's router to another path
+ * keeps and forgets the edits of the page they were made on. In fresh mode
+ * nothing is read or written.
+ */
+export function localEditsStore(path: string = pathNow()): EditsStore {
+  const pageKey = (): string => `${EDITS_KEY}${path}`;
   return {
     load() {
       try {
@@ -206,7 +251,7 @@ export function localEditsStore(): EditsStore {
       try {
         if (kept === null) storage.removeItem(pageKey());
         else {
-          storage.setItem(pageKey(), JSON.stringify({ ...kept, at: realNow() }));
+          write(storage, pageKey(), JSON.stringify({ ...kept, at: realNow() }));
           evict(storage, pageKey());
         }
       } catch {
@@ -223,8 +268,14 @@ export function localEditsStore(): EditsStore {
   };
 }
 
-/** Makes kept edits again on the page, through the log. */
-export type Replay = (log: EditLog, list: readonly unknown[]) => Replayed;
+/** What making kept edits again came to, with those that wait for the user. */
+export interface Replaying extends Replayed {
+  /** The edits from the first one that waits for the user's click on: an html or attribute edit. */
+  waiting: SavedEdit[];
+}
+
+/** Makes kept edits again on the page, through the log. With `hold`, an html or attribute edit and all after it wait. */
+export type Replay = (log: EditLog, list: readonly unknown[], hold: boolean) => Replaying;
 
 /** What the replay on load came to: how many edits were made again, and those that were not. */
 export interface Restored {
@@ -235,10 +286,20 @@ export interface Restored {
 export interface Keeper {
   /** Whether the page keeps its edits: the switch. */
   on(): boolean;
-  /** Turn the switch on, which keeps the edits in force now, or off, which forgets them. */
+  /** Turn the switch on, which keeps the edits in force now, or off, which forgets them, those that wait too. */
   set(on: boolean): void;
   /** What the replay on load came to, or null where none ran. */
   restored(): Restored | null;
+  /**
+   * The kept edits that wait for the user: from the first html or attribute
+   * edit on, which could change what a script of the page does, so none is
+   * made as the page loads. Until they are made, nothing new is kept.
+   */
+  waiting(): readonly SavedEdit[];
+  /** Make the edits that wait. Only for a trusted click on the panel's own button. */
+  applyWaiting(): void;
+  /** How many edits in force are kept. */
+  kept(): number;
   /** How many edits in force are past the caps, and not kept. */
   cut(): number;
   /** Hear the switch, the replay or the cut change. Returns the way to stop. */
@@ -299,51 +360,80 @@ export function createKeeper(options: KeeperOptions): Keeper {
   let known = false;
   let on = false;
   let restored: Restored | null = null;
+  let waiting: SavedEdit[] = [];
+  /** What makes edits again, once loaded, for those that wait. */
+  let run: Replay | null = null;
+  let kept = 0;
   let cut = 0;
-  /** The kept edits are being made again: that is no change to keep. */
-  let replaying = false;
+  /** The kept edits wait to be made again, or are being made: nothing is kept meanwhile. */
+  let pending = false;
+  /** The edits changed while pending: they are kept once it ends. */
+  let dirty = false;
   let stopped = false;
 
   function tell(): void {
     for (const listener of Array.from(listeners)) listener();
   }
 
-  /** The edits in force made on this page, and not in another window. */
+  /** The edits in force made on this page, as recorded, and not in another window. */
   function keepable(): Edit[] {
     const recorded = log.recorded();
     return log.list().filter((_edit, at) => {
-      const made = recorded[at]?.change.view;
+      const made = recorded[at]?.view;
       return !made || made === view;
     });
   }
 
+  /** Keep the edits in force, unless kept edits are still to be made, which would be lost. */
   function save(): void {
-    const kept = toKept(keepable());
-    cut = kept.cut;
+    if (pending || waiting.length > 0) {
+      dirty = true;
+      return;
+    }
+    dirty = false;
+    const list = keepable();
+    const result = toKept(list);
+    kept = result.kept.edits.length;
+    cut = result.cut;
     try {
-      store.save(kept.kept);
+      store.save(result.kept);
     } catch {
       // A store that went, as an extension reloaded: the edits hold until the page goes.
     }
   }
 
+  /** Make edits again through the log, and add what came of it to what the panel says. */
+  function make(replay: Replay, list: readonly unknown[], hold: boolean): void {
+    let result: Replaying;
+    // The edits it makes are those kept already: only a change of the user's meanwhile is new.
+    const changed = dirty;
+    pending = true;
+    try {
+      result = replay(log, list, hold);
+    } finally {
+      pending = false;
+      dirty = changed;
+    }
+    waiting = result.waiting;
+    restored = { kept: (restored?.kept ?? 0) + result.applied.length, missed: [...(restored?.missed ?? []), ...result.skipped] };
+    // Those not made stay kept until the next change; the ones that waited, once made, are kept in the order they were made.
+    if (on && (dirty || !hold)) save();
+    tell();
+  }
+
   async function replay(list: SavedEdit[]): Promise<void> {
-    Reflect.set(view, REPLAYED, true);
+    pending = true;
     try {
       await wait();
-      const run = await loadReplay();
+      const loaded = await loadReplay();
       if (stopped) return;
-      replaying = true;
-      let result: Replayed;
-      try {
-        result = run(log, list);
-      } finally {
-        replaying = false;
-      }
-      restored = { kept: result.applied.length, missed: result.skipped };
-      tell();
+      Reflect.set(view, REPLAYED, true);
+      run = loaded;
+      make(loaded, list, true);
     } catch {
-      // What makes them again did not load: the page stays as it was written.
+      // What makes them again did not load: the page stays as it was written, and the next mount tries again.
+      pending = false;
+      if (dirty && on && !stopped) save();
     }
   }
 
@@ -355,19 +445,22 @@ export function createKeeper(options: KeeperOptions): Keeper {
       value = null;
     }
     if (value === undefined) return;
-    const kept = readKept(value);
-    on = kept !== null;
+    const read = readKept(value);
+    on = read !== null;
     if (!known) {
       known = true;
-      if (kept && kept.edits.length > 0 && Reflect.get(view, REPLAYED) !== true) void replay(kept.edits);
+      if (read && read.edits.length > 0 && Reflect.get(view, REPLAYED) !== true) void replay(read.edits);
     }
-    if (!on) restored = null;
+    if (!on) {
+      restored = null;
+      waiting = [];
+    }
     tell();
   }
 
   const stopStore = store.subscribe(heard);
   const stopLog = log.subscribe(() => {
-    if (on && known && !replaying) save();
+    if (on && known) save();
     // The cut is told whatever the switch: it shows only while it is on.
     tell();
   });
@@ -381,6 +474,7 @@ export function createKeeper(options: KeeperOptions): Keeper {
       if (next) save();
       else {
         restored = null;
+        waiting = [];
         cut = 0;
         try {
           store.save(null);
@@ -391,6 +485,12 @@ export function createKeeper(options: KeeperOptions): Keeper {
       tell();
     },
     restored: () => restored,
+    waiting: () => waiting,
+    applyWaiting() {
+      if (!run || waiting.length === 0 || pending) return;
+      make(run, waiting, false);
+    },
+    kept: () => (on ? kept : 0),
     cut: () => (on ? cut : 0),
     subscribe(listener) {
       listeners.add(listener);

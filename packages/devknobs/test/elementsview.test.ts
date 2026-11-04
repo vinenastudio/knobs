@@ -230,6 +230,9 @@ describe("the elements view", () => {
       on: () => on,
       set: (next) => void turned.push(next),
       restored: () => null,
+      waiting: () => [],
+      applyWaiting: () => undefined,
+      kept: () => 0,
       cut: () => 0,
       subscribe: (listener) => {
         listeners.add(listener);

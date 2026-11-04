@@ -3,8 +3,10 @@
  * each as a `-` line before and a `+` line after under the place it is in,
  * and the ways to hand them on: the prompt for an agent, the diff, and undo
  * all. With edits kept after a reload, a line says how many were made again
- * as the page loaded and lists those that were not, and one says when edits
- * past the caps are not kept. It shows only while there is something to say. To use it:
+ * as the page loaded and lists those that were not, one says when edits
+ * past the caps are not kept, and kept html and attribute edits wait there,
+ * listed, for a click on their `apply`: they could change what a script of
+ * the page does, so only the user makes them again. It shows only while there is something to say. To use it:
  *
  *   const changes = createChanges(edits, copy, isMac(), keeper());
  *   view.append(changes.node); changes.destroy();
@@ -36,12 +38,24 @@ export function keptLine(kept: number, missed: number): string {
   return missed > 0 ? `${made}, ${missed} could not be found` : made;
 }
 
+/** What the line over the kept edits that wait says. */
+export function waitLine(markup: number, more: number): string {
+  const html = `${markup} kept html ${markup === 1 ? "edit waits" : "edits wait"}`;
+  return more > 0 ? `${html}, with ${more} ${more === 1 ? "edit" : "edits"} after them` : html;
+}
+
+/** An edit that was not made again, or waits: `text on h1.title`, then why where it was not made. */
+function editLine(value: unknown): string | null {
+  const edit = readSavedEdit(value);
+  if (!edit) return null;
+  const what = edit.kind === edit.property || edit.kind.startsWith("css-") || edit.kind === "attr" ? data(edit.property) : edit.kind;
+  return `${what} on ${data(edit.target.selector)}`;
+}
+
 /** An edit that was not made again, as its line says it: `text on h1.title: not found on the page`, `padding on a.cta: ...`. */
 export function missedLine(skipped: Skipped): string {
-  const edit = readSavedEdit(skipped.edit);
-  if (!edit) return skipped.reason;
-  const what = edit.kind === edit.property || edit.kind.startsWith("css-") || edit.kind === "attr" ? data(edit.property) : edit.kind;
-  return `${what} on ${data(edit.target.selector)}: ${skipped.reason}`;
+  const line = editLine(skipped.edit);
+  return line ? `${line}: ${skipped.reason}` : skipped.reason;
 }
 
 export interface Changes {
@@ -60,6 +74,11 @@ export function createChanges(log: EditLog, copy: Copy, mac = isMac(), keep: Kee
   node.setAttribute("aria-label", "changes");
   const head = el("div", "changes-head");
   const kept = el("div", "changes-kept");
+  const apply = button("chip changes-apply", "apply");
+  // Only the user's own click on this button makes the kept html edits: a page script's click is no trusted one.
+  apply.addEventListener("click", (event: Event) => {
+    if (event.isTrusted && event.currentTarget === apply) keep?.applyWaiting();
+  });
   const list = el("div", "changes-list");
   const prompt = button("chip changes-go", "copy prompt for agent");
   const diff = button("chip", "copy diff");
@@ -108,7 +127,15 @@ export function createChanges(log: EditLog, copy: Copy, mac = isMac(), keep: Kee
       said.push(el("div", "changes-kept-line", keptLine(restored.kept, restored.missed.length)));
       for (const one of restored.missed) said.push(el("div", "changes-missed", missedLine(one)));
     }
-    if (cut > 0) said.push(el("div", "changes-kept-line", `only the first ${edits.length - cut} edits are kept after a reload`));
+    const waiting = keep?.waiting() ?? [];
+    if (waiting.length > 0) {
+      const markup = waiting.filter((one) => one.kind === "html" || one.kind === "attr").length;
+      const head = el("div", "changes-kept-line changes-wait", `${waitLine(markup, waiting.length - markup)}: `);
+      head.append(apply);
+      said.push(head);
+      for (const one of waiting) said.push(el("div", "changes-missed", editLine(one) ?? ""));
+    }
+    if (cut > 0) said.push(el("div", "changes-kept-line", `only the first ${keep?.kept() ?? 0} edits are kept after a reload`));
     kept.replaceChildren(...said);
     kept.hidden = said.length === 0;
     node.hidden = count === 0 && said.length === 0;

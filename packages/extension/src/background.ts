@@ -5,9 +5,8 @@ import {
   type Answer,
   type Carry,
   detachMessage,
-  EDITS_PAGES,
-  EDITS_PREFIX,
   editsKey,
+  editsToForget,
   KEYS_KEY,
   PREFER_KEY,
   REAL_PHONE_KEY,
@@ -785,23 +784,6 @@ function unbypass(tabId: number): Promise<void> {
   });
 }
 
-/** Forget the pages whose edits were kept longest ago, past `EDITS_PAGES`, never `kept`, the one just written. */
-async function evictEdits(kept: string) {
-  const stored = await chrome.storage.local.get(null);
-  const pages = Object.entries(stored)
-    .filter(([key]) => key.startsWith(EDITS_PREFIX) && key !== kept)
-    .map(([key, value]) => {
-      const at: unknown =
-        typeof value === 'object' && value !== null ? Reflect.get(value, 'at') : 0;
-      return { at: typeof at === 'number' ? at : 0, key };
-    })
-    .toSorted((a, b) => b.at - a.at);
-  const old = pages.slice(EDITS_PAGES - 1).map(({ key }) => key);
-  if (old.length > 0) {
-    await chrome.storage.local.remove(old);
-  }
-}
-
 /** Keep a page's edits, on the tab's own origin, or with null forget them. */
 async function keepEdits(
   url: string | undefined,
@@ -817,7 +799,10 @@ async function keepEdits(
     return;
   }
   await chrome.storage.local.set({ [key]: { ...kept, at: Date.now() } });
-  await evictEdits(key);
+  const old = editsToForget(await chrome.storage.local.get(null), key);
+  if (old.length > 0) {
+    await chrome.storage.local.remove(old);
+  }
 }
 
 async function answer(tabId: number, question: Question, url: string | undefined): Promise<Answer> {

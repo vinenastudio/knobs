@@ -78,5 +78,9 @@ hidden, deleted or moved.
 the switch `keep edits after reload` at the top of the view keeps the edits
 for the page: after a reload they are made again where the page still has
 them, and the changes say how many came back and which could not be found.
-it is off at first, and off forgets them. with the npm package they are in
-the page's `localStorage`, with the extension in its own storage.
+it is off at first, and off forgets them. html and attribute edits are
+never made on load: they wait in the changes until you click `apply`, as a
+page script could have planted them, and one that could run a script is
+never made. kept edits hold the page's text, attribute values and markup as
+edited. with the npm package they are in the page's `localStorage`, with the
+extension in its own storage.

@@ -284,14 +284,26 @@ export function movable(node: Node): node is Element {
   return node.querySelector("[data-devknobs]") === null;
 }
 
-/** Elements with no content of their own, which take no element moved into them. */
-const EMPTY = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr", "template"]);
+/**
+ * Elements that take no element moved into them: those with no content of
+ * their own, those whose content is text or another document, and `<html>`
+ * and `<head>`, which hold only the head and body, and what goes in a head.
+ */
+const EMPTY = new Set([
+  ...["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr", "template"],
+  ...["script", "style", "textarea", "title", "iframe", "noscript", "object", "html", "head"],
+]);
 
-/** Whether an element can take `element` moved into it: on the page, not devknobs' own, not the element or one in it, not a void element. */
+/** The node above, through a shadow root to its host. */
+function above(node: Node): Node | null {
+  return isShadowRoot(node) ? node.host : node.parentNode;
+}
+
+/** Whether an element can take `element` moved into it: on the page, not devknobs' own, not the element or one in it, through shadow roots too, and not one of `EMPTY`. */
 export function canHold(parent: Node, element: Element): parent is Element {
   if (!isElement(parent) || !parent.isConnected || isOwnElement(parent) || parent === element) return false;
   if (parent.namespaceURI === HTML && EMPTY.has(parent.localName)) return false;
-  for (let at: Node | null = parent; at; at = at.parentNode) if (at === element) return false;
+  for (let at: Node | null = parent; at; at = above(at)) if (at === element) return false;
   return true;
 }
 

@@ -350,18 +350,35 @@ the switch `keep edits after reload` at the top of the view is off at
 first, and a reload loses the edits. on, it keeps the edits in force for the
 page, its origin and path without the query, and keeps them again on each
 change: their kinds, selectors, rules and values before and after, as plain
-json, no node of the page. as the page loads again, once it loaded and
-nothing on it changed for 300 milliseconds (3 seconds at most, so a
-framework has drawn it), devknobs makes them again in order. each is made
+json, no node of the page, though they hold the page's text, attribute
+values and element markup as edited (up to 64K characters each). as the
+page loads again, once it loaded and nothing on it changed for 300
+milliseconds (3 seconds at most, so a framework has drawn it), devknobs
+makes them again in order. each is made
 only where its element is found by its selector, its rule by its selector,
 what it sits in and its stylesheet, and the page still has the value it had
-before it; a new rule is made anew. the changes say
+before it; a new rule is made anew. after a delete, a move or an html edit
+that is not made, no later edit is (`an earlier edit it may depend on was
+not made`): it may stand on that one. the changes say
 `5 edits kept from before the reload`, or `4 edits kept from before the
 reload, 1 could not be found` with a line for each one not made and why
 (not found on the page, its rule is not on the page, the page has another
 value now). from then on they are edits like any other: undo, the changes
 and the prompt take them. the next change keeps the edits in force then, so
-those not found are dropped.
+those not made are dropped from what is kept.
+
+html and attribute edits are never made as the page loads. from the first
+of them on, the kept edits wait in the changes, listed under `1 kept html
+edit waits` (with how many edits come after it), until you click its
+`apply`: a page script could have planted them, and markup or an attribute
+can run a script. only your own click on that button makes them, and even
+then an html edit with `<script>`, a frame, `<object>`, `<embed>`, `<base>`,
+`<meta>` or `<link>`, an `on…` handler, a `srcdoc` or a `javascript:`
+address, and such an attribute, is not made (`could run a script`), nor
+kept. while edits wait, nothing new is kept, so what is kept stays as it
+was; turning the switch off forgets them too. edits made in another page
+of the site keep under that page's path, the one it loaded at, also once
+its app's router moved.
 
 turning the switch off forgets the page's edits; it leaves the ones on the
 page. the switch is on for a page while it keeps edits, in every tab. a
@@ -370,7 +387,8 @@ say `only the first 200 edits are kept after a reload`. edits are kept for 20
 pages at most: the page kept longest ago is forgotten first. forced states
 are no edits and are never kept, nor are edits made in the width knob's
 frame. with the npm package they are in the page's `localStorage`, one item
-per page, `devknobs:edits:` and the path, and none in fresh mode; with the
+per page, `devknobs:edits:` and the path; in fresh mode nothing is kept or
+made again; with the
 extension, in the extension's own storage (see
 [the extension](/docs/extension)). see [privacy](/docs/privacy) for how to
 clear them.

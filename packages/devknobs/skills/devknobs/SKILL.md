@@ -231,8 +231,14 @@ window.devknobs.undoEdit(); // undoes the last edit in force, returns it or null
 `setEdits` makes each edit only where its element is found by its selector
 and the page still has its `before` value, through the same log as the
 panel's, so the user sees them and can undo them. `skipped` lists each one not
-made as `{ edit, reason }`. Once an edit is in the code, `setEdits` skips it
-with `the page has another value now`: that tells you the code matches.
+made as `{ edit, reason }`, and after a delete, move or html edit that was not
+made, every later one is skipped too. A `css-rule` is always made anew, even
+once the rule is in the code, so read its declarations instead. A value edit
+already in the code is skipped with `the page has another value now`, and a
+node deleted in the code with `not found on the page`: both tell you the code
+matches. An html or attribute edit that could run a script is never made.
+With `keep edits after reload` on, html and attribute edits kept from before
+wait for the user's click on `apply` in the panel.
 
 ## Check a hover or focus state
 
