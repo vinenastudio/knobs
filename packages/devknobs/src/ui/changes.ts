@@ -53,11 +53,20 @@ export const WAIT_NOTE = "apply only edits you made on this page";
 /** The most characters a waiting edit's value shows, cut at its end. */
 export const WAIT_MAX = 120;
 
-/** What a waiting edit makes, as apply would: the markup, `name="value"`, or the value after, cut short, as data. */
-export function waitValue(edit: SavedEdit): string {
-  const after = edit.after === null ? "(removed)" : edit.kind === "attr" ? `${edit.property}="${edit.after}"` : edit.after;
-  const chars = [...after];
-  return data(chars.length > WAIT_MAX ? `${chars.slice(0, WAIT_MAX - 1).join("")}…` : after);
+/** What a waiting edit makes, as apply would: the markup, `name="value"`, or the value after. */
+function waitText(edit: SavedEdit): string {
+  return edit.after === null ? "(removed)" : edit.kind === "attr" ? `${edit.property}="${edit.after}"` : edit.after;
+}
+
+/** Whether a waiting edit's value is longer than its line shows at first. */
+export function waitCut(edit: SavedEdit): boolean {
+  return [...waitText(edit)].length > WAIT_MAX;
+}
+
+/** A waiting edit's value as data, cut short unless `full`. */
+export function waitValue(edit: SavedEdit, full = false): string {
+  const text = waitText(edit);
+  return data(!full && waitCut(edit) ? `${[...text].slice(0, WAIT_MAX - 1).join("")}…` : text);
 }
 
 /** An edit that was not made again, or waits: `text on h1.title`, then why where it was not made. */
@@ -91,9 +100,11 @@ export function createChanges(log: EditLog, copy: Copy, mac = isMac(), keep: Kee
   const head = el("div", "changes-head");
   const kept = el("div", "changes-kept");
   const apply = button("chip changes-apply", "apply");
+  /** The waiting edits the user showed whole. */
+  const shownWhole = new WeakSet<SavedEdit>();
   // Only the user's own click on this button makes the kept html edits: a page script's click is no trusted one.
   apply.addEventListener("click", (event: Event) => {
-    if (event.isTrusted && event.currentTarget === apply) keep?.applyWaiting();
+    if (event.isTrusted && event.currentTarget === apply && !apply.disabled) keep?.applyWaiting();
   });
   const list = el("div", "changes-list");
   const prompt = button("chip changes-go", "copy prompt for agent");
@@ -139,7 +150,8 @@ export function createChanges(log: EditLog, copy: Copy, mac = isMac(), keep: Kee
     const restored = keep?.restored() ?? null;
     const cut = keep?.cut() ?? 0;
     const said: HTMLElement[] = [];
-    if (restored) {
+    // Nothing made and nothing missed: the waiting line says it all.
+    if (restored && (restored.kept > 0 || restored.missed.length > 0)) {
       said.push(el("div", "changes-kept-line", keptLine(restored.kept, restored.missed.length)));
       for (const one of restored.missed) said.push(el("div", "changes-missed", missedLine(one)));
     }
@@ -150,8 +162,21 @@ export function createChanges(log: EditLog, copy: Copy, mac = isMac(), keep: Kee
       const head = el("div", "changes-kept-line changes-wait", `${waitLine(html, attributes, waiting.length - html - attributes)}: `);
       head.append(apply);
       said.push(head, el("div", "changes-kept-line changes-wait-note", WAIT_NOTE));
-      // Each with what apply makes, as text: the user sees the markup and the values before making them.
-      for (const one of waiting) said.push(el("div", "changes-missed", `${editLine(one) ?? ""}: ${waitValue(one)}`));
+      // Each with what apply makes, as text. A long one is cut, with `show all` for the rest, and apply waits until each is shown whole.
+      for (const one of waiting) {
+        const line = el("div", "changes-missed", `${editLine(one) ?? ""}: ${waitValue(one, shownWhole.has(one))}`);
+        if (waitCut(one) && !shownWhole.has(one)) {
+          const more = button("chip changes-show", "show all");
+          more.addEventListener("click", () => {
+            shownWhole.add(one);
+            draw();
+          });
+          line.append(" ", more);
+        }
+        said.push(line);
+      }
+      apply.disabled = waiting.some((one) => waitCut(one) && !shownWhole.has(one));
+      apply.title = apply.disabled ? "show each edit whole first" : "";
     }
     if (cut > 0) said.push(el("div", "changes-kept-line", `only the first ${keep?.kept() ?? 0} edits are kept after a reload`));
     kept.replaceChildren(...said);

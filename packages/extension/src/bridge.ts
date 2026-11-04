@@ -27,6 +27,10 @@ const ask = (request: Request) => chrome.runtime.sendMessage<Request, Response>(
 
 const base = chrome.runtime.getURL('content.js');
 
+// The path this page loaded at, read once: its kept edits go under it, whatever path the page's
+// router moves to, or the page names, later.
+const EDITS_PATH = location.pathname;
+
 document.addEventListener(TO_BRIDGE, (event) => {
   const detail = (event as CustomEvent<unknown>).detail;
   if (typeof detail !== 'string') {
@@ -39,7 +43,9 @@ document.addEventListener(TO_BRIDGE, (event) => {
     return;
   }
   // Any script of the page can send this event: only what devknobs sends goes on.
-  const request = readPageMessage(parsed);
+  const read = readPageMessage(parsed);
+  // Edits go under the path this page loaded at, as the bridge read it, never one the page names.
+  const request = read?.type === 'edits' ? { ...read, path: EDITS_PATH } : read;
   if (!request) {
     return;
   }
@@ -213,8 +219,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-// The edits kept for this page after a reload, the same way: the page at this origin and path.
-const EDITS_KEY = editsKey(location.origin, location.pathname);
+// The edits kept for this page after a reload, the same way: the page at this origin and the
+// path it loaded at (`EDITS_PATH`, above).
+const EDITS_KEY = editsKey(location.origin, EDITS_PATH);
 chrome.storage.local.get(EDITS_KEY, (stored) =>
   toPage({ kept: readKept(stored[EDITS_KEY]), type: 'edits' }),
 );

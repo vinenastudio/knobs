@@ -258,7 +258,10 @@ the page at once, into the same changes as the style edits:
   selected. undo puts it back where it stood
 - `⇧↑` and `⇧↓` (`Shift Up` and `Shift Down` off a Mac) move the selected
   element before the element above it or after the one below it, among the
-  elements in its parent; texts between them stay where they are
+  elements in its parent; texts between them stay where they are. a
+  `<script>`, frame, `<object>`, `<embed>`, `<base>`, `<link>` or `<meta>`,
+  and an element that holds one, does not move: moved, it would run, load
+  or read the page's addresses again
 - an element's line has a handle, `⋮⋮`, at its start, shown with the pointer
   on the line and on the selected line. drag it onto another element's line:
   its top quarter puts the element before that one, its bottom quarter after
@@ -377,10 +380,13 @@ then an html edit with `<script>`, a frame, `<object>`, `<embed>`, `<base>`,
 address, such an attribute (a `javascript:` item in an svg `values` list
 too), and any attribute or text of the page's own `<script>` (a data script
 such as `application/ld+json` too, and svg's), `<base>`, frame, `<object>`,
-`<embed>`, `<link>` or `<meta>`, is not made (`could run a script`), nor
-kept. the list shows what `apply` would make: each edit's markup or
-`name="value"`, cut at 120 characters, under `apply only edits you made on
-this page`. while edits wait, nothing new is kept, so what is kept stays as it
+`<embed>`, `<link>` or `<meta>`, is not made (`could run a script`). an
+html or attribute edit that could run a script by its own text is not kept
+either; one that is risky only for the element it is on may stay kept, and
+is refused each time it would be made. the list shows what `apply` would
+make: each edit's markup or `name="value"`, cut at 120 characters with
+`show all` for the rest, and `apply` waits until each one is shown whole,
+under `apply only edits you made on this page`. while edits wait, nothing new is kept, so what is kept stays as it
 was; turning the switch off forgets them too. edits made in another page
 of the site keep under that page's path, the one it loaded at, also once
 its app's router moved.
@@ -450,5 +456,5 @@ where that falls short:
 - a closed shadow root, a frame's document inside the tree, and a
   `<template>`'s content
 
-the tree has no line numbers, no node is dragged yet, and there is no right
+the tree has no line numbers, and there is no right
 click menu: the bar under the tree holds the actions.

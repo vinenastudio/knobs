@@ -73,6 +73,8 @@ describe("kept edits as json", () => {
     expect(readKept({ v: 1, edits: [first, { kind: "nope" }] })).toBeNull();
     expect(readKept({ v: 1, edits: Array(MAX_EDITS + 1).fill(first) })).toBeNull();
     expect(readKept("[]")).toBeNull();
+    const fat = { kind: "attr", target: { selector: "p" }, property: "title", before: null, after: "x".repeat(60 * 1024) };
+    expect(readKept({ v: 1, edits: [fat, fat, fat, fat, fat] })).toBeNull();
     expect(readKept({ v: 1, edits: [{ kind: "html", target: { selector: "p" }, property: "html", before: "<p>a</p>", after: '<img src=x onerror="a()">' }] })).toBeNull();
     // One kept before items had a version reads as this one.
     expect(readKept({ edits: [] })).toEqual({ v: EDITS_VERSION, edits: [] });
@@ -397,6 +399,25 @@ describe("the keeper", () => {
     await flush();
     await flush();
     expect(readKept(store.value)?.edits.map((one) => one.after)).toEqual(["early", "kept"]);
+    keep.stop();
+  });
+
+  test("the switch turned off while the page settles makes nothing of what was kept", async () => {
+    const store = memoryStore(toKept([{ id: 1, ...change("kept").edit }]).kept);
+    let runs = 0;
+    let settle = () => undefined as void;
+    const run: Replay = () => {
+      runs++;
+      return { applied: [], skipped: [], waiting: [] };
+    };
+    const keep = createKeeper({ log: createEditLog(), store, view: VIEW, replay: async () => run, settled: () => new Promise((resolve) => (settle = () => resolve())) });
+    expect(keep.known()).toBe(true);
+    keep.set(false);
+    settle();
+    await flush();
+    await flush();
+    expect(runs).toBe(0);
+    expect(store.value).toBeNull();
     keep.stop();
   });
 

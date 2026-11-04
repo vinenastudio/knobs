@@ -81,6 +81,7 @@ them, and the changes say how many came back and which could not be found.
 it is off at first, and off forgets them. html and attribute edits are
 never made on load: they wait in the changes until you click `apply`, as a
 page script could have planted them, and one that could run a script is
-never made. kept edits hold the page's text, attribute values and markup as
+never made. a page keeps its first 200 edits, up to 256 KB, for 20 pages at
+most; forced states and edits in the width knob's frame are never kept. kept edits hold the page's text, attribute values and markup as
 edited. with the npm package they are in the page's `localStorage`, with the
 extension in its own storage.

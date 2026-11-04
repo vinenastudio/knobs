@@ -226,10 +226,12 @@ describe("the elements view", () => {
     let on = false;
     const listeners = new Set<() => void>();
     const turned: boolean[] = [];
+    let known = false;
     const keep: Keeper = {
       on: () => on,
       set: (next) => void turned.push(next),
       restored: () => null,
+      known: () => known,
       waiting: () => [],
       applyWaiting: () => undefined,
       kept: () => 0,
@@ -247,6 +249,11 @@ describe("the elements view", () => {
     expect(line?.textContent).toBe(KEEP_LABEL);
     const control = line?.all().find((one) => one.tag === "button");
     expect(control?.getAttribute("aria-checked")).toBe("false");
+    // Off to a click until the keeper knows what the page keeps.
+    expect(control && Reflect.get(control, "disabled")).toBe(true);
+    known = true;
+    for (const listener of listeners) listener();
+    expect(control && Reflect.get(control, "disabled")).toBe(false);
     control?.fire("click");
     expect(turned).toEqual([true]);
     on = false;

@@ -99,10 +99,11 @@ describe("a move", () => {
   test("does not go on where the page moved the element since, nor come off where it moved it after", () => {
     const { body, list, a, b, c } = menu();
     const change = must(moveEdit(AT, el(c), { parent: el(list), next: el(a) }, PLACES));
-    body.append(c);
+    // appendChild, which moves a node as the browser does; the fake's append only adds.
+    body.appendChild(c);
     const log = createEditLog();
     expect(log.record(change)).toBeNull();
-    list.append(c);
+    list.appendChild(c);
     const fresh = createEditLog();
     fresh.record(must(moveEdit(AT, el(c), { parent: el(list), next: el(a) }, PLACES)));
     // The page's own script moved it again: undo leaves it where the page put it.
@@ -131,6 +132,33 @@ describe("a move", () => {
     page(() => [head, body]);
     for (const parent of [script, textarea, head, body.parentNode as PageNode]) expect(canHold(as(parent), el(a))).toBe(false);
     expect(dropAt(row(head), 0.1, el(a), false)).toBeNull();
+  });
+
+  test("never moves a script, frame or base, nor an element that holds one", () => {
+    const frame = elem("iframe");
+    const holder = elem("div", {}, elem("p", {}, elem("script")));
+    const base = elem("base");
+    const plain = elem("p");
+    const body = elem("body", {}, frame, holder, base, plain);
+    page(() => [elem("head"), body]);
+    for (const one of [frame, holder, base]) {
+      expect(movable(as(one))).toBe(false);
+      expect(moveEdit(AT, el(one), { parent: el(body), next: el(plain) }, PLACES)).toBeNull();
+    }
+    expect(movable(as(plain))).toBe(true);
+  });
+
+  test("says which of alike siblings a place is, and a move between them is never dropped from the changes", () => {
+    const one = elem("li");
+    const two = elem("li");
+    const three = elem("li");
+    const list = elem("ul", {}, one, two, three);
+    page(() => [elem("body", {}, list)]);
+    const log = createEditLog();
+    const edit = log.record(must(moveEdit(AT, el(one), { parent: el(list), next: el(three) }, PLACES)));
+    expect([edit?.before, edit?.after]).toEqual(["before the 2nd <li> in <ul>", "before the 3rd <li> in <ul>"]);
+    const same = { id: 1, kind: "move" as const, target: AT, property: "node", before: "before <li> in <ul>", after: "before <li> in <ul>", from: PLACES.from, to: PLACES.to };
+    expect(netChanges([same])[0]?.changes).toHaveLength(1);
   });
 
   test("finds the elements beside one, devknobs' own left out", () => {

@@ -40,7 +40,8 @@ export type Response = {
  * whose copy of devknobs runs the panel on a page with its own, for every site,
  * `realPhone` keeps real phone mode, for every tab and site, `keys` keeps
  * the shortcuts the user set in the panel, for every site, and `edits` keeps the
- * edits of the page at `path` on the tab's origin after a reload, or with null forgets them.
+ * edits of the page at `path` on the tab's origin after a reload, or with null forgets them:
+ * the bridge puts the path the page loaded at in place of the one the page sent.
  * `carry` hands the page's knobs on, as the tab follows its frame to another
  * origin the service worker saw it land on. `id` pairs the answer.
  */

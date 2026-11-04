@@ -18,7 +18,7 @@ install it from the [chrome web store](https://chromewebstore.google.com/detail/
 
 the npm package is for your own app, in any browser. the extension is for any site, in Chrome and Edge. if the page runs devknobs too, the extension's panel wins, and the page's calls such as `setState` go to it. to try a local build of devknobs on your own site, set prefer to page in the panel's settings: the page's copy then runs the panel, with real browser settings off. it needs a page copy newer than 0.5.1 or a local build, and applies to every site in the Chrome profile. the panel's footer says which copy runs it.
 
-the edits the Elements view keeps after a reload are in the extension's storage, per page, not in the page's `localStorage`. a page script can change them only right after you click or press a key on that page, so kept html and attribute edits wait for your click on `apply` in the panel. turn the view's switch off to forget a page's edits; clearing the site's data does not.
+the edits the Elements view keeps after a reload are in the extension's storage, per page, not in the page's `localStorage`, unless the page's own copy runs the panel (prefer page), which keeps them in the page's `localStorage`. a page script can change them for a short time after you click or press a key on that page, so kept html and attribute edits wait for your click on `apply` in the panel. turn the view's switch off to forget a page's edits; clearing the site's data does not.
 
 ## what Chrome sets for real
 

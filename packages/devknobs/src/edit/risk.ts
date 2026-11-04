@@ -45,13 +45,25 @@ function isElement(node: Node): node is Element {
   return node.nodeType === 1;
 }
 
-/** Whether parsed nodes hold anything that could run a script, in them or anywhere in what they hold. */
+function isNodeList(value: unknown): value is ArrayLike<Node> {
+  return typeof value === "object" && value !== null && typeof Reflect.get(value, "length") === "number";
+}
+
+/** A `<template>`'s content, which `querySelectorAll` does not reach into. */
+function templateContent(element: Element): Node[] {
+  const content: unknown = element.localName === "template" ? Reflect.get(element, "content") : null;
+  const nodes: unknown = typeof content === "object" && content !== null ? Reflect.get(content, "childNodes") : null;
+  return isNodeList(nodes) ? Array.from(nodes) : [];
+}
+
+/** Whether parsed nodes hold anything that could run a script, in them or anywhere in what they hold, a `<template>`'s content too. */
 export function riskyNodes(nodes: readonly Node[]): boolean {
   for (const node of nodes) {
     if (!isElement(node)) continue;
     for (const one of [node, ...Array.from(node.querySelectorAll("*"))]) {
       if (riskyElement(one)) return true;
       if (Array.from(one.attributes).some((attr) => riskyAttribute(attr.name, attr.value))) return true;
+      if (riskyNodes(templateContent(one))) return true;
     }
   }
   return false;

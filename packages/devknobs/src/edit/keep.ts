@@ -138,6 +138,7 @@ export function readSavedEdit(value: unknown): SavedEdit | null {
  */
 export function readKept(value: unknown): KeptEdits | null {
   if (!isFields(value) || newer(value, EDITS_VERSION) || !Array.isArray(value.edits) || value.edits.length > MAX_EDITS) return null;
+  if (JSON.stringify(value.edits).length > MAX_BYTES) return null;
   const list: SavedEdit[] = [];
   for (const one of value.edits) {
     const read = readSavedEdit(one);
@@ -206,12 +207,14 @@ function evict(storage: Storage, kept: string): void {
 
 /** Write a page's item; where the storage is full, forget the pages kept longest ago, one at a time, until it fits. */
 function write(storage: Storage, key: string, text: string): void {
-  const older = otherPages(storage, key);
+  // Read only once the storage is full: a save that fits reads no other page.
+  let older: string[] | null = null;
   for (;;) {
     try {
       storage.setItem(key, text);
       return;
     } catch (error) {
+      older ??= otherPages(storage, key);
       const oldest = older.pop();
       if (!oldest) throw error;
       storage.removeItem(oldest);
@@ -284,6 +287,8 @@ export interface Restored {
 }
 
 export interface Keeper {
+  /** Whether what the page keeps is known yet: the extension's store tells it a moment after the mount. Until then the switch does nothing. */
+  known(): boolean;
   /** Whether the page keeps its edits: the switch. */
   on(): boolean;
   /** Turn the switch on, which keeps the edits in force now, or off, which forgets them, those that wait too. */
@@ -370,6 +375,8 @@ export function createKeeper(options: KeeperOptions): Keeper {
   /** The edits changed while pending: they are kept once it ends. */
   let dirty = false;
   let stopped = false;
+  /** Counts the turns of the switch off: a replay that waits sees one, and makes nothing. */
+  let offs = 0;
 
   function tell(): void {
     for (const listener of Array.from(listeners)) listener();
@@ -423,10 +430,15 @@ export function createKeeper(options: KeeperOptions): Keeper {
 
   async function replay(list: SavedEdit[]): Promise<void> {
     pending = true;
+    const turn = offs;
     try {
       await wait();
       const loaded = await loadReplay();
-      if (stopped) return;
+      // Stopped, or the switch went off meanwhile, which forgot what was kept.
+      if (stopped || turn !== offs) {
+        pending = false;
+        return;
+      }
       Reflect.set(view, REPLAYED, true);
       run = loaded;
       make(loaded, list, true);
@@ -452,6 +464,8 @@ export function createKeeper(options: KeeperOptions): Keeper {
       if (read && read.edits.length > 0 && Reflect.get(view, REPLAYED) !== true) void replay(read.edits);
     }
     if (!on) {
+      // Forgotten in another tab: a replay that waits makes nothing.
+      offs++;
       restored = null;
       waiting = [];
     }
@@ -467,12 +481,15 @@ export function createKeeper(options: KeeperOptions): Keeper {
   heard();
 
   return {
+    known: () => known,
     on: () => on,
     set(next) {
       if (!known) return;
       on = next;
       if (next) save();
       else {
+        offs++;
+        pending = false;
         restored = null;
         waiting = [];
         cut = 0;
@@ -487,7 +504,7 @@ export function createKeeper(options: KeeperOptions): Keeper {
     restored: () => restored,
     waiting: () => waiting,
     applyWaiting() {
-      if (!run || waiting.length === 0 || pending) return;
+      if (!on || !run || waiting.length === 0 || pending) return;
       make(run, waiting, false);
     },
     kept: () => (on ? kept : 0),

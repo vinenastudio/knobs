@@ -135,7 +135,14 @@ export function createElementsView(context: StylesContext, parts: ElementsParts 
   const changes = createChanges(log, copy, undefined, keep);
   const keepSwitch = keep ? switchLine({ label: KEEP_LABEL, on: keep.on(), onChange: (on) => keep.set(on) }) : null;
   keepSwitch?.node.classList.add("keep-line");
-  const stopKeep = keep && keepSwitch ? keep.subscribe(() => keepSwitch.set(keep.on())) : null;
+  /** The switch as the keeper has it, and off to a click until it knows what the page keeps. */
+  const syncKeep = (): void => {
+    if (!keep || !keepSwitch) return;
+    keepSwitch.set(keep.on());
+    keepSwitch.control.disabled = !keep.known();
+  };
+  syncKeep();
+  const stopKeep = keep ? keep.subscribe(syncKeep) : null;
   if (keepSwitch) node.append(keepSwitch.node);
   node.append(tree.node, styles.node, changes.node);
 

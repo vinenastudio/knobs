@@ -144,6 +144,7 @@ describe("the line of edits kept after a reload", () => {
       on: () => restored !== null,
       set: () => undefined,
       restored: () => restored,
+      known: () => true,
       waiting: () => [],
       applyWaiting: () => undefined,
       kept: () => 0,
@@ -177,6 +178,7 @@ describe("kept html edits that wait", () => {
       on: () => true,
       set: () => undefined,
       restored: () => ({ kept: 1, missed: [] }),
+      known: () => true,
       waiting: () => waiting,
       applyWaiting: () => void applied++,
       kept: () => 0,
@@ -193,11 +195,19 @@ describe("kept html edits that wait", () => {
     expect(node.all().some((one) => one.textContent === WAIT_NOTE)).toBe(true);
     expect(node.all().filter((one) => one.className === "changes-missed").map((one) => one.textContent)).toEqual([
       'title on h1: title="Hi"',
-      `html on p: <p>${"x".repeat(WAIT_MAX - 4)}…`,
+      `html on p: <p>${"x".repeat(WAIT_MAX - 4)}… show all`,
       "hide on p: hidden",
     ]);
     expect(waitValue({ kind: "html", target: { selector: "p" }, property: "html", before: null, after: "<p>a\nb</p>" })).toBe('"<p>a\\nb</p>"');
-    const apply = control(node, "apply");
+    let apply = control(node, "apply");
+    // A value cut short keeps apply off until it is shown whole.
+    expect(Reflect.get(apply, "disabled")).toBe(true);
+    apply.fire("click", { isTrusted: true, currentTarget: apply });
+    expect(applied).toBe(0);
+    control(node, "show all").fire("click");
+    expect(node.all().filter((one) => one.className === "changes-missed")[1]?.textContent).toBe(`html on p: <p>${"x".repeat(200)}</p>`);
+    apply = control(node, "apply");
+    expect(Reflect.get(apply, "disabled")).toBe(false);
     apply.fire("click", { isTrusted: false, currentTarget: apply });
     expect(applied).toBe(0);
     apply.fire("click", { isTrusted: true, currentTarget: {} });

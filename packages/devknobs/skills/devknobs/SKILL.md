@@ -222,9 +222,14 @@ To try the edits again on a fresh load, before or after they are in the code,
 save the list and make it again:
 
 ```js
-const list = window.devknobs.edits();
-// ...reload the page, then:
-const { applied, skipped } = await window.devknobs.setEdits(list);
+// Read the list into your own context (the result of the evaluate call): a reload clears the page's variables.
+JSON.stringify(window.devknobs.edits());
+```
+
+Reload the page, then pass the list you kept back in:
+
+```js
+const { applied, skipped } = await window.devknobs.setEdits(LIST_YOU_KEPT);
 window.devknobs.undoEdit(); // undoes the last edit in force, returns it or null
 ```
 
@@ -235,8 +240,9 @@ made as `{ edit, reason }`, and after a delete, move or html edit that was not
 made, every later one is skipped too. A `css-rule` is always made anew, even
 once the rule is in the code, so read its declarations instead. A value edit
 already in the code is skipped with `the page has another value now`, and a
-node deleted in the code with `not found on the page`: both tell you the code
-matches. An html or attribute edit that could run a script is never made.
+node deleted in the code with `not found on the page`, but those reasons have
+other causes too: they say the edit may already be in the code, so check the
+page itself before you count it done. An html or attribute edit that could run a script is never made.
 With `keep edits after reload` on, html and attribute edits kept from before
 wait for the user's click on `apply` in the panel.
 

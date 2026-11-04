@@ -78,7 +78,8 @@ export function netChanges(edits: readonly Edit[]): ChangeGroup[] {
     }
   }
   return [...groups.values()]
-    .map((group) => ({ ...group, changes: group.changes.filter((one) => one.before !== one.after) }))
+    // A move is never one that came back: the same words can say two places, as between two alike siblings.
+    .map((group) => ({ ...group, changes: group.changes.filter((one) => one.kind === "move" || one.before !== one.after) }))
     .filter((group) => group.changes.length > 0);
 }
 

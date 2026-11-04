@@ -13,6 +13,7 @@
 
 import { addStyle, ensureStyle, isDocument, type OwnStyle } from "../engine/style";
 import type { Change, EditKind, EditPlace, EditTarget } from "./log";
+import { riskyElement } from "./risk";
 
 /** The html edits, by their kind. */
 export type HtmlKind = Extract<EditKind, "text" | "attr" | "html" | "hide" | "delete" | "move">;
@@ -273,14 +274,17 @@ export function firstElementOf(node: Node): Element | null {
 
 /**
  * Whether an element can be moved: one in an element, and not the head or
- * body, devknobs' own, or one that holds devknobs' own nodes, as the body
- * holds the panel. The root element has a document above it, and stays.
+ * body, devknobs' own, one that holds devknobs' own nodes, as the body holds
+ * the panel, nor a script, frame or the like, or one that holds one. The
+ * root element has a document above it, and stays.
  */
 export function movable(node: Node): node is Element {
   if (!isElement(node) || isOwnElement(node)) return false;
   const parent = node.parentNode;
   if (!parent || !isElement(parent)) return false;
   if (node.namespaceURI === HTML && (node.localName === "head" || node.localName === "body")) return false;
+  // A script, frame or base moved runs, loads or reads the page's addresses again: neither it nor one holding it moves.
+  if (riskyElement(node) || Array.from(node.querySelectorAll("*")).some(riskyElement)) return false;
   return node.querySelector("[data-devknobs]") === null;
 }
 
@@ -315,9 +319,30 @@ export function tagLabel(element: Element): string {
   return `<${tag}${id ? ` id="${id}"` : ""}${classes ? ` class="${classes}"` : ""}>`;
 }
 
-/** A place in words: `before <li class="x"> in <ul>`, or `at the end of <ul>`. */
+const ORDINALS = ["th", "st", "nd", "rd"];
+
+/** 1st, 2nd, 3rd, 4th, 11th, 21st. */
+function ordinal(n: number): string {
+  const tens = n % 100;
+  return `${n}${tens >= 11 && tens <= 13 ? "th" : (ORDINALS[n % 10] ?? "th")}`;
+}
+
+/** An element as a place says it: its label, and where its parent holds others that look alike, which of them it is. */
+function placeLabel(parent: Element, element: Element): string {
+  const label = tagLabel(element);
+  let at = 0;
+  let alike = 0;
+  for (let one = firstElementOf(parent); one; one = nextElementOf(one)) {
+    if (tagLabel(one) !== label) continue;
+    alike++;
+    if (one === element) at = alike;
+  }
+  return alike > 1 && at > 0 ? `the ${ordinal(at)} ${label}` : label;
+}
+
+/** A place in words: `before <li class="x"> in <ul>`, `before the 2nd <li> in <ul>`, or `at the end of <ul>`. */
 export function placeWords(parent: Element, next: Element | null): string {
-  return next ? `before ${tagLabel(next)} in ${tagLabel(parent)}` : `at the end of ${tagLabel(parent)}`;
+  return next ? `before ${placeLabel(parent, next)} in ${tagLabel(parent)}` : `at the end of ${tagLabel(parent)}`;
 }
 
 /**

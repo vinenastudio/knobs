@@ -15,6 +15,10 @@ describe("what could run a script", () => {
     }
     expect(riskyNodes([as(svg("svg", {}, svg("set", { attributeName: "href", to: "javascript:x" })))])).toBe(true);
     expect(riskyNodes([as(elem("div", { srcdoc: "<p>" }))])).toBe(true);
+    // A template's content is a fragment of its own, which querySelectorAll does not reach.
+    const template = Object.assign(elem("template"), { content: elem("div", {}, elem("template", {}), elem("img", { onerror: "x()" })) });
+    expect(riskyNodes([as(elem("div", {}, template))])).toBe(true);
+    expect(riskyNodes([as(Object.assign(elem("template"), { content: elem("div", {}, elem("p")) }))])).toBe(false);
     expect(riskyNodes([as(elem("a", { href: "/shop", class: "cta" }, text("Buy"))), as(text("<script>"))])).toBe(false);
   });
 
