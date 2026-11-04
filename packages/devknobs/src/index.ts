@@ -7,6 +7,7 @@ import { GEO_PRESETS } from "./engine/geo";
 import { LOCALE_PRESETS } from "./engine/locale";
 import { TIME_ZONE_PRESETS } from "./engine/time";
 import { UA_PRESETS } from "./engine/ua";
+import { type EditsStore, forgetReplay, type Replayed, startKeep, stopKeep } from "./edit/keep";
 import { type Edit, edits as editLog } from "./edit/log";
 import { clearForced, type ForcedState, forceState as forceOn } from "./styles/force";
 import { createGrab, type GrabControl } from "./grab/control";
@@ -78,7 +79,8 @@ export type {
   KnobValue,
 } from "./engine/describe";
 export type { DeviceKind, DevicePreset } from "./engine/devices";
-export type { Edit, EditKind, EditTarget } from "./edit/log";
+export type { Edit, EditKind, EditPlace, EditTarget } from "./edit/log";
+export type { Replayed, SavedEdit, Skipped } from "./edit/keep";
 export type { ForcedState } from "./styles/force";
 export type { GeoPreset } from "./engine/geo";
 export type { UaBrand, UaHints, UaPreset } from "./engine/ua";
@@ -88,6 +90,8 @@ export type { SystemMedia } from "./engine/system";
 export type { HostBuild, PreferSetting, PreferValue } from "./host";
 /** @internal For the devknobs extension, with `keysStore`: not public api. */
 export type { KeysStore, StoredKeys } from "./ui/bindings";
+/** @internal For the devknobs extension, with `editsStore`: not public api. */
+export type { EditsStore, KeptEdits } from "./edit/keep";
 export type {
   GrabEntry,
   GrabFrame,
@@ -153,6 +157,12 @@ export interface MountOptions extends engine.EngineOptions {
    * site. Not public api: it may change in any release.
    */
   keysStore?: KeysStore;
+  /**
+   * @internal For the devknobs extension: where the edits kept after a
+   * reload are kept in place of the page's `localStorage`. Not public api:
+   * it may change in any release.
+   */
+  editsStore?: EditsStore;
 }
 
 export const PRESETS = {
@@ -232,6 +242,8 @@ export function mount(options: MountOptions = {}): void {
   engine.start(options);
   mounted = options;
   attach(options);
+  // The edits kept for the page, made again once it settles. The width knob's frame keeps none.
+  if (!isDevknobsFrame()) startKeep(options.editsStore);
 }
 
 /** The panel, its keys, grab and inspect, for the engine that runs. */
@@ -424,9 +436,12 @@ export function unmount(): void {
   waiting = null;
   if (superseded(window, unmount)) return;
   detach();
+  // Before the edits are undone, so that is not kept for the page.
+  stopKeep();
   // The page goes back to how it was written, unless the panel is only handed over.
   if (!handing) {
     editLog.undoAll();
+    forgetReplay();
     clearForced();
   }
   // A host keeps its switch's choice through a take-back: off stays off.
@@ -556,12 +571,35 @@ export async function grab(
  * value before and after (null where it is not set). An html edit has in
  * place of a css property `text` (`text 2` and on), the attribute's name,
  * `html`, `hidden` or `node`, and a delete of a text or a comment `text` or
- * `comment`. Undo and the panel's
+ * `comment`. A move has `node`, and `from` and `to`, the places as selectors. Undo and the panel's
  * reset take edits back, and so does `unmount`. `reset()` leaves them, so an
  * agent can loop over conditions with the edits on.
  */
 export function edits(): Edit[] {
   return (hosted("edits") ?? editLog.list)();
+}
+
+/**
+ * Make edits on the page from their plain data, in the shape `edits()` gives,
+ * oldest first: an agent can read `edits()`, save the list, and make the same
+ * edits again with this on a fresh load. Each edit is made only where its
+ * element is found by its selector (and its rule by its selector, what it
+ * sits in and its stylesheet) and the value there is still its `before`.
+ * They go to the same log as the panel's, so the panel lists them and undo
+ * takes them back. Resolves to the edits made and those skipped, each with
+ * why. Not a list throws a TypeError.
+ */
+export async function setEdits(list: readonly unknown[]): Promise<Replayed> {
+  const host = hosted("setEdits");
+  if (host) return host(list);
+  if (!Array.isArray(list)) throw new TypeError("devknobs.setEdits takes a list of edits, as edits() gives them");
+  const { replayEdits } = await import("./edit/replay");
+  return replayEdits(editLog, list);
+}
+
+/** Undo the last edit in force, as Z does in the panel. Returns it, or null with none. */
+export function undoEdit(): Edit | null {
+  return (hosted("undoEdit") ?? editLog.undo)();
 }
 
 /**
@@ -580,7 +618,7 @@ export function forceState(target: Element | string | null, states: readonly str
   return forceOn(element, states);
 }
 
-const api = { mount, unmount, getState, setState, reset, replay, grab, describe, ready, edits, forceState };
+const api = { mount, unmount, getState, setState, reset, replay, grab, describe, ready, edits, setEdits, undoEdit, forceState };
 
 /** What `mount` puts at `window.devknobs`, for agents that run code in the page. */
 export type DevknobsApi = typeof api;

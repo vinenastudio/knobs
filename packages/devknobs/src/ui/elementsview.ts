@@ -9,13 +9,15 @@
  * and the edits are listed at the foot, with Z to undo and ⇧Z to redo while
  * the focus is in the view and not in a field. Where an undo takes away the
  * node selected, as one of an element written anew as html, the node put
- * back in its place is selected. To use it, as the styles view:
+ * back in its place is selected. A switch at the top keeps the edits after a
+ * reload, as `edit/keep.ts` says. To use it, as the styles view:
  *
  *   const view = createElementsView(context);
  *   body.append(view.node); view.show(element); view.destroy();
  */
 
 import { successor } from "../edit/html";
+import { type Keeper, keeper } from "../edit/keep";
 import { type EditLog, edits } from "../edit/log";
 import { type Copy, createChanges } from "./changes";
 import { copyText } from "./copytext";
@@ -23,6 +25,7 @@ import { el } from "./dom";
 import { createDomEditor } from "./domedit";
 import { createDomTree, type DomTree, elementOf } from "./domtree";
 import { letterMatches, typesInField } from "./keys";
+import { switchLine } from "./kit";
 import { createStylesView, type StylesContext, type StylesPage, type StylesView } from "./stylesview";
 
 /** The name the console knows the node selected in the Elements panel by. */
@@ -36,7 +39,12 @@ export interface ElementsParts {
   copy?: Copy;
   /** The log the edits go to. Defaults to the page's one. */
   edits?: EditLog;
+  /** What keeps the edits after a reload. Defaults to the page's one; without one the view has no switch. */
+  keep?: Keeper | null;
 }
+
+/** What the switch at the top of the view says. */
+export const KEEP_LABEL = "keep edits after reload";
 
 /** Whether a keydown is the view's undo, z, or its redo, shift z: no other modifier, and not in a field. */
 export function undoKey(event: KeyboardEvent): "undo" | "redo" | null {
@@ -123,7 +131,12 @@ export function createElementsView(context: StylesContext, parts: ElementsParts 
     },
     parts.page,
   );
-  const changes = createChanges(log, copy);
+  const keep = parts.keep === undefined ? keeper() : parts.keep;
+  const changes = createChanges(log, copy, undefined, keep);
+  const keepSwitch = keep ? switchLine({ label: KEEP_LABEL, on: keep.on(), onChange: (on) => keep.set(on) }) : null;
+  keepSwitch?.node.classList.add("keep-line");
+  const stopKeep = keep && keepSwitch ? keep.subscribe(() => keepSwitch.set(keep.on())) : null;
+  if (keepSwitch) node.append(keepSwitch.node);
   node.append(tree.node, styles.node, changes.node);
 
   function onKeydown(event: KeyboardEvent): void {
@@ -155,6 +168,7 @@ export function createElementsView(context: StylesContext, parts: ElementsParts 
     destroy(): void {
       node.removeEventListener("keydown", onKeydown);
       stopFollow();
+      stopKeep?.();
       tree.destroy();
       styles.destroy();
       changes.destroy();

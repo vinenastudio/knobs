@@ -7,8 +7,11 @@
  *
  *   Enter    edit the text           a    add an attribute
  *   F2       edit as html            h    hide, or show again
- *   Delete   delete the node
+ *   Delete   delete the node         ⇧↑   move up among its siblings
+ *                                    ⇧↓   move down among its siblings
  *
+ * An element's line is also dragged by its handle, before or after another
+ * element, or into one, through `move`.
  * A one-line field puts its edit on with Enter and leaves with esc. The html
  * field, and the field of a text or a value with line breaks in it, takes
  * line breaks with Enter, and puts its edit on with ⇧↩ (Shift Enter
@@ -21,7 +24,21 @@
  *   editor.dblclick(row, target); editor.key(event, row); editor.selected(row);
  */
 
-import { attrEdit, attributeName, deleteEdit, HIDE_ATTRIBUTE, hideEdit, htmlEdit, parseHtml, textEdit } from "../edit/html";
+import {
+  attrEdit,
+  attributeName,
+  canHold,
+  deleteEdit,
+  HIDE_ATTRIBUTE,
+  hideEdit,
+  htmlEdit,
+  movable,
+  moveEdit,
+  nextElementOf,
+  parseHtml,
+  previousElementOf,
+  textEdit,
+} from "../edit/html";
 import type { Change, EditLog } from "../edit/log";
 import { type Locate, locateSource, recordAt } from "../edit/source";
 import { isMac } from "../engine/ua";
@@ -31,7 +48,7 @@ import { type Entry, isElement, markupOf, parentOf, type Row } from "./domtree";
 import { comboLabel, letterMatches, typesInField, withShift } from "./keys";
 
 /** What a key on the selected line does. */
-export type TreeEditAction = "text" | "attr" | "html" | "hide" | "delete";
+export type TreeEditAction = "text" | "attr" | "html" | "hide" | "delete" | "up" | "down";
 
 /** What the bar's buttons say. */
 export const ACTIONS: Record<TreeEditAction, string> = {
@@ -40,6 +57,8 @@ export const ACTIONS: Record<TreeEditAction, string> = {
   html: "edit as html",
   hide: "hide",
   delete: "delete",
+  up: "move up",
+  down: "move down",
 };
 
 /** What the tree lends its editor. */
@@ -77,6 +96,8 @@ export interface DomEditor {
   busy(): boolean;
   /** Close the field open, with or without its edit; one whose edit is refused closes without it. Says whether one was open. */
   close(commit: boolean): boolean;
+  /** Move an element into `parent`, before `next`, or at its end with null, and select it. Says whether it moved. */
+  move(element: Element, parent: Element, next: Element | null): boolean;
   destroy(): void;
 }
 
@@ -93,6 +114,8 @@ export function commitsHtml(event: Pick<KeyboardEvent, "key" | "shiftKey" | "met
 /** What a key on the selected line does: no modifier but shift, and never in a field. Null for any other key. */
 export function treeEditKey(event: KeyboardEvent): TreeEditAction | null {
   if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing || typesInField(event)) return null;
+  if (event.shiftKey && event.key === "ArrowUp") return "up";
+  if (event.shiftKey && event.key === "ArrowDown") return "down";
   switch (event.key) {
     case "Enter":
       return "text";
@@ -165,6 +188,8 @@ export function actionsFor(row: Row | null): TreeEditAction[] {
     out.push("attr");
     // The root element goes only with its document; the head and body, and one with the panel in it, stay.
     if (node.parentNode?.nodeType !== 9 && !isFrame(node) && !holdsOwn(node)) out.push("html", "hide", "delete");
+    if (movable(node) && previousElementOf(node)) out.push("up");
+    if (movable(node) && nextElementOf(node)) out.push("down");
   } else if ((row.kind === "text" || row.kind === "comment") && inElement(node)) out.push("delete");
   return out;
 }
@@ -406,6 +431,35 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
     if (next) hooks.select(next);
   }
 
+  /** Move an element, the places read as selectors before it moves, and select it where it went. */
+  function move(element: Element, parent: Element, next: Element | null): boolean {
+    const home = element.parentNode;
+    if (!home || !isElement(home) || !movable(element) || !canHold(parent, element)) return false;
+    const was = nextElementOf(element);
+    const places = {
+      from: { parent: selectorOf(home), next: was ? selectorOf(was) : null },
+      to: { parent: selectorOf(parent), next: next ? selectorOf(next) : null },
+    };
+    const change = moveEdit(target(element), element, { parent, next }, places);
+    if (!change || !record(change, element)) return false;
+    hooks.select(element);
+    return true;
+  }
+
+  /** Move the line's element one place up or down among the elements beside it. */
+  function step(row: Row, up: boolean): void {
+    const element = row.node;
+    const parent = element.parentNode;
+    if (!isElement(element) || !parent || !isElement(parent)) return;
+    if (up) {
+      const before = previousElementOf(element);
+      if (before) move(element, parent, before);
+      return;
+    }
+    const after = nextElementOf(element);
+    if (after) move(element, parent, nextElementOf(after));
+  }
+
   /** Put the open field's edit on. False where it refused it: the field stays open, marked, and nothing else is done. */
   function done(): boolean {
     open?.close(true);
@@ -419,6 +473,7 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
     else if (action === "attr") editAttr(row, null);
     else if (action === "html") editHtml(row);
     else if (action === "hide") hide(row);
+    else if (action === "up" || action === "down") step(row, action === "up");
     else remove(row);
   }
 
@@ -467,6 +522,9 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
       // The tree goes on, as to another node: a field whose edit is refused gives way all the same.
       open.close(commit, commit);
       return true;
+    },
+    move(element, parent, next) {
+      return done() && move(element, parent, next);
     },
     destroy() {
       open?.close(false);

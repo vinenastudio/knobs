@@ -67,8 +67,16 @@ element or close the view.
 
 the DOM tree can be edited too: double-click a text or an attribute to edit
 it, and on the selected line `a` adds an attribute, `F2` edits it as html,
-`h` hides it and Delete deletes it, or use the bar under the tree. those
+`h` hides it, Delete deletes it and `⇧↑` / `⇧↓` move it among its
+siblings, or use the bar under the tree. drag an element's line by its
+handle, `⋮⋮`, to move it before or after another element, or into one. those
 edits go into the same changes, and the prompt asks your agent to change the
 component, as a re-render may undo an edit of the DOM. `<html>`, `<head>`
 and `<body>` and devknobs' own nodes and attributes cannot be replaced,
-hidden or deleted.
+hidden, deleted or moved.
+
+the switch `keep edits after reload` at the top of the view keeps the edits
+for the page: after a reload they are made again where the page still has
+them, and the changes say how many came back and which could not be found.
+it is off at first, and off forgets them. with the npm package they are in
+the page's `localStorage`, with the extension in its own storage.

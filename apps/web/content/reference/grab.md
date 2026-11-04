@@ -256,17 +256,29 @@ the page at once, into the same changes as the style edits:
   `style` stays as it is. its line goes faint
 - Delete or Backspace deletes the selected node, and the line after it is
   selected. undo puts it back where it stood
+- `⇧↑` and `⇧↓` (`Shift Up` and `Shift Down` off a Mac) move the selected
+  element before the element above it or after the one below it, among the
+  elements in its parent; texts between them stay where they are
+- an element's line has a handle, `⋮⋮`, at its start, shown with the pointer
+  on the line and on the selected line. drag it onto another element's line:
+  its top quarter puts the element before that one, its bottom quarter after
+  it (or first in it, where its line is open), and its middle into it, at its
+  end; the top half of an end tag's line puts it in that element, at its end.
+  a line over or under the target, or a ring around it, shows where it goes.
+  esc while dragging lets it go where it was. it cannot go into itself, an
+  element in it, or an element with no content such as `<img>`. undo puts it
+  back where it stood
 
 a field closed as it was opened makes no edit, and one whose edit is refused
 stays open, red, until it is fixed, left with esc or the focus leaves it,
 and no key or button of the tree acts while it is open. `<html>`, `<head>`, `<body>` and an element that holds devknobs'
-own nodes are not edited as html, hidden or deleted, and a text straight in
+own nodes are not edited as html, hidden, deleted or moved, and a text straight in
 a shadow root or the document is not edited.
 
 the keys are plain and act only on the selected line, never while a field
 has the focus. the bar under the tree has the same actions for the selected
-line: `edit text`, `+ attribute`, `edit as html`, `hide` (or `show`) and
-`delete`, and the line's `copy` copies its markup. it works the same on the
+line: `edit text`, `+ attribute`, `edit as html`, `hide` (or `show`),
+`delete`, `move up` and `move down`, and the line's `copy` copies its markup. it works the same on the
 width knob's frame. an edit of the html is made on the live DOM: where the
 page's framework renders again and changes or replaces the node, the edit
 stays in the list as text, and undo then only takes it out.
@@ -310,8 +322,9 @@ stylesheet, or `style=""` and the element for its own style. a new rule is
 under `new rule for` and the element's selector: `+ .cta:hover { }`, then its
 declarations. an element's
 html edits are under `html of` and its selector: `- text: "Start now"`,
-`+ class: "cta cta-lg"`, the markup an element had and has, `+ hidden`, and
-the markup of a node deleted.
+`+ class: "cta cta-lg"`, the markup an element had and has, `+ hidden`, the
+markup of a node deleted, and where a moved element stood and stands:
+`- at the end of <ul class="menu">`, `+ before <li class="a"> in <ul class="menu">`.
 several edits of one property come to one change, and one that went back to
 where it started to none. `Z` undoes the last edit and `⇧Z` (`Shift Z` off
 a Mac) does it again, while the focus is in the view and not in a field. `copy prompt for
@@ -320,15 +333,47 @@ code: each element's selector, its file and line where grab finds them, the
 rule and its stylesheet, and each property from its value before to its
 value after, a new rule with its selector to add where the element's styles
 are written, and for the html each text, attribute and markup from before
-to after, a hide and a delete. with html edits it ends by asking the agent
+to after, a hide, a delete and a move, with the place it went as selectors
+(``move it: at the end of <ul class="menu"> -> before <li class="a"> in <ul class="menu"> (into `ul.menu`, before `li.a`)``). with html edits it ends by asking the agent
 to change the component or template that renders the element, not the DOM,
 as the framework's next render may undo an edit of the DOM. `copy diff` copies the diff lines alone, and `undo all` takes
 every edit back. reset in the footer undoes the edits with the knobs, and so
 does `unmount()`; `devknobs.reset()` leaves them. an edit whose page goes, as
 a frame's reloads, stays in the list as text, and undo then only takes it
-out. `window.devknobs.edits()` gives the edits in force as json
-(see [agents](/docs/agents)). the edits are not kept: a reload of the page
-loses them.
+out. `window.devknobs.edits()` gives the edits in force as json, and
+`setEdits()` makes such a list again (see [agents](/docs/agents)). the line
+under the buttons says so: `agents read and apply edits: devknobs.edits() / setEdits()`.
+
+### keep edits after reload
+
+the switch `keep edits after reload` at the top of the view is off at
+first, and a reload loses the edits. on, it keeps the edits in force for the
+page, its origin and path without the query, and keeps them again on each
+change: their kinds, selectors, rules and values before and after, as plain
+json, no node of the page. as the page loads again, once it loaded and
+nothing on it changed for 300 milliseconds (3 seconds at most, so a
+framework has drawn it), devknobs makes them again in order. each is made
+only where its element is found by its selector, its rule by its selector,
+what it sits in and its stylesheet, and the page still has the value it had
+before it; a new rule is made anew. the changes say
+`5 edits kept from before the reload`, or `4 edits kept from before the
+reload, 1 could not be found` with a line for each one not made and why
+(not found on the page, its rule is not on the page, the page has another
+value now). from then on they are edits like any other: undo, the changes
+and the prompt take them. the next change keeps the edits in force then, so
+those not found are dropped.
+
+turning the switch off forgets the page's edits; it leaves the ones on the
+page. the switch is on for a page while it keeps edits, in every tab. a
+page keeps its first 200 edits, up to 256 KB of json; past that the changes
+say `only the first 200 edits are kept after a reload`. edits are kept for 20
+pages at most: the page kept longest ago is forgotten first. forced states
+are no edits and are never kept, nor are edits made in the width knob's
+frame. with the npm package they are in the page's `localStorage`, one item
+per page, `devknobs:edits:` and the path, and none in fresh mode; with the
+extension, in the extension's own storage (see
+[the extension](/docs/extension)). see [privacy](/docs/privacy) for how to
+clear them.
 
 ### force a state
 

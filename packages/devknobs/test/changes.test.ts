@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import { cssValue } from "../src/edit/css";
 import { createEditLog, type EditLog } from "../src/edit/log";
 import { diffText, promptText } from "../src/edit/text";
-import { COPIED, createChanges, type Changes, NOT_COPIED, undoHint } from "../src/ui/changes";
+import type { Keeper, Restored } from "../src/edit/keep";
+import { COPIED, createChanges, type Changes, keptLine, missedLine, NOT_COPIED, undoHint } from "../src/ui/changes";
 import { Block, fakeCss } from "./edit-block";
 import { FakeNode, fake } from "./styles-dom";
 
@@ -123,6 +124,40 @@ describe("the changes", () => {
     control(node, "undo all").fire("click");
     expect(log.list()).toEqual([]);
     expect(style.cssText).toBe("color: red; margin: 0;");
+    expect(node.hidden).toBe(true);
+  });
+});
+
+describe("the line of edits kept after a reload", () => {
+  test("says how many were made again and lists those that were not", () => {
+    expect(keptLine(1, 0)).toBe("1 edit kept from before the reload");
+    expect(keptLine(4, 1)).toBe("4 edits kept from before the reload, 1 could not be found");
+    expect(missedLine({ edit: { kind: "text", target: { selector: "h1" }, property: "text", before: "a", after: "b" }, reason: "not found on the page" })).toBe("text on h1: not found on the page");
+    expect(missedLine({ edit: { kind: "css-value", target: { selector: "a`b" }, property: "padding", before: "1px", after: "2px" }, reason: "x" })).toBe('padding on "a`b": x');
+    expect(missedLine({ edit: "junk", reason: "not an edit devknobs reads" })).toBe("not an edit devknobs reads");
+  });
+
+  test("shows in the section with no change in force, and goes with the switch", () => {
+    let restored: Restored | null = { kept: 0, missed: [{ edit: { kind: "move", target: { selector: "li" }, property: "node", before: "a", after: "b", from: { parent: "ul", next: null }, to: { parent: "ul", next: "li" } }, reason: "gone" }] };
+    const listeners = new Set<() => void>();
+    const keep: Keeper = {
+      on: () => restored !== null,
+      set: () => undefined,
+      restored: () => restored,
+      cut: () => 0,
+      subscribe: (listener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      stop: () => undefined,
+    };
+    changes = createChanges(log, () => true, true, keep);
+    const node = fake(changes.node);
+    expect(node.hidden).toBe(false);
+    expect(node.all().filter((one) => one.className === "changes-kept-line").map((one) => one.textContent)).toEqual(["0 edits kept from before the reload, 1 could not be found"]);
+    expect(node.all().filter((one) => one.className === "changes-missed").map((one) => one.textContent)).toEqual(["move on li: gone"]);
+    restored = null;
+    for (const listener of listeners) listener();
     expect(node.hidden).toBe(true);
   });
 });

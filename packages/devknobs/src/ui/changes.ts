@@ -2,14 +2,17 @@
  * The changes at the foot of the Elements view: how many edits are in force,
  * each as a `-` line before and a `+` line after under the place it is in,
  * and the ways to hand them on: the prompt for an agent, the diff, and undo
- * all. It shows only while there is a change. To use it:
+ * all. With edits kept after a reload, a line says how many were made again
+ * as the page loaded and lists those that were not, and one says when edits
+ * past the caps are not kept. It shows only while there is something to say. To use it:
  *
- *   const changes = createChanges(edits, copy);
+ *   const changes = createChanges(edits, copy, isMac(), keeper());
  *   view.append(changes.node); changes.destroy();
  */
 
+import { type Keeper, readSavedEdit, type Skipped } from "../edit/keep";
 import type { EditLog } from "../edit/log";
-import { changeCount, diffLines, diffText, netChanges, placeLine, promptText } from "../edit/text";
+import { changeCount, data, diffLines, diffText, netChanges, placeLine, promptText } from "../edit/text";
 import { isMac } from "../engine/ua";
 import { button, el } from "./dom";
 import { comboLabel, withShift } from "./keys";
@@ -25,7 +28,21 @@ export type Copy = (text: string) => boolean | Promise<boolean>;
 const COPIED_FOR = 1200;
 
 /** What the line under the buttons says, for agents that run code in the page. */
-export const AGENT_NOTE = "agents read the edits with devknobs.edits()";
+export const AGENT_NOTE = "agents read and apply edits: devknobs.edits() / setEdits()";
+
+/** What the line about edits made again as the page loaded says. */
+export function keptLine(kept: number, missed: number): string {
+  const made = `${kept} ${kept === 1 ? "edit" : "edits"} kept from before the reload`;
+  return missed > 0 ? `${made}, ${missed} could not be found` : made;
+}
+
+/** An edit that was not made again, as its line says it: `text on h1.title: not found on the page`, `padding on a.cta: ...`. */
+export function missedLine(skipped: Skipped): string {
+  const edit = readSavedEdit(skipped.edit);
+  if (!edit) return skipped.reason;
+  const what = edit.kind === edit.property || edit.kind.startsWith("css-") || edit.kind === "attr" ? data(edit.property) : edit.kind;
+  return `${what} on ${data(edit.target.selector)}: ${skipped.reason}`;
+}
 
 export interface Changes {
   node: HTMLElement;
@@ -38,17 +55,18 @@ export function undoHint(mac: boolean): string {
   return `undo ${undo}, redo ${comboLabel(withShift("z"), mac)}`;
 }
 
-export function createChanges(log: EditLog, copy: Copy, mac = isMac()): Changes {
+export function createChanges(log: EditLog, copy: Copy, mac = isMac(), keep: Keeper | null = null): Changes {
   const node = el("section", "changes");
   node.setAttribute("aria-label", "changes");
   const head = el("div", "changes-head");
+  const kept = el("div", "changes-kept");
   const list = el("div", "changes-list");
   const prompt = button("chip changes-go", "copy prompt for agent");
   const diff = button("chip", "copy diff");
   const undoAll = button("chip", "undo all");
   const acts = el("div", "changes-acts");
   acts.append(prompt, diff, undoAll);
-  node.append(head, list, acts, el("div", "changes-note", AGENT_NOTE));
+  node.append(head, kept, list, acts, el("div", "changes-note", AGENT_NOTE));
   const timers = new Map<HTMLButtonElement, number>();
   const labels = new Map<HTMLButtonElement, string>();
   /** The section went: a copy that answers after that changes nothing. */
@@ -83,7 +101,17 @@ export function createChanges(log: EditLog, copy: Copy, mac = isMac()): Changes 
   function draw(): void {
     const edits = log.list();
     const count = changeCount(edits);
-    node.hidden = count === 0;
+    const restored = keep?.restored() ?? null;
+    const cut = keep?.cut() ?? 0;
+    const said: HTMLElement[] = [];
+    if (restored) {
+      said.push(el("div", "changes-kept-line", keptLine(restored.kept, restored.missed.length)));
+      for (const one of restored.missed) said.push(el("div", "changes-missed", missedLine(one)));
+    }
+    if (cut > 0) said.push(el("div", "changes-kept-line", `only the first ${edits.length - cut} edits are kept after a reload`));
+    kept.replaceChildren(...said);
+    kept.hidden = said.length === 0;
+    node.hidden = count === 0 && said.length === 0;
     head.textContent = `changes (${count}) · ${undoHint(mac)}`;
     const lines: HTMLElement[] = [];
     for (const group of netChanges(edits)) {
@@ -96,6 +124,7 @@ export function createChanges(log: EditLog, copy: Copy, mac = isMac()): Changes 
   }
 
   const stop = log.subscribe(draw);
+  const stopKeep = keep?.subscribe(draw) ?? null;
   draw();
 
   return {
@@ -103,6 +132,7 @@ export function createChanges(log: EditLog, copy: Copy, mac = isMac()): Changes 
     destroy(): void {
       gone = true;
       stop();
+      stopKeep?.();
       for (const timer of timers.values()) clearTimeout(timer);
     },
   };

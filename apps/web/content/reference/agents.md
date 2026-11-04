@@ -25,7 +25,7 @@ the page, such as playwright's `page.evaluate` or the chrome devtools mcp's
 - `edits()` gives the style and html edits made in inspect's view that are in force,
   oldest first, as json: each one's `kind` (`css-value`, `css-toggle` or
   `css-add` for styles, `css-rule` for a new rule; `text`, `attr`, `html`,
-  `hide` or `delete` for the html), its `target` (the element's `selector`, its `source` file and
+  `hide`, `delete` or `move` for the html), its `target` (the element's `selector`, its `source` file and
   line where grab finds it, and the `rule`'s `selectorText`, `sheet`,
   `owner` (the element that brought the stylesheet in), `sheetId` (tells
   two stylesheets with the same address apart), `path` and `context`, the
@@ -43,7 +43,27 @@ the page, such as playwright's `page.evaluate` or the chrome devtools mcp's
   rule made in the panel: `property` is `rule`, `after` its selector, and
   its `target.rule.sheet` is `new rule`; the `css-add` edits with the same
   `target.rule` are its declarations. add it where the element's styles are
-  written.
+  written. a `move` is an element moved in the DOM tree: `property` is
+  `node`, `before` and `after` say where it stood and stands in words
+  (`at the end of <ul class="menu">`, `before <li class="a"> in <ul class="menu">`),
+  and `from` and `to` say it as selectors read before the move: `parent`,
+  the element it is in, and `next`, the element it stands before, null at
+  the end. move it in the markup the component renders.
+- `setEdits(list)` makes edits again from a list in the shape `edits()`
+  gives, oldest first, through the same log as the panel's: the panel lists
+  them, `Z` and `undoEdit()` undo them. each is made only where its element
+  is found by its `selector` (and its rule by its `selectorText`, `context`,
+  `sheet` and `owner`) and the page still has the value `before`; a
+  `css-rule` makes a new rule, and the edits of its declarations go to it.
+  it resolves to `{ applied, skipped }`: the edits made, as `edits()` gives
+  them, and each one not made as `{ edit, reason }` (`not found on the page`,
+  `its rule is not on the page`, `the page has another value now`, `the page
+did not take it`, `not an edit devknobs reads`). anything but a list
+  throws a `TypeError`. so an agent can read `edits()`, save the list, and
+  make the same edits again on a fresh load, to compare or to screenshot
+  them before they are in the code.
+- `undoEdit()` undoes the last edit in force, as `Z` does in the panel, and
+  returns it, or null with none.
 - `forceState(element, states)` forces states on an element, so it renders
   as if hovered, focused or pressed, for a screenshot of that state. it takes
   the element or a selector for it, and `hover`, `focus`, `focus-visible`,
@@ -55,6 +75,7 @@ the page, such as playwright's `page.evaluate` or the chrome devtools mcp's
   [grab and inspect](/docs/grab)).
 - `reset()` leaves the panel as it is: open or closed, docked or not, its
   handle shown or hidden, its dev tab icon (`devIcon`) and real phone mode (`realPhone`) as set.
+- edits kept after a reload with the extension (the Elements view's switch): only a change made during a user gesture is kept, so `setEdits()` and `undoEdit()` from a script change the page and the panel, and not what is kept, unless they run right after a click or a key on the page.
 - `setState({ panel: { realPhone } })` with the extension: a change made during a user gesture, such as a click (the panel's switch included), is saved for every tab and site; a change a script makes without one stays in that tab, so a page's script cannot turn it for the others.
 
 ```js

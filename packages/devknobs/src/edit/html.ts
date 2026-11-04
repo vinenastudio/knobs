@@ -12,10 +12,10 @@
  */
 
 import { addStyle, ensureStyle, isDocument, type OwnStyle } from "../engine/style";
-import type { Change, EditKind, EditTarget } from "./log";
+import type { Change, EditKind, EditPlace, EditTarget } from "./log";
 
 /** The html edits, by their kind. */
-export type HtmlKind = Extract<EditKind, "text" | "attr" | "html" | "hide" | "delete">;
+export type HtmlKind = Extract<EditKind, "text" | "attr" | "html" | "hide" | "delete" | "move">;
 
 /** The attribute a hidden element carries. devknobs' own, so the tree and a copy leave it out. */
 export const HIDE_ATTRIBUTE = "data-devknobs-hide";
@@ -245,5 +245,102 @@ export function deleteEdit(target: EditTarget, node: Node, before: string, prope
       parent.insertBefore(node, at);
     },
     view: viewOf(node),
+  };
+}
+
+/** devknobs' own element: its panel, its boxes, the styles it puts on the page. */
+function isOwnElement(node: Node): boolean {
+  return isElement(node) && node.hasAttribute("data-devknobs");
+}
+
+/** The element after a node among its parent's, devknobs' own left out. Null at the end. */
+export function nextElementOf(node: Node): Element | null {
+  for (let at = node.nextSibling; at; at = at.nextSibling) if (isElement(at) && !isOwnElement(at)) return at;
+  return null;
+}
+
+/** The element before a node among its parent's, devknobs' own left out. Null at the start. */
+export function previousElementOf(node: Node): Element | null {
+  for (let at = node.previousSibling; at; at = at.previousSibling) if (isElement(at) && !isOwnElement(at)) return at;
+  return null;
+}
+
+/** The first element in a node, devknobs' own left out. */
+export function firstElementOf(node: Node): Element | null {
+  for (let at = node.firstChild; at; at = at.nextSibling) if (isElement(at) && !isOwnElement(at)) return at;
+  return null;
+}
+
+/**
+ * Whether an element can be moved: one in an element, and not the head or
+ * body, devknobs' own, or one that holds devknobs' own nodes, as the body
+ * holds the panel. The root element has a document above it, and stays.
+ */
+export function movable(node: Node): node is Element {
+  if (!isElement(node) || isOwnElement(node)) return false;
+  const parent = node.parentNode;
+  if (!parent || !isElement(parent)) return false;
+  if (node.namespaceURI === HTML && (node.localName === "head" || node.localName === "body")) return false;
+  return node.querySelector("[data-devknobs]") === null;
+}
+
+/** Elements with no content of their own, which take no element moved into them. */
+const EMPTY = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr", "template"]);
+
+/** Whether an element can take `element` moved into it: on the page, not devknobs' own, not the element or one in it, not a void element. */
+export function canHold(parent: Node, element: Element): parent is Element {
+  if (!isElement(parent) || !parent.isConnected || isOwnElement(parent) || parent === element) return false;
+  if (parent.namespaceURI === HTML && EMPTY.has(parent.localName)) return false;
+  for (let at: Node | null = parent; at; at = at.parentNode) if (at === element) return false;
+  return true;
+}
+
+/** An element as a move says it: its tag, with its id and class where it has them. */
+export function tagLabel(element: Element): string {
+  const tag = element.localName || element.nodeName.toLowerCase();
+  const id = element.getAttribute("id");
+  const classes = element.getAttribute("class")?.trim().replace(/\s+/g, " ");
+  return `<${tag}${id ? ` id="${id}"` : ""}${classes ? ` class="${classes}"` : ""}>`;
+}
+
+/** A place in words: `before <li class="x"> in <ul>`, or `at the end of <ul>`. */
+export function placeWords(parent: Element, next: Element | null): string {
+  return next ? `before ${tagLabel(next)} in ${tagLabel(parent)}` : `at the end of ${tagLabel(parent)}`;
+}
+
+/**
+ * An element moved into `to.parent`, before `to.next`, or at its end with
+ * null. `places` are the two places as selectors, read before the move. Null
+ * where it cannot move, where the place cannot take it, or where it already
+ * stands there. It goes on only where the element still stands where it was,
+ * and comes off only where it still stands where it went: undo puts it back
+ * before the node that came after it, or after the one before.
+ */
+export function moveEdit(target: EditTarget, element: Element, to: { parent: Element; next: Element | null }, places: { from: EditPlace; to: EditPlace }): Change | null {
+  const home = element.parentNode;
+  if (!home || !isElement(home) || !movable(element) || !canHold(to.parent, element)) return null;
+  if (to.next === element || (to.next !== null && to.next.parentNode !== to.parent)) return null;
+  const fromNext = nextElementOf(element);
+  if (to.parent === home && to.next === fromNext) return null;
+  let next: Node | null = null;
+  let previous: Node | null = null;
+  return {
+    edit: { kind: "move", target: { ...target }, property: "node", before: placeWords(home, fromNext), after: placeWords(to.parent, to.next), from: { ...places.from }, to: { ...places.to } },
+    apply() {
+      if (element.parentNode !== home || !canHold(to.parent, element) || (to.next !== null && to.next.parentNode !== to.parent)) return false;
+      next = element.nextSibling;
+      previous = element.previousSibling;
+      to.parent.insertBefore(element, to.next);
+      return true;
+    },
+    revert() {
+      if (element.parentNode !== to.parent || nextElementOf(element) !== to.next || !home.isConnected) return;
+      let at: Node | null = null;
+      if (next?.parentNode === home) at = next;
+      else if (previous?.parentNode === home) at = previous.nextSibling;
+      else if (previous === null) at = home.firstChild;
+      home.insertBefore(element, at);
+    },
+    view: viewOf(element),
   };
 }

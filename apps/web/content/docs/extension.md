@@ -3,7 +3,7 @@ title: chrome extension
 meta_title: knobs Chrome extension: the devknobs panel on any website
 description: The devknobs Chrome extension puts the same panel on any site you open in Chrome or Edge, with no change to its code, and has Chrome set some knobs for real.
 order: 8
-updated: 2026-11-01
+updated: 2026-11-04
 ---
 
 ## what it does
@@ -17,6 +17,8 @@ install it from the [chrome web store](https://chromewebstore.google.com/detail/
 ## with the npm package
 
 the npm package is for your own app, in any browser. the extension is for any site, in Chrome and Edge. if the page runs devknobs too, the extension's panel wins, and the page's calls such as `setState` go to it. to try a local build of devknobs on your own site, set prefer to page in the panel's settings: the page's copy then runs the panel, with real browser settings off. it needs a page copy newer than 0.5.1 or a local build, and applies to every site in the Chrome profile. the panel's footer says which copy runs it.
+
+the edits the Elements view keeps after a reload are in the extension's storage, per page, not in the page's `localStorage`. a page script can change them only right after you click or press a key on that page. turn the view's switch off to forget a page's edits.
 
 ## what Chrome sets for real
 
@@ -35,7 +37,7 @@ while text size, offline, a preference or the viewport is set, Chrome shows its 
 - `debugger`: the knobs set for real.
 - `declarativeNetRequestWithHostAccess` and `<all_urls>`: the user agent and framing rules.
 - `offscreen`: reads your own scheme and motion.
-- `storage`: each tab's knobs and the real or in-page switch.
+- `storage`: each tab's knobs, the real or in-page switch, and the edits pages keep after a reload.
 - `webNavigation`: drops framing rules when a tab loads another page, and sees the width knob's frame sent to another host of the same site.
 
 pages that refuse frames still load in the width knob's frame: while it is open, the extension removes `X-Frame-Options` from that tab's frame loads of the page's host, and `Content-Security-Policy` where its `frame-ancestors` leaves the page out. a site that sends the frame's first load to another host of its own, such as its mobile one for a phone, takes the tab there, with your knobs. later loads sent elsewhere get the notice.

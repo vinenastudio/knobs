@@ -1454,6 +1454,7 @@ button:focus-visible { outline: 1px solid var(--faint); outline-offset: -1px; }
   user-select: text;
   -webkit-user-select: text;
 }
+.dom-row { position: relative; }
 .dom-row:hover { background: var(--card); }
 .dom-row.on { background: var(--card); }
 .dom-tree:focus-within .dom-row.on { background: var(--pick); }
@@ -1477,6 +1478,32 @@ button:focus-visible { outline: 1px solid var(--faint); outline-offset: -1px; }
   background: var(--bg);
   border-top: 1px solid var(--line);
 }
+/* The handle that drags an element's line, at the start of its step in: on
+   hover and on the selected line, and always under a finger. The line being
+   dragged is faint; where it would go is a line over or under another, or
+   a ring around the element it would go into. */
+.dom-grip {
+  position: absolute;
+  top: 0;
+  width: 1.2em;
+  line-height: 1.6;
+  text-align: center;
+  color: var(--faint);
+  cursor: grab;
+  opacity: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: opacity 120ms ease-out;
+}
+.dom-row:hover > .dom-grip, .dom-row.on > .dom-grip { opacity: 1; }
+@media (hover: none) { .dom-grip { opacity: 0.6; } }
+.dom-grip:hover { color: var(--fg); }
+.dom-drag, .dom-drag * { cursor: grabbing; }
+.dom-dragging > .dom-code { opacity: 0.45; }
+.dom-drop-before { box-shadow: inset 0 2px 0 var(--fg); }
+.dom-drop-after { box-shadow: inset 0 -2px 0 var(--fg); }
+.dom-drop-into { box-shadow: inset 0 0 0 1px var(--fg); }
 .dom-flash { animation: dom-flash 900ms ease-out; }
 @keyframes dom-flash {
   from { background: var(--pick); }
@@ -1653,6 +1680,8 @@ s.css-decl, s.css-decl .css-var, s.css-decl .css-name { color: var(--faint); tex
 .changes {
   position: sticky;
   bottom: 0;
+  /* Over the styles' bar where the two meet, with a long list. */
+  z-index: 2;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 6px;
@@ -1661,6 +1690,13 @@ s.css-decl, s.css-decl .css-var, s.css-decl .css-name { color: var(--faint); tex
   border-top: 1px solid var(--line);
 }
 .changes-head, .changes-note { font-size: 10.5px; color: var(--faint); }
+/* What was made again as the page loaded, and the edits that were not. */
+.changes-kept { display: grid; gap: 2px; font-size: 11px; }
+.changes-kept-line { color: var(--fg); }
+.changes-missed { padding-left: var(--col-pad); font: 10.5px/1.5 var(--mono); color: var(--faint); overflow-wrap: anywhere; }
+/* The switch that keeps the edits after a reload, over the tree. */
+.keep-line { padding: 4px 0 6px; border-bottom: 1px solid var(--line); }
+.keep-line .knob-label { color: var(--fg); }
 .changes-list {
   max-height: 30vh;
   overflow: auto;

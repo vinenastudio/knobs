@@ -1,4 +1,7 @@
 import type {
+  EditKind,
+  EditPlace,
+  KeptEdits,
   NativeUa,
   NativeViewport,
   PreferValue,
@@ -35,8 +38,9 @@ export type Response = {
  * tab's loads skip service workers while it stays open, and `ua` is the user
  * agent the tab's requests carry, null for the browser's own. `prefer` keeps
  * whose copy of devknobs runs the panel on a page with its own, for every site,
- * `realPhone` keeps real phone mode, for every tab and site, and `keys` keeps
- * the shortcuts the user set in the panel, for every site.
+ * `realPhone` keeps real phone mode, for every tab and site, `keys` keeps
+ * the shortcuts the user set in the panel, for every site, and `edits` keeps the
+ * edits of the page at `path` on the tab's origin after a reload, or with null forgets them.
  * `carry` hands the page's knobs on, as the tab follows its frame to another
  * origin the service worker saw it land on. `id` pairs the answer.
  */
@@ -49,6 +53,7 @@ export type Ask =
   | { prefer: PreferValue; type: 'prefer' }
   | { on: boolean; type: 'realPhone' }
   | { keys: Keys; type: 'keys' }
+  | { kept: KeptEdits | null; path: string; type: 'edits' }
   | { state: Carry; type: 'carry' };
 export type Question = Ask & { id: number };
 
@@ -130,6 +135,170 @@ const KEY_MAX = 64;
 /** The shortcuts as devknobs keeps them: its version and each binding's key it set, as text. */
 export type Keys = { v?: number } & StoredKeys;
 
+/**
+ * In `chrome.storage.local`, before the page's origin and path: the edits kept after a reload
+ * for that page, with when they were kept (`at`), in place of the page's `localStorage`. The
+ * bridge reads the tab's page's as it starts and hands them on as they change; the service
+ * worker keeps those of `EDITS_PAGES` pages at most, forgetting the page kept longest ago.
+ */
+export const EDITS_PREFIX = 'edits:';
+export const EDITS_PAGES = 20;
+
+/** Where the edits of a page are kept: its origin and path, as devknobs keeps them per page. */
+export const editsKey = (origin: string, path: string) => `${EDITS_PREFIX}${origin}${path}`;
+
+// devknobs' caps on what it keeps for a page (`MAX_EDITS` and `MAX_BYTES` in its edit/keep.ts),
+// and on a field of one edit.
+const EDITS_MAX = 200;
+const EDITS_BYTES = 256 * 1024;
+const FIELD_MAX = 64 * 1024;
+const PATH_MAX = 2048;
+
+/** devknobs' edit kinds: one it adds that this leaves out, or one it dropped, is a type error. */
+const EDIT_KINDS: Record<EditKind, true> = {
+  attr: true,
+  'css-add': true,
+  'css-rule': true,
+  'css-toggle': true,
+  'css-value': true,
+  delete: true,
+  hide: true,
+  html: true,
+  move: true,
+  text: true,
+};
+const KINDS = Object.keys(EDIT_KINDS) as Array<EditKind>;
+
+const isField = (value: unknown): value is string =>
+  typeof value === 'string' && value.length <= FIELD_MAX;
+
+const isFieldOrNull = (value: unknown): value is string | null => value === null || isField(value);
+
+function readPlace(value: unknown): EditPlace | null {
+  if (!isFields(value) || !isField(value.parent) || value.parent === '') {
+    return null;
+  }
+  const { next, parent } = value;
+  if (next !== null && (!isField(next) || next === '')) {
+    return null;
+  }
+  return { next, parent };
+}
+
+type Rule = NonNullable<KeptEdits['edits'][number]['target']['rule']>;
+
+function readRule(value: unknown): Rule | null {
+  if (!isFields(value)) {
+    return null;
+  }
+  const { context, owner, path, selectorText, sheet, sheetId } = value;
+  const steps =
+    Array.isArray(path) &&
+    path.length <= 64 &&
+    path.every(
+      (step: unknown) => typeof step === 'number' && Number.isSafeInteger(step) && step >= 0,
+    )
+      ? path.map(Number)
+      : null;
+  const around =
+    Array.isArray(context) && context.length <= 64 && context.every(isField)
+      ? context.map(String)
+      : null;
+  if (
+    !isField(selectorText) ||
+    !isField(sheet) ||
+    !isFieldOrNull(owner) ||
+    typeof sheetId !== 'number' ||
+    !Number.isSafeInteger(sheetId) ||
+    !steps ||
+    !around
+  ) {
+    return null;
+  }
+  return { context: around, owner, path: steps, selectorText, sheet, sheetId };
+}
+
+type SavedEdit = KeptEdits['edits'][number];
+
+function readEdit(value: unknown): SavedEdit | null {
+  if (!isFields(value) || !isFields(value.target)) {
+    return null;
+  }
+  const kind = oneOf(value.kind, KINDS);
+  const { after, before, property } = value;
+  const { rule, selector, source } = value.target;
+  if (
+    !kind ||
+    !isField(selector) ||
+    selector === '' ||
+    !isField(property) ||
+    !isFieldOrNull(before) ||
+    !isFieldOrNull(after) ||
+    (source !== undefined && !isField(source))
+  ) {
+    return null;
+  }
+  const edit: SavedEdit = { after, before, kind, property, target: { selector } };
+  if (source !== undefined) {
+    edit.target.source = source;
+  }
+  if (rule !== undefined) {
+    const read = readRule(rule);
+    if (!read) {
+      return null;
+    }
+    edit.target.rule = read;
+  }
+  if (kind === 'move') {
+    const from = readPlace(value.from);
+    const to = readPlace(value.to);
+    if (!from || !to) {
+      return null;
+    }
+    edit.from = from;
+    edit.to = to;
+  }
+  return edit;
+}
+
+/**
+ * The edits a page sent or storage holds for a page, or null for anything that is no object,
+ * has a bad version, more edits than devknobs keeps, more text than it keeps, or an entry that
+ * is no edit of a kind it makes. devknobs reads each edit again itself.
+ */
+export function readKept(value: unknown): KeptEdits | null {
+  if (
+    !isFields(value) ||
+    !Array.isArray(value.edits) ||
+    value.edits.length > EDITS_MAX ||
+    typeof value.v !== 'number' ||
+    !Number.isSafeInteger(value.v) ||
+    value.v < 0 ||
+    JSON.stringify(value.edits).length > EDITS_BYTES
+  ) {
+    return null;
+  }
+  const edits: Array<SavedEdit> = [];
+  for (const one of value.edits) {
+    const edit = readEdit(one);
+    if (!edit) {
+      return null;
+    }
+    edits.push(edit);
+  }
+  return { edits, v: value.v };
+}
+
+/** A page's path as a page sent it: one that starts with `/`, with no query or hash, or null. */
+export function readPath(value: unknown): string | null {
+  return typeof value === 'string' &&
+    value.startsWith('/') &&
+    value.length <= PATH_MAX &&
+    !/[?#]/.test(value)
+    ? value
+    : null;
+}
+
 /** The preference as stored, the extension's copy where none is. */
 export function readPrefer(value: unknown): PreferValue {
   return value === 'page' ? 'page' : 'extension';
@@ -142,6 +311,8 @@ export type PageMessage =
   | { on: boolean; type: 'realPhone' }
   /** The shortcuts kept for every site, null where the user set none yet. */
   | { keys: Keys | null; type: 'keys' }
+  /** The edits kept for the page after a reload, null where it keeps none. */
+  | { kept: KeptEdits | null; type: 'edits' }
   | (Answer & { id: number; type: 'answer' })
   | {
       base: string;
@@ -405,6 +576,11 @@ export function readPageMessage(value: unknown): PageRequest | null {
     case 'keys': {
       const keys = readKeys(value.keys);
       return keys ? { id, keys, type: 'keys' } : null;
+    }
+    case 'edits': {
+      const path = readPath(value.path);
+      const kept = value.kept === null ? null : readKept(value.kept);
+      return path && (kept || value.kept === null) ? { id, kept, path, type: 'edits' } : null;
     }
     case 'carry': {
       const state = readCarry(value.state);

@@ -4,12 +4,12 @@
  * property in one place come to one change, from the first value to the last,
  * and one that came back to where it started is no change. An element's html
  * edits are one place, apart from its style, and an html edit adds to the one
- * before only where it goes on from its value; deletes never merge. A new
+ * before only where it goes on from its value; deletes and moves never merge. A new
  * rule and the declarations added to it are one place. Nothing here touches
  * the page.
  */
 
-import type { Edit, EditKind, EditTarget } from "./log";
+import type { Edit, EditKind, EditPlace, EditTarget } from "./log";
 import { NEW_RULE_SHEET } from "./rule";
 
 /** One property's change in one place, from its first value to its last. */
@@ -20,6 +20,8 @@ export interface NetChange {
   property: string;
   before: string | null;
   after: string | null;
+  /** For a move: where the element went, as selectors. */
+  to?: EditPlace;
 }
 
 /** The edits that change one place, in the order the first of them was made. */
@@ -30,7 +32,7 @@ export interface ChangeGroup {
   changes: NetChange[];
 }
 
-const MARKUP_KINDS: ReadonlySet<EditKind> = new Set<EditKind>(["text", "attr", "html", "hide", "delete"]);
+const MARKUP_KINDS: ReadonlySet<EditKind> = new Set<EditKind>(["text", "attr", "html", "hide", "delete", "move"]);
 
 /** Whether a target is in a rule added from the styles view. */
 export function isNewRuleTarget(target: EditTarget): boolean {
@@ -62,14 +64,15 @@ export function netChanges(edits: readonly Edit[]): ChangeGroup[] {
     }
     // One element's selector and source, together: the last that knows where it is written.
     if (edit.target.source) group.target = edit.target;
-    // A delete is never one with another: the selectors after a node taken out shift.
+    // A delete or a move is never one with another: the selectors after a node taken out or moved shift.
     // An html edit's property is the kind's own: a real `hidden` attribute is not a hide.
-    const at = edit.kind === "delete" ? `#${edit.id}` : isMarkupKind(edit.kind) ? `${key}\n${edit.kind}\n${edit.property}` : `${key}\n${edit.property}`;
+    const at = edit.kind === "delete" || edit.kind === "move" ? `#${edit.id}` : isMarkupKind(edit.kind) ? `${key}\n${edit.kind}\n${edit.property}` : `${key}\n${edit.property}`;
     const known = byProperty.get(at);
     // An html edit goes on from the last only where it starts from that one's value: a selector or a `text 2` that shifted is another node.
     if (known && (!isMarkupKind(edit.kind) || known.after === edit.before)) known.after = edit.after;
     else {
       const change: NetChange = { target: edit.target, kind: edit.kind, property: edit.property, before: edit.before, after: edit.after };
+      if (edit.to) change.to = { ...edit.to };
       byProperty.set(at, change);
       group.changes.push(change);
     }
@@ -119,11 +122,11 @@ export function placeLine(target: EditTarget, markup = false): string {
   return `style="" on ${data(target.selector)}`;
 }
 
-/** An html change as diff lines: `- class: "cta"`, `+ text: "Buy"`, the markup a delete took, `+ hidden`. */
+/** An html change as diff lines: `- class: "cta"`, `+ text: "Buy"`, the markup a delete took, `+ hidden`, where a move took an element. */
 function markupDiff(change: Pick<NetChange, "kind" | "property" | "before" | "after">): string[] {
   const line = (sign: string, value: string): string => {
     if (change.kind === "hide") return `${sign} hidden`;
-    if (change.kind === "html" || change.kind === "delete") return `${sign} ${data(value)}`;
+    if (change.kind === "html" || change.kind === "delete" || change.kind === "move") return `${sign} ${data(value)}`;
     return `${sign} ${data(change.property)}: ${quoted(value)}`;
   };
   const lines: string[] = [];
@@ -196,6 +199,11 @@ function markupLine(change: NetChange): string {
       return after === null ? "show it again: it was hidden" : "hide it: the panel hid it with visibility: hidden";
     case "delete":
       return `delete: ${said(before, "(none)")}`;
+    case "move": {
+      const to = change.to;
+      const where = to ? ` (into \`${data(to.parent)}\`, ${to.next === null ? "at its end" : `before \`${data(to.next)}\``})` : "";
+      return `move it: ${said(before, "(none)")} -> ${said(after, "(none)")}${where}`;
+    }
     default:
       return `${data(change.property)}: ${saidQuoted(before, "(none)")} -> ${saidQuoted(after, "(removed)")}`;
   }

@@ -5,6 +5,9 @@ import {
   type Answer,
   type Carry,
   detachMessage,
+  EDITS_PAGES,
+  EDITS_PREFIX,
+  editsKey,
   KEYS_KEY,
   PREFER_KEY,
   REAL_PHONE_KEY,
@@ -782,6 +785,41 @@ function unbypass(tabId: number): Promise<void> {
   });
 }
 
+/** Forget the pages whose edits were kept longest ago, past `EDITS_PAGES`, never `kept`, the one just written. */
+async function evictEdits(kept: string) {
+  const stored = await chrome.storage.local.get(null);
+  const pages = Object.entries(stored)
+    .filter(([key]) => key.startsWith(EDITS_PREFIX) && key !== kept)
+    .map(([key, value]) => {
+      const at: unknown =
+        typeof value === 'object' && value !== null ? Reflect.get(value, 'at') : 0;
+      return { at: typeof at === 'number' ? at : 0, key };
+    })
+    .toSorted((a, b) => b.at - a.at);
+  const old = pages.slice(EDITS_PAGES - 1).map(({ key }) => key);
+  if (old.length > 0) {
+    await chrome.storage.local.remove(old);
+  }
+}
+
+/** Keep a page's edits, on the tab's own origin, or with null forget them. */
+async function keepEdits(
+  url: string | undefined,
+  { kept, path }: Extract<Question, { type: 'edits' }>,
+) {
+  const origin = url ? URL.parse(url)?.origin : undefined;
+  if (!origin || origin === 'null') {
+    throw new Error('this page keeps no edits');
+  }
+  const key = editsKey(origin, path);
+  if (kept === null) {
+    await chrome.storage.local.remove(key);
+    return;
+  }
+  await chrome.storage.local.set({ [key]: { ...kept, at: Date.now() } });
+  await evictEdits(key);
+}
+
 async function answer(tabId: number, question: Question, url: string | undefined): Promise<Answer> {
   switch (question.type) {
     case 'why': {
@@ -807,6 +845,10 @@ async function answer(tabId: number, question: Question, url: string | undefined
     }
     case 'keys': {
       await chrome.storage.local.set({ [KEYS_KEY]: question.keys });
+      return {};
+    }
+    case 'edits': {
+      await keepEdits(url, question);
       return {};
     }
     case 'carry': {
@@ -858,6 +900,7 @@ chrome.runtime.onMessage.addListener(
       request.type === 'prefer' ||
       request.type === 'realPhone' ||
       request.type === 'keys' ||
+      request.type === 'edits' ||
       request.type === 'carry'
     ) {
       answer(tabId, request, sender.url).then(reply, (error) =>

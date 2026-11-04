@@ -3,7 +3,8 @@ import { DEFAULT_STATE } from "../src/engine/store";
 import type { DomTree, DomTreeContext } from "../src/ui/domtree";
 import { attrEdit, htmlEdit } from "../src/edit/html";
 import { type Change, createEditLog, type EditLog } from "../src/edit/log";
-import { createDollar, createElementsView, DOLLAR, undoKey } from "../src/ui/elementsview";
+import type { Keeper } from "../src/edit/keep";
+import { createDollar, createElementsView, DOLLAR, KEEP_LABEL, undoKey } from "../src/ui/elementsview";
 import type { StylesPage, StylesView } from "../src/ui/stylesview";
 import type { Tips } from "../src/ui/tooltip";
 import { as as pageNode, elem, page as pageOf } from "./dom-page";
@@ -163,7 +164,7 @@ describe("the elements view", () => {
   /** The node the stub tree has selected. */
   let picked: Node | null = null;
 
-  function start(): FakeNode {
+  function start(keep: Keeper | null = null): FakeNode {
     undid = [];
     copies = [];
     copyWorks = true;
@@ -182,6 +183,7 @@ describe("the elements view", () => {
       {
         page,
         edits: log,
+        keep,
         copy: (text) => {
           copies.push(text);
           return copyWorks ? true : Promise.reject(new Error("no clipboard"));
@@ -216,6 +218,40 @@ describe("the elements view", () => {
     expect(revealed).toEqual([]);
     log.undoAll();
     picked = null;
+  });
+
+  test("has the switch that keeps the edits after a reload at its top, as the keeper has it, only with a keeper", () => {
+    expect(start().all().some((one) => one.classList.contains("keep-line"))).toBe(false);
+    view?.destroy();
+    let on = false;
+    const listeners = new Set<() => void>();
+    const turned: boolean[] = [];
+    const keep: Keeper = {
+      on: () => on,
+      set: (next) => void turned.push(next),
+      restored: () => null,
+      cut: () => 0,
+      subscribe: (listener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      stop: () => undefined,
+    };
+    const node = start(keep);
+    const line = node.all().find((one) => one.classList.contains("keep-line"));
+    expect(node.all().findIndex((one) => one === line)).toBe(1);
+    expect(line?.classList.contains("keep-line")).toBe(true);
+    expect(line?.textContent).toBe(KEEP_LABEL);
+    const control = line?.all().find((one) => one.tag === "button");
+    expect(control?.getAttribute("aria-checked")).toBe("false");
+    control?.fire("click");
+    expect(turned).toEqual([true]);
+    on = false;
+    for (const listener of listeners) listener();
+    expect(control?.getAttribute("aria-checked")).toBe("false");
+    on = true;
+    for (const listener of listeners) listener();
+    expect(control?.getAttribute("aria-checked")).toBe("true");
   });
 
   test("undoes on Z and redoes on ⇧Z, and leaves a key in a field to it", () => {

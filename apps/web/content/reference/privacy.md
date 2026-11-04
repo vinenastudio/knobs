@@ -27,6 +27,7 @@ what it keeps, all in your browser, for the page's origin:
 
 - `sessionStorage`: the knobs, under `devknobs` (pass `persist: false` to keep them in memory), the last frame's look for the early script, the scroll position and page path across a frame reload (`devknobs:scroll`), the old values of the locale stores it wrote (`devknobs:locale-stores`), and when it last asked for a reload (`devknobs:locale-reload`, `devknobs:fresh-reload`).
 - `localStorage`: keys that start with `devknobs:`, such as the panel's width and settings (`devknobs:prefs`), its place and pin (`devknobs:place`), your shortcuts (`devknobs:keys`), your own colors (`devknobs:colors`) and storage presets (`devknobs:storage-presets`).
+- `localStorage`, only while the Elements view's `keep edits after reload` switch is on for a page: that page's edits, under `devknobs:edits:` and its path, as json (each edit's kind, selectors, rule and values before and after, no part of the page itself), for 20 pages of the origin at most. turning the switch off removes the page's item; clearing the site's data removes them all. see [keep edits after reload](/docs/grab#keep-edits-after-reload).
 - the locale knob writes the tag into the stores i18n libraries read: the paraglide cookie always, the paraglide and i18next local storage keys and the i18next session key and cookie only when the page already has them, and `NEXT_LOCALE` on next.js pages or when that cookie exists. it gives each its old value back when you set it to system, within the same tab session only.
 
 with `devknobs=fresh` in the address, devknobs' own items skip `localStorage`. the storage view still reads the page's storage, and writes it when you edit there. see [fresh mode](/docs/panel#fresh-mode).
@@ -38,9 +39,9 @@ the extension's own code makes no network requests: no `fetch`, no `XMLHttpReque
 what it keeps, in `chrome.storage`:
 
 - session storage, which Chrome clears when it closes: each tab's knobs, which tabs have devknobs' frame open on which host, and each tab's user agent with its page's host.
-- local storage: the real or in-page switch, prefer, real phone mode, and the shortcuts you set in the panel. real phone mode and the shortcuts are saved there only when set with a click or a key press of yours; a page script that sets them otherwise changes them in its own tab alone.
+- local storage: the real or in-page switch, prefer, real phone mode, the shortcuts you set in the panel, and the edits a page keeps after a reload while its switch is on (`edits:` and the page's origin and path, for 20 pages at most). real phone mode, the shortcuts and the edits are saved there only when set with a click or a key press of yours; a page script that sets them otherwise changes them in its own tab alone. turning a page's switch off removes its edits; removing the extension removes them all.
 
-the panel it puts on a page keeps the same `devknobs` and `devknobs:` keys in that page's own storage as the npm package does, but for the shortcuts, which it keeps in the extension's storage, the same on every site.
+the panel it puts on a page keeps the same `devknobs` and `devknobs:` keys in that page's own storage as the npm package does, but for the shortcuts, which it keeps in the extension's storage, the same on every site, and the edits kept after a reload, which it keeps there per page.
 
 **the debugger.** Chrome's debugger attaches to a tab only when you ask for something that needs it, and Chrome shows its bar while it is on:
 

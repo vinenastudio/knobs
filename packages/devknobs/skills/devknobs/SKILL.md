@@ -199,18 +199,40 @@ edits with the same `target.rule` are its declarations. It exists only on the
 page: add it where the element's styles are written (in Tailwind, a variant
 such as `hover:` on the element's classes).
 
-The html edits have `kind` `text`, `attr`, `html`, `hide` or `delete`, and no
-`target.rule`. `property` is `text` (`text 2` and on for an element's later
+The html edits have `kind` `text`, `attr`, `html`, `hide`, `delete` or
+`move`, and no `target.rule`. `property` is `text` (`text 2` and on for an element's later
 texts), the attribute's name, `html`, `hidden` or `node`; a `delete` of an
 element has `node`, of a text `text` (or `text 2` and on), and of a comment
 `comment`. `before` and `after` are the text, the attribute's value or the
 markup (null where it is not set: an attribute added or taken out, a node
 deleted). A `hide` with `after: "hidden"` asks to hide or remove the
 element, and one with `before: "hidden"` and `after: null` means it was
-shown again. Make each one
+shown again. A `move` has `property` `node`, `before` and `after` saying in
+words where the element stood and stands, and `from` and `to` saying it as
+selectors read before the move: `parent` (the element it is in) and `next`
+(the element it stands before, null at the end); move it in the markup the
+component renders. Make each one
 in the component or template that renders the element, never by patching the
 DOM from a script: they were made on the live DOM, and the framework's next
-render may undo them. The edits live only on the page: a reload drops them.
+render may undo them. The edits live on the page: a reload drops them, unless
+the user turned on `keep edits after reload` at the top of the Elements view,
+which makes them again as the page loads where it still has their targets.
+
+To try the edits again on a fresh load, before or after they are in the code,
+save the list and make it again:
+
+```js
+const list = window.devknobs.edits();
+// ...reload the page, then:
+const { applied, skipped } = await window.devknobs.setEdits(list);
+window.devknobs.undoEdit(); // undoes the last edit in force, returns it or null
+```
+
+`setEdits` makes each edit only where its element is found by its selector
+and the page still has its `before` value, through the same log as the
+panel's, so the user sees them and can undo them. `skipped` lists each one not
+made as `{ edit, reason }`. Once an edit is in the code, `setEdits` skips it
+with `the page has another value now`: that tells you the code matches.
 
 ## Check a hover or focus state
 

@@ -2,8 +2,10 @@
 // prefers knobs, a plain viewport and the user agent handed to the service worker, which sets them for real.
 import {
   type DevknobsStatePatch,
+  type EditsStore,
   type FrameRefusal,
   getState,
+  type KeptEdits,
   type KeysStore,
   mount,
   type NativeDriver,
@@ -383,6 +385,51 @@ function keysAbove(): KeysStore | null {
   };
 }
 
+/** The edits kept for this page after a reload, as the bridge last said: undefined until it says. */
+let keptEdits: KeptEdits | null | undefined;
+const editsHeard = new Set<() => void>();
+
+/**
+ * Where devknobs keeps the edits of this page after a reload: in the extension's storage, under
+ * the page's origin and path, not in the page's `localStorage`. The bridge says what is kept after
+ * the mount, and devknobs makes them again once it knows and the page settled. Only a change made
+ * during a gesture of the user's is kept: a page script can change them only right after you
+ * click or press a key on that page; otherwise its change stays in this tab.
+ */
+const editsStore: EditsStore = {
+  load: () => keptEdits,
+  save: (kept) => {
+    if (navigator.userActivation.isActive) {
+      void ask({ kept, path: location.pathname, type: 'edits' }).then(({ error }) => {
+        if (error !== undefined) {
+          queueMicrotask(() => {
+            throw new Error(`knobs: the edits were not kept after a reload: ${error}`);
+          });
+        }
+      });
+    }
+  },
+  subscribe: (listener) => {
+    editsHeard.add(listener);
+    return () => {
+      editsHeard.delete(listener);
+    };
+  },
+};
+
+function heardEdits(kept: KeptEdits | null) {
+  keptEdits = kept;
+  for (const listener of editsHeard) {
+    try {
+      listener();
+    } catch (error) {
+      queueMicrotask(() => {
+        throw error;
+      });
+    }
+  }
+}
+
 /**
  * Who runs the panel on a page with its own devknobs, shown in the panel's settings.
  * The choice is kept for every site; going back to the extension's copy from the
@@ -456,6 +503,8 @@ function mountHost(persist: boolean) {
     handle: false,
     host: true,
     ...(keys ? { keysStore: keys } : {}),
+    // devknobs' frame keeps no edits: they are the page's.
+    ...(top ? { editsStore } : {}),
     native: driver,
     persist,
     stoodDown: standDown,
@@ -517,6 +566,8 @@ function onMessage(event: Event) {
   } else if (message.type === 'keys') {
     // Kept after a handover too, for a mount again once the page's copy has gone.
     heardKeys(message.keys);
+  } else if (message.type === 'edits') {
+    heardEdits(message.kept);
   } else if (yielded) {
     afterYield(message);
   } else if (message.type === 'prefer') {
