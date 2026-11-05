@@ -1158,7 +1158,7 @@ describe("the styles view at any width", () => {
   const PANEL_EDGES = 10;
   const BLOCK_EDGES = 20;
 
-  test("is shown at the panel's 240 until dragged, and up to 720", () => {
+  test("is shown at 240 at the least, and up to 720", () => {
     const small = 240 + HANDLE_REACH + PANEL_GAP;
     expect(widthIn(340, small)).toBe(240);
     expect(widthIn(240, 1440)).toBe(240);
@@ -1242,8 +1242,8 @@ describe("the styles view at any width", () => {
 });
 
 describe("the panel's width", () => {
-  test("is the wrapper's --panel-width, 240 until the panel says", () => {
-    expect(body(".wrap")).toMatch(/--panel-width:\s*240px/);
+  test("is the wrapper's --panel-width, 320 until the panel says", () => {
+    expect(body(".wrap")).toMatch(/--panel-width:\s*320px/);
     expect(body(".panel")).toMatch(/width:\s*var\(--panel-width\)/);
   });
 
@@ -1368,8 +1368,8 @@ describe("the requests, at every width the panel takes", () => {
     return width - AROUND - around - 3 * sheet.px(main, "column-gap") - fixed;
   }
 
-  test("the widths are the panel's: 240 at the least and until it is dragged, 720 at the most", () => {
-    expect([WIDTH_MIN, PANEL_WIDTH, WIDTH_MAX]).toEqual([240, 240, 720]);
+  test("the widths are the panel's: 240 at the least, 320 until it is dragged, 720 at the most", () => {
+    expect([WIDTH_MIN, PANEL_WIDTH, WIDTH_MAX]).toEqual([240, 320, 720]);
   });
 
   test("only the name gives way or takes the room: the other columns keep their width", () => {

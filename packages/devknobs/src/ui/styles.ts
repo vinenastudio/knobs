@@ -96,7 +96,7 @@ export const CSS = `
   --edge: 0px;
   --edge-line: transparent;
   --glide: 220ms;
-  --panel-width: 240px;
+  --panel-width: 320px;
   /* The columns: what a row keeps clear inside its edges, an icon's width,
      the room between an icon and its word, and how far in a line of words
      starts and ends. */

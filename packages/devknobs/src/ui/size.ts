@@ -12,7 +12,7 @@ import type { LivePrefs } from "./prefs";
  */
 
 /** How wide the panel is until the user says otherwise, in px. */
-export const PANEL_WIDTH = 240;
+export const PANEL_WIDTH = 320;
 
 /** The narrowest the strip makes the panel, in px. */
 export const WIDTH_MIN = 240;

@@ -428,7 +428,7 @@ describe("the fold of the box in the preferences", () => {
     const prefs = createPrefs();
     expect(prefs.get()).toEqual({
       handle: true,
-      width: 240,
+      width: 320,
       stylesMode: "advanced",
       stylesBox: true,
       changesDiff: false,

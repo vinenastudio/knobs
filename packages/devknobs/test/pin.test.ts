@@ -35,9 +35,9 @@ describe("the pin control's words", () => {
   });
 
   test("say the panel lies over the page in a window too narrow to make room", () => {
-    expect(pinTip(false, 559)).toBe("pin to the side · over the page in a window this narrow");
+    expect(pinTip(false, 639)).toBe("pin to the side · over the page in a window this narrow");
     expect(pinTip(true, 390)).toBe("unpin · over the page in a window this narrow");
-    expect(pinTip(false, 560)).toBe("pin to the side");
+    expect(pinTip(false, 640)).toBe("pin to the side");
   });
 
   test("go by the width the panel is now", () => {

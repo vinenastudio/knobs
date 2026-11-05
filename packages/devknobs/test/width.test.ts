@@ -2482,6 +2482,8 @@ describe("a panel pinned to its side", () => {
   };
 
   beforeEach(() => {
+    // The column these cases measure against, a panel at the least it is.
+    setDockWidth(240);
     view = { width: 1600, height: 900 };
     heard = new Map();
     waits = [];

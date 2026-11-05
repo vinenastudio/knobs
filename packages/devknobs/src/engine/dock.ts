@@ -6,7 +6,7 @@ import type { PanelValue, SideValue } from "../types";
  */
 
 /** How wide the panel is until it says otherwise, in px. */
-export const DOCK_WIDTH = 240;
+export const DOCK_WIDTH = 320;
 
 /** The narrowest page the column leaves. In a window with less to spare it lies over the page. */
 export const PAGE_MIN = 320;

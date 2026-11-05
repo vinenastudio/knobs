@@ -20,8 +20,9 @@ import { PAGE_MIN } from "../src/engine/dock";
 import type { SideValue } from "../src/types";
 
 describe("the panel's width", () => {
-  test("is 240 until the user says otherwise, for the rows, the settings and every view", () => {
-    expect(PANEL_WIDTH).toBe(240);
+  test("is 320 until the user says otherwise, for the rows, the settings and every view", () => {
+    expect(PANEL_WIDTH).toBe(320);
+    expect(PANEL_WIDTH).not.toBe(WIDTH_MIN);
   });
 
   test("goes down to 240, and up to 720 or what leaves the page 96", () => {
@@ -442,12 +443,12 @@ describe("the width the panel says it has", () => {
     strip.fire("pointerup", { clientX: 900 });
     expect(wide).toEqual([400, 440]);
     strip.fire("dblclick");
-    expect(wide).toEqual([400, 440, 240]);
+    expect(wide).toEqual([400, 440, 320]);
     strip.fire("keydown", { key: "ArrowLeft" });
-    expect(wide).toEqual([400, 440, 240, 240 + WIDTH_STEP]);
+    expect(wide).toEqual([400, 440, 320, 320 + WIDTH_STEP]);
     state.view = 270;
     sizer.fit();
-    expect(wide.at(-1)).toBe(widthIn(240 + WIDTH_STEP, 270));
+    expect(wide.at(-1)).toBe(widthIn(320 + WIDTH_STEP, 270));
   });
 
   test("is not said again where the width stays, or while the panel is closed", () => {
@@ -617,8 +618,8 @@ describe("the strip", () => {
   test("a double click puts the width back to its default", () => {
     const { strip, kept, width } = rig({}, { width: 520 });
     strip.fire("dblclick");
-    expect(kept).toEqual([240]);
-    expect(width()).toBe("240px");
+    expect(kept).toEqual([320]);
+    expect(width()).toBe("320px");
   });
 
   test("the arrows change the width by 16, Home and End go to the limits, and each is kept", () => {

@@ -11,7 +11,7 @@ import {
 /** A mount's preferences, with the width a panel starts with. */
 const BASE: Prefs = {
   handle: true,
-  width: 240,
+  width: 320,
   stylesMode: "simple",
   stylesBox: true,
   changesDiff: false,
@@ -70,7 +70,7 @@ describe("readPrefs", () => {
     expect(readPrefs(JSON.stringify({ v: 1, handle: false }))).toEqual({ handle: false });
     expect(resolvePrefs(BASE, readPrefs(JSON.stringify({ v: 1, handle: false })))).toEqual({
       handle: false,
-      width: 240,
+      width: 320,
       stylesMode: "simple",
       stylesBox: true,
       changesDiff: false,
@@ -197,10 +197,18 @@ describe("createPrefs", () => {
     prefs.destroy();
   });
 
-  test("starts 240 wide", () => {
+  test("starts 320 wide", () => {
     stubWindow();
     const prefs = createPrefs();
-    expect(prefs.get()).toMatchObject({ width: 240 });
+    expect(prefs.get()).toMatchObject({ width: 320 });
+    prefs.destroy();
+  });
+
+  test("keeps a width saved narrower than the new default as it is", () => {
+    const { local } = stubWindow();
+    local.set(PREFS_KEY, JSON.stringify({ v: PREFS_VERSION, width: 260 }));
+    const prefs = createPrefs();
+    expect(prefs.get()).toMatchObject({ width: 260 });
     prefs.destroy();
   });
 
@@ -227,7 +235,7 @@ describe("createPrefs", () => {
       htmlHeight: 200,
       htmlFull: false,
     });
-    prefs.setWidth(240);
+    prefs.setWidth(320);
     expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({ v: PREFS_VERSION, handle: false });
     prefs.setHandle(true);
     expect(local.has(PREFS_KEY)).toBe(false);
@@ -273,7 +281,7 @@ describe("createPrefs", () => {
     const kept = JSON.stringify({ v: PREFS_VERSION, width: 300 });
     local.set(PREFS_KEY, kept);
     const prefs = createPrefs();
-    expect(prefs.get()).toMatchObject({ width: 240 });
+    expect(prefs.get()).toMatchObject({ width: 320 });
     prefs.setWidth(480);
     expect(prefs.get()).toMatchObject({ width: 480 });
     expect(local.get(PREFS_KEY)).toBe(kept);
