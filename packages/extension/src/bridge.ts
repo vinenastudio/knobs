@@ -2,12 +2,14 @@
 // devknobs and the service worker, which only this world can reach.
 import {
   type Answer,
+  editsKey,
   KEYS_KEY,
   LOAD_FRAME,
   type PageMessage,
   PREFER_KEY,
   REAL_PHONE_KEY,
   type Question,
+  readKept,
   readKeys,
   readPageMessage,
   readPrefer,
@@ -25,6 +27,10 @@ const ask = (request: Request) => chrome.runtime.sendMessage<Request, Response>(
 
 const base = chrome.runtime.getURL('content.js');
 
+// The path this page loaded at, read once: its kept edits go under it, whatever path the page's
+// router moves to, or the page names, later.
+const EDITS_PATH = location.pathname;
+
 document.addEventListener(TO_BRIDGE, (event) => {
   const detail = (event as CustomEvent<unknown>).detail;
   if (typeof detail !== 'string') {
@@ -37,16 +43,18 @@ document.addEventListener(TO_BRIDGE, (event) => {
     return;
   }
   // Any script of the page can send this event: only what devknobs sends goes on.
-  const request = readPageMessage(parsed);
+  const read = readPageMessage(parsed);
+  // Edits go under the path this page loaded at, as the bridge read it, never one the page names.
+  const request = read?.type === 'edits' ? { ...read, path: EDITS_PATH } : read;
   if (!request) {
     return;
   }
-  // Real phone mode and the shortcuts are kept for every tab only during a gesture of the user's,
-  // such as a click on the panel's switch or a key recorded in its settings. A page script can
-  // change them only right after you click or press a key on that page; otherwise its change
-  // stays in its tab.
+  // Real phone mode, the shortcuts and the edits kept after a reload are kept only during a
+  // gesture of the user's, such as a click on the panel's switch, a key recorded in its settings
+  // or an edit made in its Elements view. A page script can change them only right after you
+  // click or press a key on that page; otherwise its change stays in its tab.
   if (
-    (request.type === 'realPhone' || request.type === 'keys') &&
+    (request.type === 'realPhone' || request.type === 'keys' || request.type === 'edits') &&
     !navigator.userActivation.isActive
   ) {
     return;
@@ -208,5 +216,18 @@ chrome.storage.onChanged.addListener((changes, area) => {
   const change = changes[KEYS_KEY];
   if (area === 'local' && change) {
     toPage({ keys: readKeys(change.newValue), type: 'keys' });
+  }
+});
+
+// The edits kept for this page after a reload, the same way: the page at this origin and the
+// path it loaded at (`EDITS_PATH`, above).
+const EDITS_KEY = editsKey(location.origin, EDITS_PATH);
+chrome.storage.local.get(EDITS_KEY, (stored) =>
+  toPage({ kept: readKept(stored[EDITS_KEY]), type: 'edits' }),
+);
+chrome.storage.onChanged.addListener((changes, area) => {
+  const change = changes[EDITS_KEY];
+  if (area === 'local' && change) {
+    toPage({ kept: readKept(change.newValue), type: 'edits' });
   }
 });

@@ -328,7 +328,8 @@ describe("the tree as built", () => {
 
   const list = (node: FakeNode) => node.find("dom-tree")[0] as FakeNode;
   const rows = (node: FakeNode) => list(node).children as FakeNode[];
-  const said = (row: FakeNode) => row.textContent;
+  /** A line's text, without the handle an element's line has in an editable tree. */
+  const said = (row: FakeNode) => row.textContent.replace(/^⋮⋮/, "");
 
   function setup() {
     const save = elem("button", { id: "save" }, text("Save"));
@@ -433,6 +434,7 @@ describe("the tree as built", () => {
             selected: (row) => seen.push(row?.node ?? null),
             busy: () => false,
             close: () => false,
+            move: () => false,
             destroy: () => undefined,
           };
         },

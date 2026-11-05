@@ -1,15 +1,21 @@
 import { describe, expect, test } from 'bun:test';
+import type { KeptEdits } from '@vinena/knobs';
 import { DEFAULT_STATE } from '../src/knobs.ts';
 import {
   detachMessage,
+  editsKey,
+  editsToForget,
   readCarry,
+  readKept,
   readKeys,
   readPageMessage,
+  readPath,
   readPrefer,
   readState,
   readSystemChange,
   readTabRequest,
   readUa,
+  riskyEdit,
 } from '../src/messages.ts';
 
 describe('detachMessage', () => {
@@ -234,5 +240,132 @@ describe('readSystemChange', () => {
     expect(
       readSystemChange({ media: { motion: 'fast', scheme: 'dark' }, type: 'system' }),
     ).toBeNull();
+  });
+});
+
+describe('kept edits', () => {
+  const rule = {
+    context: ['@media (min-width: 640px)'],
+    owner: 'style#theme',
+    path: [2, 0],
+    selectorText: '.cta',
+    sheet: '<style>',
+    sheetId: 3,
+  };
+  const edits: KeptEdits['edits'] = [
+    {
+      after: '10px',
+      before: '8px',
+      kind: 'css-value',
+      property: 'padding',
+      target: { rule, selector: 'a.cta', source: 'src/Hero.tsx:4' },
+    },
+    {
+      after: 'before <li> in <ul>',
+      before: 'at the end of <ul>',
+      from: { next: null, parent: 'ul' },
+      kind: 'move',
+      property: 'node',
+      target: { selector: 'li.c' },
+      to: { next: 'li.a', parent: 'ul' },
+    },
+  ];
+
+  test('reads what devknobs keeps, every field checked, and nothing else', () => {
+    expect(readKept({ at: 5, edits, v: 1 })).toEqual({ edits, v: 1 });
+    expect(readKept({ edits: [], v: 1 })).toEqual({ edits: [], v: 1 });
+    expect(readKept({ edits, v: -1 })).toBeNull();
+    expect(readKept({ edits: [{ ...edits[0], kind: 'eval' }], v: 1 })).toBeNull();
+    expect(readKept({ edits: [{ ...edits[1], to: undefined }], v: 1 })).toBeNull();
+    expect(
+      readKept({
+        edits: [{ ...edits[0], target: { rule: { ...rule, path: ['x'] }, selector: 'a' } }],
+        v: 1,
+      }),
+    ).toBeNull();
+    expect(readKept({ edits: [{ ...edits[0], target: { selector: '' } }], v: 1 })).toBeNull();
+    expect(readKept({ edits: Array.from({ length: 201 }, () => edits[1]), v: 1 })).toBeNull();
+    const big = { ...edits[0], after: 'x'.repeat(60 * 1024) };
+    expect(readKept({ edits: Array.from({ length: 5 }, () => big), v: 1 })).toBeNull();
+    expect(readKept('[]')).toBeNull();
+  });
+
+  test('a page asks to keep them for a path of its own origin, or forget them', () => {
+    expect(readPageMessage({ id: 9, kept: { edits, v: 1 }, path: '/shop', type: 'edits' })).toEqual(
+      {
+        id: 9,
+        kept: { edits, v: 1 },
+        path: '/shop',
+        type: 'edits',
+      },
+    );
+    expect(readPageMessage({ id: 9, kept: null, path: '/', type: 'edits' })).toEqual({
+      id: 9,
+      kept: null,
+      path: '/',
+      type: 'edits',
+    });
+    expect(
+      readPageMessage({ id: 9, kept: { edits: 'x', v: 1 }, path: '/', type: 'edits' }),
+    ).toBeNull();
+    expect(
+      readPageMessage({ id: 9, kept: null, path: 'https://other.test/', type: 'edits' }),
+    ).toBeNull();
+    expect(readPageMessage({ kept: null, path: '/', type: 'edits' })).toBeNull();
+    expect(readPath('/a?b')).toBeNull();
+    expect(readPath('/a#b')).toBeNull();
+    expect(readPath(`/${'a'.repeat(3000)}`)).toBeNull();
+    expect(editsKey('https://site.test', '/shop')).toBe('edits:https://site.test/shop');
+  });
+});
+
+/** A kept list of one edit of a paragraph. */
+const kept = (edit: Record<string, unknown>) => ({
+  edits: [{ before: null, property: 'html', target: { selector: 'p' }, ...edit }],
+  v: 1,
+});
+
+describe('kept edits that could run a script', () => {
+  test('a list with one is not read at all', () => {
+    for (const after of [
+      '<img src=x onerror="a()">',
+      '<script>a()</script>',
+      '<iframe srcdoc="x">',
+      '<a href="javascript:a()">',
+      '<a href="jav&#x61;script:a()">',
+      '<base href="//evil.test/">',
+    ]) {
+      expect(readKept(kept({ after, kind: 'html' }))).toBeNull();
+    }
+    expect(readKept(kept({ after: 'a()', kind: 'attr', property: 'onerror' }))).toBeNull();
+    expect(readKept(kept({ after: ' JavaScript:a()', kind: 'attr', property: 'href' }))).toBeNull();
+    expect(readKept(kept({ after: '<p>Buy <b>now</b></p>', kind: 'html' }))).not.toBeNull();
+    expect(readKept(kept({ after: '/shop', kind: 'attr', property: 'href' }))).not.toBeNull();
+  });
+
+  test('reads as devknobs reads it', () => {
+    expect(riskyEdit({ after: 'x', kind: 'attr', property: 'srcdoc' })).toBe(true);
+    expect(riskyEdit({ after: '<script>', kind: 'text', property: 'text' })).toBe(false);
+    expect(riskyEdit({ after: '<a onclick = "x">', kind: 'html', property: 'html' })).toBe(true);
+    expect(riskyEdit({ after: 'x;javascript:alert(1)', kind: 'attr', property: 'values' })).toBe(
+      true,
+    );
+    expect(riskyEdit({ after: 'javascript:x', kind: 'attr', property: 'by' })).toBe(true);
+    expect(riskyEdit({ after: '0;1', kind: 'attr', property: 'values' })).toBe(false);
+  });
+});
+
+describe('the pages kept edits are forgotten for', () => {
+  test('the oldest by when they were kept, never the one just written, nor other keys', () => {
+    const stored: Record<string, unknown> = { keys: { v: 1 } };
+    for (let page = 0; page < 22; page += 1) {
+      stored[editsKey('https://a.test', `/p${page}`)] = { at: 100 + page, edits: [], v: 1 };
+    }
+    const now = editsKey('https://a.test', '/p0');
+    expect(editsToForget(stored, now, 20)).toEqual([
+      editsKey('https://a.test', '/p2'),
+      editsKey('https://a.test', '/p1'),
+    ]);
+    expect(editsToForget({ [now]: {} }, now, 20)).toEqual([]);
   });
 });

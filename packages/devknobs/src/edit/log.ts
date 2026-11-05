@@ -15,9 +15,16 @@
 /**
  * What an edit changes: a css declaration's value, a declaration turned off
  * or on, a property added, a new rule, or in the html a text, an attribute,
- * an element written anew as html, an element hidden, a node deleted.
+ * an element written anew as html, an element hidden, a node deleted, an
+ * element moved.
  */
-export type EditKind = "css-value" | "css-toggle" | "css-add" | "css-rule" | "text" | "attr" | "html" | "hide" | "delete";
+export type EditKind = "css-value" | "css-toggle" | "css-add" | "css-rule" | "text" | "attr" | "html" | "hide" | "delete" | "move";
+
+/** Where a moved element stands, as selectors read before the move: the element it is in, and the one it stands before, null at the end. */
+export interface EditPlace {
+  parent: string;
+  next: string | null;
+}
 
 /** Where an edit is, for an agent to find it in the code. */
 export interface EditTarget {
@@ -48,13 +55,17 @@ export interface Edit {
   /**
    * What in its place it changes: the css property, as written, `rule` for
    * a new rule, whose selector is its value after, the attribute's name, `text` for the element's text (`text 2` for its second
-   * text), `html` for its markup, `hidden` for a hide, `node` for a delete.
+   * text), `html` for its markup, `hidden` for a hide, `node` for a delete and a move.
    */
   property: string;
-  /** The value before, `!important` and all, or null where it was not set. For `html` and `delete`, the markup. */
+  /** The value before, `!important` and all, or null where it was not set. For `html` and `delete`, the markup. For `move`, where it stood, in words. */
   before: string | null;
-  /** The value after, or null where the edit took it away. */
+  /** The value after, or null where the edit took it away. For `move`, where it stands now, in words. */
   after: string | null;
+  /** For a move: where the element stood. */
+  from?: EditPlace;
+  /** For a move: where it stands now. */
+  to?: EditPlace;
 }
 
 /** An edit and how it goes on and off the page. */
@@ -76,6 +87,8 @@ export interface Change {
 export interface Recorded {
   edit: Edit;
   change: Change;
+  /** The window the edit was made in, as it was recorded: it stays when the change lets go of its page. */
+  readonly view: Window | null;
 }
 
 export interface EditLog {
@@ -101,7 +114,10 @@ function copy(edit: Edit): Edit {
   const target: EditTarget = { ...edit.target };
   const rule = edit.target.rule;
   if (rule) target.rule = { ...rule, path: [...rule.path], context: [...rule.context] };
-  return { ...edit, target };
+  const copied: Edit = { ...edit, target };
+  if (edit.from) copied.from = { ...edit.from };
+  if (edit.to) copied.to = { ...edit.to };
+  return copied;
 }
 
 /** A change whose page went: text alone, which can neither go on nor come off again. */
@@ -161,7 +177,7 @@ export function createEditLog(): EditLog {
 
   return {
     record(change) {
-      const one: Recorded = { edit: { id: ++ids, ...change.edit }, change };
+      const one: Recorded = { edit: { id: ++ids, ...change.edit }, change, view: change.view ?? null };
       if (!apply(one)) return null;
       watch(change.view);
       done.push(one);

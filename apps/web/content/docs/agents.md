@@ -21,7 +21,13 @@ the page, such as playwright's `page.evaluate` or the chrome devtools mcp's
   timeout never passes for success.
 - [`grab()`](/docs/grab) takes an element, an array or a NodeList of them.
 - `edits()` gives the style and html edits made in inspect's view as json,
-  to put in the code, a new rule (`css-rule`) included.
+  to put in the code, a new rule (`css-rule`) and a moved element (`move`)
+  included. `setEdits(list)` makes such a list again on a fresh load, where
+  the page still has each edit's target and value before, and resolves to
+  `{ applied, skipped }`; `undoEdit()` undoes the last one. it makes html
+  and attribute edits at once, but never one that could run a script
+  (`could run a script`), and after a delete, move or html edit that was not
+  made, it skips every later one.
 - `forceState(element, ['hover'])` makes an element render as hovered,
   focused or pressed, for a screenshot; `forceState(null)` ends it.
 - `reset()` sets the knobs back and leaves the panel as it is.

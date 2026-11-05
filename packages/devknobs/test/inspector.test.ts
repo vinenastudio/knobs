@@ -613,16 +613,20 @@ describe("the mode of the styles view", () => {
         prefs: {
           get: () => ({
             handle: true,
-            listWidth: 240,
-            viewWidth: 340,
+            width: 240,
             stylesMode: mode,
             stylesBox: true,
+            changesDiff: false,
+            htmlHeight: 200,
+            htmlFull: false,
           }),
           setStylesMode: (next) => {
             mode = next;
             kept.push(next);
           },
           setStylesBox: () => undefined,
+          setChangesDiff: () => undefined,
+          setHtmlSize: () => undefined,
         },
       },
       load,

@@ -96,8 +96,8 @@ pass `grabKey: "meta+c"` (`"ctrl+c"` off a Mac) to keep react-grab's key.
 press `⇧C` (`Shift C` off a Mac) to see the css of an element. it picks as
 grab does, with the same box, arrows and escape, and its label says `styles`
 before the element. a click copies nothing: the element's styles open in the
-panel, in place of the rows, and the panel grows wider for them. drag its
-edge for another width.
+panel, in place of the rows, at the panel's width. drag its edge for
+another width, which the rows keep too.
 
 picking is a mode, as in the browsers' own tools. a click picks the element
 and ends the picking: nothing is left drawn on the page, and the page takes
@@ -243,10 +243,17 @@ the page at once, into the same changes as the style edits:
   in a field that keeps them, where ↩ breaks the line, and `⇧↩`
   (`Shift Enter` off a Mac) or its `apply` button puts it on the page
 - `a` on the selected line adds an attribute, in a field before the tag's end
-- `F2` edits the element as html: a field with its outer html, where ↩
-  breaks the line. `⇧↩` (`Shift Enter` off a Mac), its `apply` button, or a
-  click elsewhere puts the new html in the element's place and selects it;
-  esc leaves it. html with no element in it, or with devknobs' own
+- `F2` edits the element as html: an editor with its outer html, in the
+  panel's monospace, its lines numbered and its tags, attributes, values and
+  comments colored. ↩ breaks the line with the line's indent, one level more
+  after an opening tag, and between a tag and its end tag puts the end on a
+  line of its own. `>` after `<div` writes `</div>` after the caret (not for
+  a void element such as `<img>` or `<br>`), and `"` after `=` in a tag
+  writes the closing quote too, which typing it steps over. the grip under
+  the editor drags its height, and `expand` makes it as tall as the panel
+  (`shrink` makes it as it was); both are kept for the next time. `⇧↩`
+  (`Shift Enter` off a Mac), its `apply` button, or a click elsewhere puts the
+  new html in the element's place and selects it; esc leaves it. html with no element in it, or with devknobs' own
   `data-devknobs` attributes, is refused: applying it with `⇧↩` or the
   button turns the field red and keeps it open, while a click elsewhere
   closes it without the edit. undo puts the very element back, unless the
@@ -256,17 +263,32 @@ the page at once, into the same changes as the style edits:
   `style` stays as it is. its line goes faint
 - Delete or Backspace deletes the selected node, and the line after it is
   selected. undo puts it back where it stood
+- `⇧↑` and `⇧↓` (`Shift Up` and `Shift Down` off a Mac) move the selected
+  element before the element above it or after the one below it, among the
+  elements in its parent; texts between them stay where they are. a
+  `<script>`, frame, `<object>`, `<embed>`, `<base>`, `<link>` or `<meta>`,
+  and an element that holds one, does not move: moved, it would run, load
+  or read the page's addresses again
+- an element's line has a handle, `⋮⋮`, at its start, shown with the pointer
+  on the line and on the selected line. drag it onto another element's line:
+  its top quarter puts the element before that one, its bottom quarter after
+  it (or first in it, where its line is open), and its middle into it, at its
+  end; the top half of an end tag's line puts it in that element, at its end.
+  a line over or under the target, or a ring around it, shows where it goes.
+  esc while dragging lets it go where it was. it cannot go into itself, an
+  element in it, or an element with no content such as `<img>`. undo puts it
+  back where it stood
 
 a field closed as it was opened makes no edit, and one whose edit is refused
 stays open, red, until it is fixed, left with esc or the focus leaves it,
 and no key or button of the tree acts while it is open. `<html>`, `<head>`, `<body>` and an element that holds devknobs'
-own nodes are not edited as html, hidden or deleted, and a text straight in
+own nodes are not edited as html, hidden, deleted or moved, and a text straight in
 a shadow root or the document is not edited.
 
 the keys are plain and act only on the selected line, never while a field
 has the focus. the bar under the tree has the same actions for the selected
-line: `edit text`, `+ attribute`, `edit as html`, `hide` (or `show`) and
-`delete`, and the line's `copy` copies its markup. it works the same on the
+line: `edit text`, `+ attribute`, `edit as html`, `hide` (or `show`),
+`delete`, `move up` and `move down`, and the line's `copy` copies its markup. it works the same on the
 width knob's frame. an edit of the html is made on the live DOM: where the
 page's framework renders again and changes or replaces the node, the edit
 stays in the list as text, and undo then only takes it out.
@@ -282,9 +304,26 @@ modes, and each edit goes on the page at once:
   escape leaves it as it was, and tab puts it on and goes to the next value,
   shift and tab to the one before. a value the page does not take turns red
   and stays open. `!important` at its end is kept
-- the box at a line's start, shown with the pointer on the line, turns the
-  declaration off and on. a line that is off stays where it stood, struck
-  through, and goes back there when it is turned on
+- the checkbox at a line's start, in a gutter every line keeps, turns the
+  declaration off and on. it shows with the pointer or the focus on the line,
+  and always on a line that is off, which stays where it stood, struck
+  through and faint, and goes back there when it is turned on. Tab reaches
+  it and space turns it; it is named `turn off padding` or `turn on padding`
+- typing a property's name, or a value, opens a list of suggestions under
+  the field, filtered by what was typed, those that start with it first.
+  names are every property the browser knows, asked of the browser, and the
+  custom properties the page sets. values are the keywords devknobs
+  suggests that the browser takes for the property (`CSS.supports`), named colors where it takes a color,
+  `var(--x)` for each custom property, and `inherit`, `initial`, `unset`,
+  `revert` and `revert-layer`. an empty field shows the whole list as it
+  gets the focus. ↑ and ↓ mark one (↓ also opens the list), and ↩ or Tab
+  takes the one marked; Tab in a name goes on to the value. with none
+  marked, ↩ and Tab take the first only where it starts with the word typed,
+  so `bl` becomes `block`, while a number such as `1`, a `#` color, a value
+  word ended with a space and an empty field keep what was typed. esc closes the
+  list, and a second esc leaves the field. a click on one takes it. in a
+  value the word at the caret is what a suggestion replaces, so `1px so`
+  becomes `1px solid`, and `var(--b` becomes `var(--brand)`
 - `+ add property` under `element.style` and under each rule takes a name,
   then a value. `element.style` shows even with no `style` attribute, so a
   property can be added to the element itself. in `simple` mode the line is
@@ -303,15 +342,19 @@ modes, and each edit goes on the page at once:
   so a `:hover` rule can be written without the state forced. undo takes it
   off the page
 
-the changes at the foot of the view count the edits and list them as diff
-lines, `-` the value before and `+` the value after, under the rule, what
+the changes at the foot of the view count the edits, `changes (N)`, and
+that count is a button that shows the diff and folds it away again. the diff
+is folded at first, and stays as it is left, for the next view and after a
+reload; the buttons, the kept edits and those that wait for `apply`, with
+their values, show either way. the diff lists the edits as `-` the value before and `+` the value after, under the rule, what
 it sits in (`@media`, `@layer`, the rule a nested `&` is in) and its
 stylesheet, or `style=""` and the element for its own style. a new rule is
 under `new rule for` and the element's selector: `+ .cta:hover { }`, then its
 declarations. an element's
 html edits are under `html of` and its selector: `- text: "Start now"`,
-`+ class: "cta cta-lg"`, the markup an element had and has, `+ hidden`, and
-the markup of a node deleted.
+`+ class: "cta cta-lg"`, the markup an element had and has, `+ hidden`, the
+markup of a node deleted, and where a moved element stood and stands:
+`- at the end of <ul class="menu">`, `+ before <li class="a"> in <ul class="menu">`.
 several edits of one property come to one change, and one that went back to
 where it started to none. `Z` undoes the last edit and `⇧Z` (`Shift Z` off
 a Mac) does it again, while the focus is in the view and not in a field. `copy prompt for
@@ -320,15 +363,75 @@ code: each element's selector, its file and line where grab finds them, the
 rule and its stylesheet, and each property from its value before to its
 value after, a new rule with its selector to add where the element's styles
 are written, and for the html each text, attribute and markup from before
-to after, a hide and a delete. with html edits it ends by asking the agent
+to after, a hide, a delete and a move, with the place it went as selectors
+(``move it: at the end of <ul class="menu"> -> before <li class="a"> in <ul class="menu"> (into `ul.menu`, before `li.a`)``). with html edits it ends by asking the agent
 to change the component or template that renders the element, not the DOM,
 as the framework's next render may undo an edit of the DOM. `copy diff` copies the diff lines alone, and `undo all` takes
 every edit back. reset in the footer undoes the edits with the knobs, and so
 does `unmount()`; `devknobs.reset()` leaves them. an edit whose page goes, as
 a frame's reloads, stays in the list as text, and undo then only takes it
-out. `window.devknobs.edits()` gives the edits in force as json
-(see [agents](/docs/agents)). the edits are not kept: a reload of the page
-loses them.
+out. `window.devknobs.edits()` gives the edits in force as json, and
+`setEdits()` makes such a list again (see [agents](/docs/agents)). the line
+under the buttons says so: `agents read and apply edits: devknobs.edits() / setEdits()`.
+
+### keep edits after reload
+
+the switch `keep edits after reload` at the top of the view is off at
+first, and a reload loses the edits. on, it keeps the edits in force for the
+page, its origin and path without the query, and keeps them again on each
+change: their kinds, selectors, rules and values before and after, as plain
+json, no node of the page, though they hold the page's text, attribute
+values and element markup as edited (up to 64K characters each). as the
+page loads again, once it loaded and nothing on it changed for 300
+milliseconds (3 seconds at most, so a framework has drawn it), devknobs
+makes them again in order. each is made
+only where its element is found by its selector, its rule by its selector,
+what it sits in and its stylesheet, and the page still has the value it had
+before it; a new rule is made anew. after a delete, a move or an html edit
+that is not made, no later edit is (`an earlier edit it may depend on was
+not made`): it may stand on that one. the changes say
+`5 edits kept from before the reload`, or `4 edits kept from before the
+reload, 1 could not be found` with a line for each one not made and why
+(not found on the page, its rule is not on the page, the page has another
+value now). from then on they are edits like any other: undo, the changes
+and the prompt take them. the next change keeps the edits in force then, so
+those not made are dropped from what is kept.
+
+html and attribute edits are never made as the page loads. from the first
+of them on, the kept edits wait in the changes, listed under `1 kept html
+edit waits` (with how many edits come after it), until you click its
+`apply`: a page script could have planted them, and markup or an attribute
+can run a script. only your own click on that button makes them, and even
+then an html edit with `<script>`, a frame, `<object>`, `<embed>`, `<base>`,
+`<meta>` or `<link>`, an `on…` handler, a `srcdoc` or a `javascript:`
+address, such an attribute (a `javascript:` item in an svg `values` list
+too), and any attribute or text of the page's own `<script>` (a data script
+such as `application/ld+json` too, and svg's), `<base>`, frame, `<object>`,
+`<embed>`, `<link>` or `<meta>`, is not made (`could run a script`). an
+html or attribute edit that could run a script by its own text is not kept
+either; one that is risky only for the element it is on may stay kept, and
+is refused each time it would be made. the list shows what `apply` would
+make: each edit's markup or `name="value"`, cut at 120 characters with
+`show all` for the rest, and `apply` waits until each one is shown whole,
+under `apply only edits you made on this page`. while edits wait, nothing new is kept, so what is kept stays as it
+was; turning the switch off forgets them too. edits made in another page
+of the site keep under that page's path, the one it loaded at, also once
+its app's router moved.
+
+turning the switch off forgets the page's edits; it leaves the ones on the
+page. the switch is on for a page while it keeps edits, in every tab. a
+page keeps its first 200 edits, up to 256 KB of json; past that the changes
+say `only the first 200 edits are kept after a reload`. edits are kept for 20
+pages at most: the page kept longest ago is forgotten first. forced states
+are no edits and are never kept. edits made in devknobs' frame, for a
+pinned panel or a device, are kept while the frame shows the same page (its
+origin and path), and made again in the frame after a reload; html and
+attribute edits made there wait for `apply` too, as the page's own do. with the npm package they are in the page's `localStorage`, one item
+per page, `devknobs:edits:` and the path; in fresh mode nothing is kept or
+made again; with the
+extension, in the extension's own storage (see
+[the extension](/docs/extension)). see [privacy](/docs/privacy) for how to
+clear them.
 
 ### force a state
 
@@ -382,5 +485,5 @@ where that falls short:
 - a closed shadow root, a frame's document inside the tree, and a
   `<template>`'s content
 
-the tree has no line numbers, no node is dragged yet, and there is no right
+the tree has no line numbers, and there is no right
 click menu: the bar under the tree holds the actions.

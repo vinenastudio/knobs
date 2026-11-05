@@ -54,7 +54,7 @@ import { type BoxReading, createBoxDiagram, readBox } from "./boxdiagram";
 import { createCssEditor, newRuleSelector, offDeclaration, type Place, styleOf } from "./cssedit";
 import { button, el } from "./dom";
 import { emptyAction, emptyLine, type Fold, filterField, sectionFold, segments, toolbar, toolToggle } from "./kit";
-import type { StylesMode } from "./prefs";
+import type { HtmlSize, StylesMode } from "./prefs";
 import {
   type Applied,
   appliedInherited,
@@ -113,6 +113,10 @@ export interface StylesContext {
   area?(ring: BoxRing | null): void;
   /** Whether the box starts folded out, and where the way the user leaves it is kept. */
   box?: { get(): boolean; set(open: boolean): void };
+  /** Whether the Elements view's changes start with their diff shown, and where the way the user leaves them is kept. */
+  diff?: { get(): boolean; set(open: boolean): void };
+  /** How tall the Elements view's html editor starts, and where the size the user gives it is kept. */
+  htmlSize?: { get(): HtmlSize; set(size: HtmlSize): void };
   /**
    * The picking, for the select button the bar starts with, and for the
    * empty line, which starts it with no element shown and the picking off.
@@ -855,7 +859,7 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
     const row = el(off ? "s" : "div", "css-decl");
     named(row, declaration, variables);
     const value = valueNode(declaration);
-    row.append(value);
+    row.append(value, mark(";"));
     const comes = off ? null : resolvedValue(declaration.value, variables);
     if (comes !== null) row.append(el("span", "css-comes", ` → ${comes}`));
     if (place) editor?.editable(row, value, declaration, place, off);
@@ -1128,7 +1132,7 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
     show,
     refresh,
     escape(): boolean {
-      return editor?.close(false) || filter.clear();
+      return editor?.dismiss() || editor?.close(false) || filter.clear();
     },
     focus: () => node.focus({ preventScroll: true }),
     destroy(): void {

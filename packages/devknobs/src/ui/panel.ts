@@ -309,7 +309,6 @@ export function createPanel(options: PanelOptions = {}): Panel {
     wrap,
     panel,
     prefs,
-    showing: () => (viewing() ? "view" : "list"),
     place: () => engine.getState().panel,
     // The frame gives a pinned panel's column the width the panel has or glides to.
     wide: setDockWidth,

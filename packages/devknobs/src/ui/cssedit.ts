@@ -21,6 +21,7 @@ import { newRule, ruleOf } from "../edit/rule";
 import { type Locate, recordAt } from "../edit/source";
 import { elementSelector } from "../grab/selector";
 import type { OwnBlock, StyleDeclaration } from "../styles/types";
+import { type Autocomplete, autocomplete, browserCss, nameSuggestions, valueSuggestions } from "./cssauto";
 import { button, el } from "./dom";
 
 /** What the line that adds a property says. */
@@ -62,6 +63,8 @@ export interface CssEditor {
   busy(): boolean;
   /** Close the field open, with or without its edit. Says whether one was open. */
   close(commit: boolean): boolean;
+  /** Escape closes the open field's suggestions first. Says whether a list of them showed. */
+  dismiss(): boolean;
   destroy(): void;
 }
 
@@ -97,6 +100,11 @@ export function offDeclaration(off: Off): StyleDeclaration {
   };
 }
 
+/** What a declaration's checkbox is called: what a press does, `turn off padding` while it is on. */
+export function toggleLabel(property: string, on: boolean): string {
+  return `turn ${on ? "off" : "on"} ${property}`;
+}
+
 /** A selector that finds the element, for an edit's target. */
 export function selectorOf(element: Element): string {
   try {
@@ -106,19 +114,41 @@ export function selectorOf(element: Element): string {
   }
 }
 
-/** A one-line field of the editor, as wide as what it holds. */
-export function editField(value: string, label: string): HTMLInputElement {
-  const input = document.createElement("input");
+/**
+ * Fit a field to what it holds: as wide as its longest line, but never wider
+ * than the line it stands in, and as tall as its text wraps to, so a long
+ * value goes on under itself and nothing scrolls sideways.
+ */
+export function fitField(area: HTMLTextAreaElement): void {
+  const longest = Math.max(...area.value.split("\n").map((line) => line.length));
+  area.style.width = `min(${Math.max(longest + 1, 3)}ch, 100%)`;
+  area.style.height = "auto";
+  // Only a field on the page has a height to take.
+  const tall = Number(area.scrollHeight) || 0;
+  if (tall > 0) area.style.height = `${tall}px`;
+}
+
+/** A one-line field of the editor, as wide as what it holds, that wraps where it is wider than its line. */
+export function editField(value: string, label: string): HTMLTextAreaElement {
+  const input = document.createElement("textarea");
   input.className = "css-edit inline-field";
   input.value = value;
+  input.rows = 1;
   input.spellcheck = false;
   input.autocomplete = "off";
   input.setAttribute("aria-label", label);
-  const fit = (): void => {
-    input.size = Math.max(input.value.length + 1, 3);
-  };
-  fit();
-  input.addEventListener("input", fit);
+  input.addEventListener("input", () => {
+    // One line: a line break pasted in goes, as a one-line field drops it.
+    if (/[\r\n]/.test(input.value)) {
+      const caret = input.value.slice(0, input.selectionStart ?? input.value.length).replace(/[\r\n]/g, "").length;
+      input.value = input.value.replace(/[\r\n]/g, "");
+      input.setSelectionRange(caret, caret);
+    }
+    fitField(input);
+  });
+  // Its height is known once it is on the page, as it takes the focus.
+  input.addEventListener("focus", () => fitField(input));
+  fitField(input);
   return input;
 }
 
@@ -164,6 +194,8 @@ export function createCssEditor(context: CssEditorContext): CssEditor {
   let fields: Field[] = [];
   /** The field open: its way to close. */
   let open: { close(commit: boolean): void } | null = null;
+  /** The suggestions of the field open. */
+  let lists: Autocomplete[] = [];
   /** A field closed by a click elsewhere: the view stays as it is until that click is done. */
   let holding = false;
   let holdTimer = 0;
@@ -220,11 +252,15 @@ export function createCssEditor(context: CssEditorContext): CssEditor {
     open?.close(true);
     if (!field.value.isConnected) return;
     const input = editField(field.text, `value of ${field.property}`);
+    const world = browserCss(field.place.element);
+    const auto = autocomplete(input, () => valueSuggestions(field.property, world), "value");
+    lists = [auto];
     field.value.replaceWith(input);
     let shown = true;
     const close = (commit: boolean, next?: Field, away = false): void => {
       if (!shown) return;
       shown = false;
+      auto.close();
       open = null;
       // A click elsewhere closed it: the view stays as it is until that click lands.
       if (away) hold();
@@ -253,7 +289,7 @@ export function createCssEditor(context: CssEditorContext): CssEditor {
     const self = { close: (commit: boolean) => close(commit) };
     open = self;
     input.addEventListener("keydown", (event: KeyboardEvent) => {
-      if (event.isComposing) return;
+      if (event.isComposing || auto.key(event)) return;
       if (event.key === "Enter") {
         event.preventDefault();
         close(true);
@@ -276,10 +312,12 @@ export function createCssEditor(context: CssEditorContext): CssEditor {
     box.type = "checkbox";
     box.className = "css-toggle";
     box.checked = off === null;
-    box.setAttribute("aria-label", `${property} on`);
+    const name = (): void => box.setAttribute("aria-label", toggleLabel(property, box.checked));
+    name();
     box.addEventListener("change", () => {
       const change = box.checked && off ? cssOn(full(place), off, log.recorded) : cssOff(full(place), property, log.recorded);
       if (!record(change, place)) box.checked = !box.checked;
+      name();
       // The line was built again, and the box with it.
       if (!box.isConnected) node.focus({ preventScroll: true });
     });
@@ -390,19 +428,25 @@ export function createCssEditor(context: CssEditorContext): CssEditor {
     return took;
   }
 
-  /** A field for the name, then one for the value. Enter or Tab on the value adds it. */
+  /** A field for the name, then one for the value, each with its suggestions. Enter or Tab on the value adds it. */
   function openAdd(control: HTMLElement, place: Place): void {
     open?.close(true);
     if (!control.isConnected) return;
     const row = el("div", "css-decl css-adding");
     const name = editField("", "property name");
     const value = editField("", "property value");
+    const world = browserCss(place.element);
+    const names = autocomplete(name, () => nameSuggestions(world), "name");
+    const values = autocomplete(value, () => valueSuggestions(name.value, world), "value");
+    lists = [names, values];
     row.append(name, el("span", "css-punct", ": "), value, el("span", "css-punct", ";"));
     control.replaceWith(row);
     let shown = true;
     const close = (commit: boolean, away = false): void => {
       if (!shown) return;
       shown = false;
+      names.close();
+      values.close();
       open = null;
       if (away) hold();
       const property = name.value.trim();
@@ -422,7 +466,7 @@ export function createCssEditor(context: CssEditorContext): CssEditor {
     const self = { close: (commit: boolean) => close(commit) };
     open = self;
     name.addEventListener("keydown", (event: KeyboardEvent) => {
-      if (event.isComposing) return;
+      if (event.isComposing || names.key(event)) return;
       if (event.key === "Escape") {
         event.preventDefault();
         close(false);
@@ -433,7 +477,7 @@ export function createCssEditor(context: CssEditorContext): CssEditor {
       if (name.value.trim() !== "") value.focus({ preventScroll: true });
     });
     value.addEventListener("keydown", (event: KeyboardEvent) => {
-      if (event.isComposing) return;
+      if (event.isComposing || values.key(event)) return;
       if (event.key === "Escape") {
         event.preventDefault();
         close(false);
@@ -478,6 +522,7 @@ export function createCssEditor(context: CssEditorContext): CssEditor {
     addLine,
     newRuleLine,
     busy: () => open !== null || holding,
+    dismiss: () => open !== null && lists.some((list) => list.dismiss()),
     close(commit) {
       if (!open) return false;
       open.close(commit);

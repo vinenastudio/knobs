@@ -5,7 +5,6 @@ import {
   createPane,
   onPane,
   openPane,
-  PANE_WIDTH,
   type Pane,
   type PaneView,
   paneView,
@@ -336,10 +335,6 @@ describe("opening a view", () => {
     closePane();
     openPane(viewOf("requests").view);
     expect(page.asked.filter((ask) => ask === "open")).toHaveLength(1);
-  });
-
-  test("is 340 wide until the user drags the panel's edge", () => {
-    expect(PANE_WIDTH).toBe(340);
   });
 });
 

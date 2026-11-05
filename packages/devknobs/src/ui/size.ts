@@ -1,28 +1,21 @@
-import { PAGE_MIN } from "../engine/dock";
+import { DOCK_WIDTH, PAGE_MIN } from "../engine/dock";
 import type { SideValue } from "../types";
-import { PANE_WIDTH } from "./pane";
-import { between, PANEL_GAP } from "./place";
+import { between } from "./place";
 import type { LivePrefs } from "./prefs";
 
 /**
  * How wide the panel is, and the strip on its page side that changes it, as
- * the edge of a docked devtools does. The rows and the settings share one
- * width and a feature's view has its own, wider one. Both are kept with the
- * preferences, and a window too narrow for one shows the panel narrower
- * without changing what is kept. Pinned, the panel is a column the page gives
+ * the edge of a docked devtools does. The rows, the settings and every
+ * feature's view share one width, kept with the preferences, and a window too
+ * narrow for it shows the panel narrower without changing what is kept. Pinned, the panel is a column the page gives
  * its room to, and the strip leaves the page the least it is laid out at.
  */
 
-/** What the panel shows, as far as its width goes: the rows or the settings, or a feature's view. */
-export type Showing = "list" | "view";
-
 /** How wide the panel is until the user says otherwise, in px. */
-export const LIST_WIDTH = 240;
-export const VIEW_WIDTH = PANE_WIDTH;
+export const PANEL_WIDTH = DOCK_WIDTH;
 
-/** The narrowest the strip makes each, in px. */
-export const LIST_MIN = 240;
-export const VIEW_MIN = 280;
+/** The narrowest the strip makes the panel, in px. */
+export const WIDTH_MIN = 240;
 
 /** The widest the strip makes the panel, and what it leaves the page of the window's width, in px. */
 export const WIDTH_MAX = 720;
@@ -52,21 +45,18 @@ export interface Limits {
  * The widths the strip can set in a window `view` wide, which leave the page
  * `page` of it. With no room to spare, only the least.
  */
-export function widthLimits(showing: Showing, view: number, page = PAGE_ROOM): Limits {
-  const min = showing === "view" ? VIEW_MIN : LIST_MIN;
-  return { min, max: Math.max(min, Math.min(WIDTH_MAX, view - page)) };
+export function widthLimits(view: number, page = PAGE_ROOM): Limits {
+  return { min: WIDTH_MIN, max: Math.max(WIDTH_MIN, Math.min(WIDTH_MAX, view - page)) };
 }
 
 /**
  * The width the panel takes for the one that is wanted, in a window `view`
- * wide that keeps `page` of it: held between the strip's limits, and in a
- * window too narrow even for the least, what the handle and the gap leave,
- * down to the rows' least, which a panel always had.
+ * wide that keeps `page` of it: held between the strip's limits, so never
+ * under the least, even in a window too narrow for it.
  */
-export function widthIn(showing: Showing, wanted: number, view: number, page = PAGE_ROOM): number {
-  const { min, max } = widthLimits(showing, view, page);
-  const room = view - HANDLE_REACH - PANEL_GAP;
-  return Math.max(LIST_MIN, Math.min(Math.round(between(wanted, min, max)), room));
+export function widthIn(wanted: number, view: number, page = PAGE_ROOM): number {
+  const { min, max } = widthLimits(view, page);
+  return Math.round(between(wanted, min, max));
 }
 
 /**
@@ -112,8 +102,6 @@ export interface SizerContext {
   wrap: HTMLElement;
   panel: HTMLElement;
   prefs: LivePrefs;
-  /** What the panel shows now. */
-  showing(): Showing;
   /** Whether the panel is open, the side of the window it is on, and whether it is pinned there. */
   place(): { open: boolean; side: SideValue; docked: boolean };
   /** The panel is `px` wide from now, or on its way there: its first width too. */
@@ -126,10 +114,10 @@ export interface Sizer {
   /** The strip, which goes in the panel. */
   strip: HTMLElement;
   /**
-   * Give the panel the width of what it shows. `draw` draws that, at the
-   * width the panel ends at, so what is measured there holds once it has
-   * glided. A closed panel keeps its width until it opens, as its handle
-   * would jump with it.
+   * Give the panel its width. `draw` draws what it shows, at the width the
+   * panel ends at, so what is measured there holds once it has glided. A
+   * closed panel keeps its width until it opens, as its handle would jump
+   * with it.
    */
   size(draw?: () => void): void;
   /** The window resized: the panel takes the width that leaves, at once. */
@@ -138,9 +126,8 @@ export interface Sizer {
   cancel(): void;
 }
 
-/** The strip's drag: what it sizes, the pointer that drags, where it started and where it is. */
+/** The strip's drag: the pointer that drags, where it started and where it is. */
 interface Held {
-  showing: Showing;
   pointer: number;
   from: number;
   x: number;
@@ -178,13 +165,11 @@ export function createSizer(context: SizerContext): Sizer {
    * and is let go from there.
    */
   function apply(draw: (() => void) | undefined, resizing: boolean): void {
-    const showing = context.showing();
     const view = viewWidth();
-    const kept = showing === "view" ? prefs.get().viewWidth : prefs.get().listWidth;
     const page = pageRoom(context.place().docked);
-    const next = widthIn(showing, held?.showing === showing ? held.width : kept, view, page);
+    const next = widthIn(held ? held.width : prefs.get().width, view, page);
     const from = shown;
-    const limits = widthLimits(showing, view, page);
+    const limits = widthLimits(view, page);
     strip.setAttribute("aria-valuemin", String(limits.min));
     strip.setAttribute("aria-valuemax", String(limits.max));
     if (next === from || (from !== null && !context.place().open)) {
@@ -210,11 +195,11 @@ export function createSizer(context: SizerContext): Sizer {
   /** End the drag: the width it reached is kept, or dropped for the one that was. */
   function end(keep: boolean): void {
     if (!held) return;
-    const { showing, pointer, width, moved } = held;
+    const { pointer, width, moved } = held;
     held = null;
     delete wrap.dataset.sizing;
     if (strip.hasPointerCapture(pointer)) strip.releasePointerCapture(pointer);
-    if (keep && moved) prefs.setWidth(showing, width);
+    if (keep && moved) prefs.setWidth(width);
     else apply(undefined, false);
   }
 
@@ -222,7 +207,6 @@ export function createSizer(context: SizerContext): Sizer {
   strip.addEventListener("pointerdown", (event: PointerEvent) => {
     if (event.button !== 0 || held || shown === null) return;
     held = {
-      showing: context.showing(),
       pointer: event.pointerId,
       from: shown,
       x: event.clientX,
@@ -236,7 +220,7 @@ export function createSizer(context: SizerContext): Sizer {
     if (!held || event.pointerId !== held.pointer) return;
     const { side, docked } = context.place();
     const wanted = dragWidth(held.from, event.clientX - held.x, side);
-    const width = widthIn(held.showing, wanted, viewWidth(), pageRoom(docked));
+    const width = widthIn(wanted, viewWidth(), pageRoom(docked));
     if (width === held.width) return;
     held.width = width;
     held.moved = true;
@@ -254,19 +238,15 @@ export function createSizer(context: SizerContext): Sizer {
   strip.addEventListener("lostpointercapture", (event: PointerEvent) => {
     if (event.pointerId === held?.pointer) end(false);
   });
-  strip.addEventListener("dblclick", () => {
-    const showing = context.showing();
-    prefs.setWidth(showing, showing === "view" ? VIEW_WIDTH : LIST_WIDTH);
-  });
+  strip.addEventListener("dblclick", () => prefs.setWidth(PANEL_WIDTH));
   strip.addEventListener("keydown", (event: KeyboardEvent) => {
     if (shown === null || event.altKey || event.ctrlKey || event.metaKey) return;
-    const showing = context.showing();
     const { side, docked } = context.place();
-    const limits = widthLimits(showing, viewWidth(), pageRoom(docked));
+    const limits = widthLimits(viewWidth(), pageRoom(docked));
     const next = keyWidth(event.key, shown, limits, side);
     if (next === null) return;
     event.preventDefault();
-    prefs.setWidth(showing, next);
+    prefs.setWidth(next);
   });
 
   return {

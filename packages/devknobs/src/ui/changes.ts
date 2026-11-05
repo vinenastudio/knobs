@@ -2,14 +2,20 @@
  * The changes at the foot of the Elements view: how many edits are in force,
  * each as a `-` line before and a `+` line after under the place it is in,
  * and the ways to hand them on: the prompt for an agent, the diff, and undo
- * all. It shows only while there is a change. To use it:
+ * all. The diff lines are folded away until the count's button shows them,
+ * and the way the user leaves them is kept where `diff` says. With edits kept after a reload, a line says how many were made again
+ * as the page loaded and lists those that were not, one says when edits
+ * past the caps are not kept, and kept html and attribute edits wait there,
+ * listed, for a click on their `apply`: they could change what a script of
+ * the page does, so only the user makes them again. It shows only while there is something to say. To use it:
  *
- *   const changes = createChanges(edits, copy);
+ *   const changes = createChanges(edits, copy, isMac(), keeper(), { get, set });
  *   view.append(changes.node); changes.destroy();
  */
 
+import { type Keeper, readSavedEdit, type SavedEdit, type Skipped } from "../edit/keep";
 import type { EditLog } from "../edit/log";
-import { changeCount, diffLines, diffText, netChanges, placeLine, promptText } from "../edit/text";
+import { changeCount, data, diffLines, diffText, netChanges, placeLine, promptText } from "../edit/text";
 import { isMac } from "../engine/ua";
 import { button, el } from "./dom";
 import { comboLabel, withShift } from "./keys";
@@ -25,7 +31,61 @@ export type Copy = (text: string) => boolean | Promise<boolean>;
 const COPIED_FOR = 1200;
 
 /** What the line under the buttons says, for agents that run code in the page. */
-export const AGENT_NOTE = "agents read the edits with devknobs.edits()";
+export const AGENT_NOTE = "agents read and apply edits: devknobs.edits() / setEdits()";
+
+/** What the line about edits made again as the page loaded says. */
+export function keptLine(kept: number, missed: number): string {
+  const made = `${kept} ${kept === 1 ? "edit" : "edits"} kept from before the reload`;
+  return missed > 0 ? `${made}, ${missed} could not be found` : made;
+}
+
+/** What the line over the kept edits that wait says: how many html and attribute edits, and the edits after them. */
+export function waitLine(html: number, attributes: number, more: number): string {
+  const parts: string[] = [];
+  if (html > 0) parts.push(`${html} kept html ${html === 1 ? "edit" : "edits"}`);
+  if (attributes > 0) parts.push(`${attributes} kept attribute ${attributes === 1 ? "edit" : "edits"}`);
+  const said = `${parts.join(" and ")} ${html + attributes === 1 ? "waits" : "wait"}`;
+  return more > 0 ? `${said}, with ${more} ${more === 1 ? "edit" : "edits"} after them` : said;
+}
+
+/** What the line under them says: a page script may have planted them. */
+export const WAIT_NOTE = "apply only edits you made on this page";
+
+/** The most characters a waiting edit's value shows, cut at its end. */
+export const WAIT_MAX = 120;
+
+/** What a waiting edit makes, as apply would: the markup, `name="value"`, or the value after. */
+function waitText(edit: SavedEdit): string {
+  return edit.after === null ? "(removed)" : edit.kind === "attr" ? `${edit.property}="${edit.after}"` : edit.after;
+}
+
+/** Whether a waiting edit's value is longer than its line shows at first. */
+export function waitCut(edit: SavedEdit): boolean {
+  return [...waitText(edit)].length > WAIT_MAX;
+}
+
+/** A waiting edit's value as data, cut short unless `full`. */
+export function waitValue(edit: SavedEdit, full = false): string {
+  const text = waitText(edit);
+  return data(!full && waitCut(edit) ? `${[...text].slice(0, WAIT_MAX - 1).join("")}…` : text);
+}
+
+/** An edit that was not made again, or waits: `text on h1.title`, then why where it was not made. */
+function editLine(value: unknown): string | null {
+  const edit = readSavedEdit(value);
+  if (!edit) return null;
+  const what = edit.kind === edit.property || edit.kind.startsWith("css-") || edit.kind === "attr" ? data(edit.property) : edit.kind;
+  return `${what} on ${data(edit.target.selector)}`;
+}
+
+/** An edit that was not made again, as its line says it: `text on h1.title: not found on the page`, `padding on a.cta: ...`. */
+export function missedLine(skipped: Skipped): string {
+  const line = editLine(skipped.edit);
+  return line ? `${line}: ${skipped.reason}` : skipped.reason;
+}
+
+/** How many sections were made, for each list's own id. */
+let made = 0;
 
 export interface Changes {
   node: HTMLElement;
@@ -38,17 +98,45 @@ export function undoHint(mac: boolean): string {
   return `undo ${undo}, redo ${comboLabel(withShift("z"), mac)}`;
 }
 
-export function createChanges(log: EditLog, copy: Copy, mac = isMac()): Changes {
+/** Whether the diff lines show, and where the way the user leaves them is kept. */
+export interface DiffShown {
+  get(): boolean;
+  set(open: boolean): void;
+}
+
+export function createChanges(log: EditLog, copy: Copy, mac = isMac(), keep: Keeper | null = null, diffShown: DiffShown | null = null): Changes {
   const node = el("section", "changes");
   node.setAttribute("aria-label", "changes");
   const head = el("div", "changes-head");
+  /** Shows and folds the diff lines. Folded unless the user left them shown. */
+  const fold = button("changes-toggle", "");
+  let open = diffShown?.get() ?? false;
+  const keys = el("span", "", ` · ${undoHint(mac)}`);
+  head.append(fold, keys);
+  const kept = el("div", "changes-kept");
+  const apply = button("chip changes-apply", "apply");
+  /** The waiting edits the user showed whole. */
+  const shownWhole = new WeakSet<SavedEdit>();
+  /** The `show all` buttons drawn now, in order. */
+  let shows: HTMLButtonElement[] = [];
+  // Only the user's own click on this button makes the kept html edits: a page script's click is no trusted one.
+  apply.addEventListener("click", (event: Event) => {
+    if (event.isTrusted && event.currentTarget === apply && !apply.disabled) keep?.applyWaiting();
+  });
   const list = el("div", "changes-list");
+  list.id = `devknobs-changes-${++made}`;
+  fold.setAttribute("aria-controls", list.id);
+  fold.addEventListener("click", () => {
+    open = !open;
+    diffShown?.set(open);
+    draw();
+  });
   const prompt = button("chip changes-go", "copy prompt for agent");
   const diff = button("chip", "copy diff");
   const undoAll = button("chip", "undo all");
   const acts = el("div", "changes-acts");
   acts.append(prompt, diff, undoAll);
-  node.append(head, list, acts, el("div", "changes-note", AGENT_NOTE));
+  node.append(head, kept, list, acts, el("div", "changes-note", AGENT_NOTE));
   const timers = new Map<HTMLButtonElement, number>();
   const labels = new Map<HTMLButtonElement, string>();
   /** The section went: a copy that answers after that changes nothing. */
@@ -83,8 +171,50 @@ export function createChanges(log: EditLog, copy: Copy, mac = isMac()): Changes 
   function draw(): void {
     const edits = log.list();
     const count = changeCount(edits);
-    node.hidden = count === 0;
-    head.textContent = `changes (${count}) · ${undoHint(mac)}`;
+    const restored = keep?.restored() ?? null;
+    const cut = keep?.cut() ?? 0;
+    const said: HTMLElement[] = [];
+    // Nothing made and nothing missed: the waiting line says it all.
+    if (restored && (restored.kept > 0 || restored.missed.length > 0)) {
+      said.push(el("div", "changes-kept-line", keptLine(restored.kept, restored.missed.length)));
+      for (const one of restored.missed) said.push(el("div", "changes-missed", missedLine(one)));
+    }
+    const waiting = keep?.waiting() ?? [];
+    shows = [];
+    if (waiting.length > 0) {
+      const html = waiting.filter((one) => one.kind === "html").length;
+      const attributes = waiting.filter((one) => one.kind === "attr").length;
+      const head = el("div", "changes-kept-line changes-wait", `${waitLine(html, attributes, waiting.length - html - attributes)}: `);
+      head.append(apply);
+      said.push(head, el("div", "changes-kept-line changes-wait-note", WAIT_NOTE));
+      // Each with what apply makes, as text. A long one is cut, with `show all` for the rest, and apply waits until each is shown whole.
+      for (const one of waiting) {
+        const line = el("div", "changes-missed", `${editLine(one) ?? ""}: ${waitValue(one, shownWhole.has(one))}`);
+        if (waitCut(one) && !shownWhole.has(one)) {
+          const more = button("chip changes-show", "show all");
+          more.addEventListener("click", () => {
+            shownWhole.add(one);
+            draw();
+            // The button went with the redraw: the focus goes on to the next `show all`, or to apply once it is on.
+            const next = shows[0];
+            if (next) next.focus({ preventScroll: true });
+            else if (!apply.disabled) apply.focus({ preventScroll: true });
+          });
+          line.append(" ", more);
+          shows.push(more);
+        }
+        said.push(line);
+      }
+      apply.disabled = waiting.some((one) => waitCut(one) && !shownWhole.has(one));
+      apply.title = apply.disabled ? "show each edit whole first" : "";
+    }
+    if (cut > 0) said.push(el("div", "changes-kept-line", `only the first ${keep?.kept() ?? 0} edits are kept after a reload`));
+    kept.replaceChildren(...said);
+    kept.hidden = said.length === 0;
+    node.hidden = count === 0 && said.length === 0;
+    fold.textContent = `changes (${count})`;
+    fold.setAttribute("aria-expanded", String(open));
+    list.hidden = !open;
     const lines: HTMLElement[] = [];
     for (const group of netChanges(edits)) {
       lines.push(el("div", "diff-place", placeLine(group.target, group.markup)));
@@ -96,6 +226,7 @@ export function createChanges(log: EditLog, copy: Copy, mac = isMac()): Changes 
   }
 
   const stop = log.subscribe(draw);
+  const stopKeep = keep?.subscribe(draw) ?? null;
   draw();
 
   return {
@@ -103,6 +234,7 @@ export function createChanges(log: EditLog, copy: Copy, mac = isMac()): Changes 
     destroy(): void {
       gone = true;
       stop();
+      stopKeep?.();
       for (const timer of timers.values()) clearTimeout(timer);
     },
   };

@@ -8,13 +8,15 @@ import {
   resolvePrefs,
 } from "../src/ui/prefs";
 
-/** A mount's preferences, with the widths a panel starts with. */
+/** A mount's preferences, with the width a panel starts with. */
 const BASE: Prefs = {
   handle: true,
-  listWidth: 240,
-  viewWidth: 340,
+  width: 320,
   stylesMode: "simple",
   stylesBox: true,
+  changesDiff: false,
+  htmlHeight: 200,
+  htmlFull: false,
 };
 
 describe("readPrefs", () => {
@@ -32,18 +34,24 @@ describe("readPrefs", () => {
     expect(readPrefs(JSON.stringify({ handle: "no", other: 1 }))).toEqual({});
   });
 
-  test("keeps the widths that are numbers of px, each on its own", () => {
-    expect(readPrefs(JSON.stringify({ listWidth: 300, viewWidth: 520 }))).toEqual({
-      listWidth: 300,
-      viewWidth: 520,
-    });
-    expect(readPrefs(JSON.stringify({ handle: false, viewWidth: 400 }))).toEqual({
-      handle: false,
-      viewWidth: 400,
-    });
-    expect(readPrefs(JSON.stringify({ listWidth: "300", viewWidth: 0 }))).toEqual({});
-    expect(readPrefs(JSON.stringify({ listWidth: -4, viewWidth: null }))).toEqual({});
-    expect(readPrefs('{"listWidth":1e999}')).toEqual({});
+  test("keeps a width that is a number of px", () => {
+    const at = (kept: object) => JSON.stringify({ v: PREFS_VERSION, ...kept });
+    expect(readPrefs(at({ width: 300 }))).toEqual({ width: 300 });
+    expect(readPrefs(at({ handle: false, width: 400 }))).toEqual({ handle: false, width: 400 });
+    expect(readPrefs(at({ width: "300" }))).toEqual({});
+    expect(readPrefs(at({ width: 0 }))).toEqual({});
+    expect(readPrefs(at({ width: -4 }))).toEqual({});
+    expect(readPrefs(at({ width: null }))).toEqual({});
+    expect(readPrefs(`{"v":${PREFS_VERSION},"width":1e999}`)).toEqual({});
+  });
+
+  test("takes up one kept at version 5 or before, with a width for the rows and one for a view: the rows' is the width, and the view's is dropped", () => {
+    expect(readPrefs(JSON.stringify({ v: 5, listWidth: 300, viewWidth: 520 }))).toEqual({ width: 300 });
+    expect(readPrefs(JSON.stringify({ v: 5, handle: false, viewWidth: 400 }))).toEqual({ handle: false });
+    expect(readPrefs(JSON.stringify({ listWidth: 280, viewWidth: 600 }))).toEqual({ width: 280 });
+    expect(readPrefs(JSON.stringify({ v: 5, width: 500 }))).toEqual({});
+    expect(readPrefs(JSON.stringify({ v: 6, listWidth: 300, viewWidth: 520 }))).toEqual({});
+    expect(readPrefs(JSON.stringify({ v: 5, listWidth: "300", viewWidth: 0 }))).toEqual({});
   });
 
   test("keeps a mode of the styles view that is one of the two", () => {
@@ -57,29 +65,42 @@ describe("readPrefs", () => {
     });
   });
 
-  test("is at version 4, and takes up one kept at version 1, which had no widths", () => {
-    expect(PREFS_VERSION).toBe(4);
+  test("is at version 6, and takes up one kept at version 1, which had no widths", () => {
+    expect(PREFS_VERSION).toBe(6);
     expect(readPrefs(JSON.stringify({ v: 1, handle: false }))).toEqual({ handle: false });
     expect(resolvePrefs(BASE, readPrefs(JSON.stringify({ v: 1, handle: false })))).toEqual({
       handle: false,
-      listWidth: 240,
-      viewWidth: 340,
+      width: 320,
       stylesMode: "simple",
       stylesBox: true,
+      changesDiff: false,
+      htmlHeight: 200,
+      htmlFull: false,
     });
-    expect(readPrefs(JSON.stringify({ v: 5, handle: false, listWidth: 300 }))).toEqual({});
+    expect(readPrefs(JSON.stringify({ v: 7, handle: false, width: 300 }))).toEqual({});
   });
 
   test("takes up one kept at version 2, which had no mode: the styles view is simple", () => {
-    const kept = JSON.stringify({ v: 2, handle: false, viewWidth: 500 });
-    expect(readPrefs(kept)).toEqual({ handle: false, viewWidth: 500 });
+    const kept = JSON.stringify({ v: 2, handle: false, listWidth: 500 });
+    expect(readPrefs(kept)).toEqual({ handle: false, width: 500 });
     expect(resolvePrefs(BASE, readPrefs(kept))).toEqual({
       handle: false,
-      listWidth: 240,
-      viewWidth: 500,
+      width: 500,
       stylesMode: "simple",
       stylesBox: true,
+      changesDiff: false,
+      htmlHeight: 200,
+      htmlFull: false,
     });
+  });
+
+  test("takes up one kept at version 4, which had no diff and no html editor: the diff is folded, the editor 200 tall", () => {
+    const kept = JSON.stringify({ v: 4, stylesBox: false });
+    expect(resolvePrefs(BASE, readPrefs(kept))).toEqual({ ...BASE, stylesBox: false });
+    expect(readPrefs(JSON.stringify({ changesDiff: true, htmlHeight: 320, htmlFull: true }))).toEqual({ changesDiff: true, htmlHeight: 320, htmlFull: true });
+    expect(readPrefs(JSON.stringify({ changesDiff: "yes", htmlHeight: -1, htmlFull: 1 }))).toEqual({});
+    // A height under the least the editor is dragged to comes back as that least.
+    expect(readPrefs(JSON.stringify({ htmlHeight: 1 }))).toEqual({ htmlHeight: 64 });
   });
 
   test("reads its own version and one kept before versions, and leaves a newer one alone", () => {
@@ -97,9 +118,8 @@ describe("resolvePrefs", () => {
     expect(resolvePrefs({ ...BASE, handle: false }, {})).toEqual({ ...BASE, handle: false });
   });
 
-  test("a width the user set wins over the one a panel starts with, each on its own", () => {
-    expect(resolvePrefs(BASE, { viewWidth: 500 })).toEqual({ ...BASE, viewWidth: 500 });
-    expect(resolvePrefs(BASE, { listWidth: 280 })).toEqual({ ...BASE, listWidth: 280 });
+  test("a width the user set wins over the one a panel starts with", () => {
+    expect(resolvePrefs(BASE, { width: 500 })).toEqual({ ...BASE, width: 500 });
   });
 });
 
@@ -179,67 +199,93 @@ describe("createPrefs", () => {
     prefs.destroy();
   });
 
-  test("starts 240 wide, and 340 with a view", () => {
+  test("starts 320 wide", () => {
     stubWindow();
     const prefs = createPrefs();
-    expect(prefs.get()).toMatchObject({ listWidth: 240, viewWidth: 340 });
+    expect(prefs.get()).toMatchObject({ width: 320 });
     prefs.destroy();
   });
 
-  test("keeps each width, beside the other and the handle, and drops one set back", () => {
+  test("keeps a width saved narrower than the new default as it is", () => {
+    const { local } = stubWindow();
+    local.set(PREFS_KEY, JSON.stringify({ v: PREFS_VERSION, width: 260 }));
+    const prefs = createPrefs();
+    expect(prefs.get()).toMatchObject({ width: 260 });
+    prefs.destroy();
+  });
+
+  test("keeps the width, beside the handle, and drops one set back", () => {
     const { local } = stubWindow();
     const prefs = createPrefs();
     let heard = 0;
     prefs.subscribe(() => heard++);
-    prefs.setWidth("view", 500);
-    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({ v: PREFS_VERSION, viewWidth: 500 });
-    prefs.setWidth("list", 280);
+    prefs.setWidth(500);
+    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({ v: PREFS_VERSION, width: 500 });
+    prefs.setWidth(280);
     prefs.setHandle(false);
     expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({
       v: PREFS_VERSION,
       handle: false,
-      listWidth: 280,
-      viewWidth: 500,
+      width: 280,
     });
     expect(prefs.get()).toEqual({
       handle: false,
-      listWidth: 280,
-      viewWidth: 500,
+      width: 280,
       stylesMode: "simple",
       stylesBox: true,
+      changesDiff: false,
+      htmlHeight: 200,
+      htmlFull: false,
     });
-    prefs.setWidth("view", 340);
-    prefs.setWidth("list", 240);
+    prefs.setWidth(320);
     expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({ v: PREFS_VERSION, handle: false });
     prefs.setHandle(true);
     expect(local.has(PREFS_KEY)).toBe(false);
-    expect(heard).toBe(6);
+    expect(heard).toBe(5);
     prefs.destroy();
   });
 
-  test("reads the widths that were kept", () => {
+  test("reads the width that was kept", () => {
     const { local } = stubWindow();
-    local.set(PREFS_KEY, JSON.stringify({ v: 2, listWidth: 300, viewWidth: 600 }));
+    local.set(PREFS_KEY, JSON.stringify({ v: PREFS_VERSION, width: 300 }));
     const prefs = createPrefs();
     expect(prefs.get()).toEqual({
       handle: true,
-      listWidth: 300,
-      viewWidth: 600,
+      width: 300,
       stylesMode: "simple",
       stylesBox: true,
+      changesDiff: false,
+      htmlHeight: 200,
+      htmlFull: false,
     });
     prefs.destroy();
   });
 
-  test("in fresh mode the widths are a first visit's, and one set here is not written", () => {
+  test("of the two widths kept at version 5, takes the rows' and writes the view's away", () => {
+    const { local } = stubWindow();
+    local.set(PREFS_KEY, JSON.stringify({ v: 5, handle: false, listWidth: 300, viewWidth: 600 }));
+    const prefs = createPrefs();
+    expect(prefs.get()).toMatchObject({ handle: false, width: 300 });
+    expect(prefs.get()).not.toHaveProperty("listWidth");
+    expect(prefs.get()).not.toHaveProperty("viewWidth");
+    prefs.setStylesBox(false);
+    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({
+      v: PREFS_VERSION,
+      handle: false,
+      width: 300,
+      stylesBox: false,
+    });
+    prefs.destroy();
+  });
+
+  test("in fresh mode the width is a first visit's, and one set here is not written", () => {
     const { local } = stubWindow("?devknobs=fresh");
-    const kept = JSON.stringify({ v: 2, listWidth: 300, viewWidth: 600 });
+    const kept = JSON.stringify({ v: PREFS_VERSION, width: 300 });
     local.set(PREFS_KEY, kept);
     const prefs = createPrefs();
-    expect(prefs.get()).toMatchObject({ listWidth: 240, viewWidth: 340 });
-    prefs.setWidth("view", 480);
-    prefs.setWidth("list", 260);
-    expect(prefs.get()).toMatchObject({ listWidth: 260, viewWidth: 480 });
+    expect(prefs.get()).toMatchObject({ width: 320 });
+    prefs.setWidth(480);
+    expect(prefs.get()).toMatchObject({ width: 480 });
     expect(local.get(PREFS_KEY)).toBe(kept);
     prefs.destroy();
   });
@@ -251,7 +297,7 @@ describe("createPrefs", () => {
     prefs.subscribe(() => heard++);
     expect(prefs.get().stylesMode).toBe("simple");
     prefs.setStylesMode("advanced");
-    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({ v: 4, stylesMode: "advanced" });
+    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({ v: PREFS_VERSION, stylesMode: "advanced" });
     expect(prefs.get().stylesMode).toBe("advanced");
     prefs.destroy();
     const next = createPrefs();
@@ -260,6 +306,23 @@ describe("createPrefs", () => {
     expect(local.has(PREFS_KEY)).toBe(false);
     expect(next.get().stylesMode).toBe("simple");
     expect(heard).toBe(1);
+    next.destroy();
+  });
+
+  test("the diff is folded by default, and the way it is left is kept, as is the html editor's size", () => {
+    const { local } = stubWindow();
+    const prefs = createPrefs();
+    expect(prefs.get().changesDiff).toBe(false);
+    expect([prefs.get().htmlHeight, prefs.get().htmlFull]).toEqual([200, false]);
+    prefs.setChangesDiff(true);
+    prefs.setHtmlSize({ height: 320, full: true });
+    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({ v: PREFS_VERSION, changesDiff: true, htmlHeight: 320, htmlFull: true });
+    prefs.destroy();
+    const next = createPrefs();
+    expect([next.get().changesDiff, next.get().htmlHeight, next.get().htmlFull]).toEqual([true, 320, true]);
+    next.setChangesDiff(false);
+    next.setHtmlSize({ height: 200, full: false });
+    expect(local.has(PREFS_KEY)).toBe(false);
     next.destroy();
   });
 

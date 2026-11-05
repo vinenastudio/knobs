@@ -12,13 +12,15 @@
  * them all. Only the lines that show are built, each once, and built again
  * when its node changes. One observer watches what shows, and a node that
  * changed lights for a moment. Given an editor, its text and attributes
- * can be edited, as `domedit.ts` says. To use it:
+ * can be edited, as `domedit.ts` says, and an element's line has a handle,
+ * ⋮⋮, on hover and while selected, that drags the element before or after
+ * another, or into one; esc lets go without a move. To use it:
  *
  *   const tree = createDomTree({ outline, select, copy });
  *   body.append(tree.node); tree.reveal(element); tree.destroy();
  */
 
-import { HIDE_ATTRIBUTE } from "../edit/html";
+import { canHold, firstElementOf, HIDE_ATTRIBUTE, movable, nextElementOf } from "../edit/html";
 import { el } from "./dom";
 import type { DomEditor, TreeHooks } from "./domedit";
 import { icon } from "./icons";
@@ -415,6 +417,38 @@ export function createTreeModel(page: TreePage = PAGE): TreeModel {
   };
 }
 
+/** Where a dragged element goes: into `parent`, before `next`, or at its end with null, shown on a line as `where`. */
+export interface DropPlace {
+  parent: Element;
+  next: Element | null;
+  where: "before" | "after" | "into";
+}
+
+/**
+ * Where an element dragged onto a line goes, by how far down the line the
+ * pointer is, 0 at its top and 1 at its bottom. An element's line: its top
+ * quarter before it, its bottom quarter after it, or, where it is open, first
+ * in it, and the middle into it, at its end. An end tag's line: its top half
+ * into the element, at its end, the rest after it. Null on other lines, on
+ * the dragged element's own and those in it, and where the place cannot take it.
+ */
+export function dropAt(row: Row, fraction: number, dragged: Element, open: boolean): DropPlace | null {
+  const target = row.node;
+  if (row.pseudo !== null || !isElement(target) || target === dragged) return null;
+  const around = target.parentNode;
+  const before = (): DropPlace | null => (around && isElement(around) ? { parent: around, next: target, where: "before" } : null);
+  const after = (): DropPlace | null => (around && isElement(around) ? { parent: around, next: nextElementOf(target), where: "after" } : null);
+  let place: DropPlace | null = null;
+  if (row.kind === "close") place = fraction < 0.5 ? { parent: target, next: null, where: "into" } : after();
+  else if (row.kind === "open") {
+    if (fraction < 0.25) place = before();
+    else if (fraction > 0.75) place = open && firstElementOf(target) ? { parent: target, next: firstElementOf(target), where: "after" } : after();
+    else place = canHold(target, dragged) ? { parent: target, next: null, where: "into" } : fraction < 0.5 ? before() : after();
+  }
+  if (!place || !canHold(place.parent, dragged) || place.next === dragged) return null;
+  return place;
+}
+
 /** Whether a line can be selected: every one but an end tag and the line that shows more. */
 export function selectable(row: Row): boolean {
   return row.kind !== "close" && row.kind !== "more";
@@ -625,6 +659,13 @@ export function createDomTree(context: DomTreeContext, model: TreeModel = create
     }
     const code = pieceNodes(row);
     line.append(turn, code);
+    if (editor && row.kind === "open" && movable(row.node)) {
+      const grip = el("span", "dom-grip", "⋮⋮");
+      grip.setAttribute("aria-hidden", "true");
+      grip.style.left = `max(0px, calc(var(--view-start) + ${row.depth} * var(--col-icon) - 1.2em))`;
+      grip.addEventListener("pointerdown", (event: PointerEvent) => startDrag(event, row, line));
+      line.prepend(grip);
+    }
     if (row.kind === "close") {
       // An end tag is the element's, and no line of its own for assistive tech.
       line.setAttribute("aria-hidden", "true");
@@ -810,6 +851,8 @@ export function createDomTree(context: DomTreeContext, model: TreeModel = create
       return;
     }
     if (event.metaKey || event.ctrlKey) return;
+    // ⇧↑ and ⇧↓ move the selected element: where it cannot go that way, they do nothing.
+    if (editor && event.shiftKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) return;
     const step = stepFor(event.key, rows, selectedIndex(), model);
     if (!step) return;
     event.preventDefault();
@@ -819,6 +862,88 @@ export function createDomTree(context: DomTreeContext, model: TreeModel = create
       return;
     }
     setOpen(step.node, step.kind === "expand");
+  }
+
+  /** An element dragged by its line's handle, and where it would go now. */
+  let drag: { element: Element; line: HTMLElement; drop: DropPlace | null; marked: HTMLElement | null } | null = null;
+
+  /** The line under the pointer, and how far down it the pointer is. */
+  function lineAt(y: number): { row: Row; line: HTMLElement; fraction: number } | null {
+    for (let at = 0; at < rows.length; at++) {
+      const line = shown[at];
+      const row = rows[at];
+      if (!line || !row) continue;
+      const box = line.getBoundingClientRect();
+      if (y >= box.top && y < box.bottom) return { row, line, fraction: box.height > 0 ? (y - box.top) / box.height : 0.5 };
+    }
+    return null;
+  }
+
+  function unmark(): void {
+    drag?.marked?.classList.remove("dom-drop-before", "dom-drop-after", "dom-drop-into");
+    if (drag) drag.marked = null;
+  }
+
+  function onDragMove(event: PointerEvent): void {
+    if (!drag) return;
+    event.preventDefault();
+    // Near the tree's top or bottom edge, it scrolls to the lines past it.
+    const box = node.getBoundingClientRect();
+    if (event.clientY < box.top + 16) node.scrollTop -= 12;
+    else if (event.clientY > box.bottom - 16) node.scrollTop += 12;
+    unmark();
+    const at = lineAt(event.clientY);
+    const drop = at ? dropAt(at.row, at.fraction, drag.element, model.isExpanded(at.row.node)) : null;
+    drag.drop = drop;
+    if (at && drop) {
+      at.line.classList.add(`dom-drop-${drop.where}`);
+      drag.marked = at.line;
+    }
+  }
+
+  function endDrag(commit: boolean): void {
+    if (!drag) return;
+    const { element, line, drop } = drag;
+    unmark();
+    drag = null;
+    line.classList.remove("dom-dragging");
+    node.classList.remove("dom-drag");
+    window.removeEventListener("pointermove", onDragMove, true);
+    window.removeEventListener("pointerup", onDragUp, true);
+    window.removeEventListener("pointercancel", onDragCancel, true);
+    window.removeEventListener("keydown", onDragKey, true);
+    if (commit && drop) editor?.move(element, drop.parent, drop.next);
+  }
+
+  function onDragUp(): void {
+    endDrag(true);
+  }
+
+  function onDragCancel(): void {
+    endDrag(false);
+  }
+
+  /** Esc lets the element go where it was. */
+  function onDragKey(event: KeyboardEvent): void {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    endDrag(false);
+  }
+
+  function startDrag(event: PointerEvent, row: Row, line: HTMLElement): void {
+    if (event.button !== 0 || !editor || !isElement(row.node)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    endDrag(false);
+    choose(row);
+    drag = { element: row.node, line, drop: null, marked: null };
+    line.classList.add("dom-dragging");
+    node.classList.add("dom-drag");
+    window.addEventListener("pointermove", onDragMove, true);
+    window.addEventListener("pointerup", onDragUp, true);
+    window.addEventListener("pointercancel", onDragCancel, true);
+    window.addEventListener("keydown", onDragKey, true);
   }
 
   function onLeave(): void {
@@ -953,6 +1078,7 @@ export function createDomTree(context: DomTreeContext, model: TreeModel = create
     selected: () => selection?.node ?? null,
     escape: () => editor?.close(false) ?? false,
     destroy(): void {
+      endDrag(false);
       editor?.destroy();
       gone = true;
       observer?.disconnect();

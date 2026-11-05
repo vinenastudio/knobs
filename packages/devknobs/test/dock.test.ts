@@ -19,9 +19,9 @@ afterEach(() => {
 });
 
 describe("dockWidth", () => {
-  test("is the panel's 240 until the panel says otherwise", () => {
-    expect(DOCK_WIDTH).toBe(240);
-    expect(dockWidth()).toBe(240);
+  test("is the panel's 320 until the panel says otherwise", () => {
+    expect(DOCK_WIDTH).toBe(320);
+    expect(dockWidth()).toBe(320);
   });
 
   test("is what the panel last said, and tells who listens, once for each change", () => {
@@ -44,7 +44,7 @@ describe("dockWidth", () => {
     let heard = 0;
     const stop = onDockWidth(() => heard++);
     for (const px of [0, -4, Number.NaN]) setDockWidth(px);
-    expect(dockWidth()).toBe(240);
+    expect(dockWidth()).toBe(320);
     expect(heard).toBe(0);
     stop();
   });

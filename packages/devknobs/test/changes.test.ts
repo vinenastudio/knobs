@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import { cssValue } from "../src/edit/css";
 import { createEditLog, type EditLog } from "../src/edit/log";
 import { diffText, promptText } from "../src/edit/text";
-import { COPIED, createChanges, type Changes, NOT_COPIED, undoHint } from "../src/ui/changes";
+import type { Keeper, Restored } from "../src/edit/keep";
+import { COPIED, createChanges, type Changes, keptLine, missedLine, NOT_COPIED, undoHint, WAIT_MAX, WAIT_NOTE, waitLine, waitValue } from "../src/ui/changes";
 import { Block, fakeCss } from "./edit-block";
 import { FakeNode, fake } from "./styles-dom";
 
@@ -71,6 +72,38 @@ describe("the changes", () => {
     ]);
   });
 
+  test("fold the diff away at first, show it on the count's press, and keep the way it is left", () => {
+    const kept: boolean[] = [];
+    let shown = false;
+    changes = createChanges(log, () => true, true, null, { get: () => shown, set: (open) => void kept.push((shown = open)) });
+    const node = fake(changes.node);
+    edit("color", "blue");
+    const fold = node.find("changes-toggle")[0];
+    if (!fold) throw new Error("no toggle");
+    expect([fold.tag, fold.textContent, fold.getAttribute("aria-expanded")]).toEqual(["button", "changes (1)", "false"]);
+    const list = node.find("changes-list")[0];
+    expect(list?.hidden).toBe(true);
+    expect(fold.getAttribute("aria-controls")).toMatch(/^devknobs-changes-\d+$/);
+    expect(fold.getAttribute("aria-controls")).toBe(Reflect.get(list ?? {}, "id"));
+    // The buttons stay in sight with the diff folded.
+    expect(["copy prompt for agent", "copy diff", "undo all"].map((text) => control(node, text).hidden)).toEqual([false, false, false]);
+    fold.fire("click");
+    expect([list?.hidden, fold.getAttribute("aria-expanded"), kept]).toEqual([false, "true", [true]]);
+    changes.destroy();
+    // A section made again starts as it was left.
+    changes = createChanges(log, () => true, true, null, { get: () => shown, set: (open) => void kept.push((shown = open)) });
+    const again = fake(changes.node);
+    expect(again.find("changes-list")[0]?.hidden).toBe(false);
+    again.find("changes-toggle")[0]?.fire("click");
+    expect([again.find("changes-list")[0]?.hidden, kept]).toEqual([true, [true, false]]);
+  });
+
+  test("with no place to keep it, fold the diff at first all the same", () => {
+    const node = start();
+    edit("color", "blue");
+    expect(node.find("changes-list")[0]?.hidden).toBe(true);
+  });
+
   test("name the keys as the footer does off a Mac", () => {
     expect(undoHint(false)).toBe("undo Z, redo Shift Z");
     expect(undoHint(true)).toBe("undo Z, redo ⇧Z");
@@ -124,5 +157,127 @@ describe("the changes", () => {
     expect(log.list()).toEqual([]);
     expect(style.cssText).toBe("color: red; margin: 0;");
     expect(node.hidden).toBe(true);
+  });
+});
+
+describe("the line of edits kept after a reload", () => {
+  test("says how many were made again and lists those that were not", () => {
+    expect(keptLine(1, 0)).toBe("1 edit kept from before the reload");
+    expect(keptLine(4, 1)).toBe("4 edits kept from before the reload, 1 could not be found");
+    expect(missedLine({ edit: { kind: "text", target: { selector: "h1" }, property: "text", before: "a", after: "b" }, reason: "not found on the page" })).toBe("text on h1: not found on the page");
+    expect(missedLine({ edit: { kind: "css-value", target: { selector: "a`b" }, property: "padding", before: "1px", after: "2px" }, reason: "x" })).toBe('padding on "a`b": x');
+    expect(missedLine({ edit: "junk", reason: "not an edit devknobs reads" })).toBe("not an edit devknobs reads");
+  });
+
+  test("shows in the section with no change in force, and goes with the switch", () => {
+    let restored: Restored | null = { kept: 0, missed: [{ edit: { kind: "move", target: { selector: "li" }, property: "node", before: "a", after: "b", from: { parent: "ul", next: null }, to: { parent: "ul", next: "li" } }, reason: "gone" }] };
+    const listeners = new Set<() => void>();
+    const keep: Keeper = {
+      on: () => restored !== null,
+      set: () => undefined,
+      restored: () => restored,
+      known: () => true,
+      waiting: () => [],
+      applyWaiting: () => undefined,
+      kept: () => 0,
+      cut: () => 0,
+      subscribe: (listener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      stop: () => undefined,
+    };
+    changes = createChanges(log, () => true, true, keep);
+    const node = fake(changes.node);
+    expect(node.hidden).toBe(false);
+    expect(node.all().filter((one) => one.className === "changes-kept-line").map((one) => one.textContent)).toEqual(["0 edits kept from before the reload, 1 could not be found"]);
+    expect(node.all().filter((one) => one.className === "changes-missed").map((one) => one.textContent)).toEqual(["move on li: gone"]);
+    restored = null;
+    for (const listener of listeners) listener();
+    expect(node.hidden).toBe(true);
+  });
+});
+
+describe("kept html edits that wait", () => {
+  test("are listed with an apply that only the user's own click on it makes", () => {
+    const waiting = [
+      { kind: "attr" as const, target: { selector: "h1" }, property: "title", before: null, after: "Hi" },
+      { kind: "html" as const, target: { selector: "p" }, property: "html", before: "<p>a</p>", after: `<p>${"x".repeat(200)}</p>` },
+      { kind: "hide" as const, target: { selector: "p" }, property: "hidden", before: null, after: "hidden" },
+    ];
+    let applied = 0;
+    const keep: Keeper = {
+      on: () => true,
+      set: () => undefined,
+      restored: () => ({ kept: 1, missed: [] }),
+      known: () => true,
+      waiting: () => waiting,
+      applyWaiting: () => void applied++,
+      kept: () => 0,
+      cut: () => 0,
+      subscribe: () => () => undefined,
+      stop: () => undefined,
+    };
+    changes = createChanges(log, () => true, true, keep);
+    const node = fake(changes.node);
+    const head = node.all().find((one) => one.className.includes("changes-wait"));
+    expect(head?.textContent).toBe("1 kept html edit and 1 kept attribute edit wait, with 1 edit after them: apply");
+    expect(waitLine(0, 2, 0)).toBe("2 kept attribute edits wait");
+    expect(waitLine(1, 0, 0)).toBe("1 kept html edit waits");
+    expect(node.all().some((one) => one.textContent === WAIT_NOTE)).toBe(true);
+    // The diff is folded, and what the waiting edits make shows all the same.
+    expect(node.find("changes-list")[0]?.hidden).toBe(true);
+    expect(node.find("changes-kept")[0]?.hidden).toBe(false);
+    expect(node.all().filter((one) => one.className === "changes-missed").map((one) => one.textContent)).toEqual([
+      'title on h1: title="Hi"',
+      `html on p: <p>${"x".repeat(WAIT_MAX - 4)}… show all`,
+      "hide on p: hidden",
+    ]);
+    expect(waitValue({ kind: "html", target: { selector: "p" }, property: "html", before: null, after: "<p>a\nb</p>" })).toBe('"<p>a\\nb</p>"');
+    let apply = control(node, "apply");
+    // A value cut short keeps apply off until it is shown whole.
+    expect(Reflect.get(apply, "disabled")).toBe(true);
+    apply.fire("click", { isTrusted: true, currentTarget: apply });
+    expect(applied).toBe(0);
+    control(node, "show all").fire("click");
+    // The button went with the redraw: the focus is on apply, now on.
+    expect(control(node, "apply").focused).toBe(true);
+    expect(node.all().filter((one) => one.className === "changes-missed")[1]?.textContent).toBe(`html on p: <p>${"x".repeat(200)}</p>`);
+    apply = control(node, "apply");
+    expect(Reflect.get(apply, "disabled")).toBe(false);
+    apply.fire("click", { isTrusted: false, currentTarget: apply });
+    expect(applied).toBe(0);
+    apply.fire("click", { isTrusted: true, currentTarget: {} });
+    expect(applied).toBe(0);
+    apply.fire("click", { isTrusted: true, currentTarget: apply });
+    expect(applied).toBe(1);
+  });
+});
+
+describe("show all on a waiting edit", () => {
+  test("moves the focus to the next show all, then to apply", () => {
+    const long = (selector: string) => ({ kind: "html" as const, target: { selector }, property: "html", before: null, after: `<p>${"x".repeat(200)}</p>` });
+    const waiting = [long("p"), long("q")];
+    const keep: Keeper = {
+      known: () => true,
+      on: () => true,
+      set: () => undefined,
+      restored: () => null,
+      waiting: () => waiting,
+      applyWaiting: () => undefined,
+      kept: () => 0,
+      cut: () => 0,
+      subscribe: () => () => undefined,
+      stop: () => undefined,
+    };
+    changes = createChanges(log, () => true, true, keep);
+    const node = fake(changes.node);
+    node.find("changes-show")[0]?.fire("click");
+    const shows = node.find("changes-show");
+    expect(shows).toHaveLength(1);
+    expect(shows[0]?.focused).toBe(true);
+    expect(control(node, "apply").focused).toBe(false);
+    shows[0]?.fire("click");
+    expect(control(node, "apply").focused).toBe(true);
   });
 });

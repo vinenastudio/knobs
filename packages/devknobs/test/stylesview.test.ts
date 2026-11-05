@@ -1064,8 +1064,10 @@ describe("editing", () => {
     const node = editing();
     const box = node.find("css-toggle")[1];
     if (!box) throw new Error("no box");
+    expect(box.getAttribute("aria-label")).toBe("turn off margin");
     Reflect.set(box, "checked", false);
     box.fire("change");
+    expect(box.getAttribute("aria-label")).toBe("turn on margin");
     expect(style.cssText).toBe("color: red; padding: 4px;");
     expect(log.list()).toMatchObject([
       {
@@ -1081,6 +1083,7 @@ describe("editing", () => {
     expect(struck?.tag).toBe("s");
     const again = struck?.find("css-toggle")[0];
     if (!again) throw new Error("no box on the struck line");
+    expect(again.getAttribute("aria-label")).toBe("turn on margin");
     Reflect.set(again, "checked", true);
     again.fire("change");
     expect(style.cssText).toBe("color: red; margin: 0; padding: 4px;");
@@ -1269,7 +1272,7 @@ describe("editing", () => {
         rule(".primary", [declaration("background", "#2f6df6")], { rule: ruleObject, origin: { sheet: "new rule", owner: null, path: [0] } }),
       ]);
     view.show(as(app));
-    expect(node.find("css-applied")[0]?.find("css-decl").map((one) => one.textContent)).toContain("background: #2f6df6");
+    expect(node.find("css-applied")[0]?.find("css-decl").map((one) => one.textContent)).toContain("background: #2f6df6;");
   });
 
   /** Open the new rule's field, with its selector set where given. */

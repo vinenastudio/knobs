@@ -6,7 +6,7 @@ import type { PanelValue, SideValue } from "../types";
  */
 
 /** How wide the panel is until it says otherwise, in px. */
-export const DOCK_WIDTH = 240;
+export const DOCK_WIDTH = 320;
 
 /** The narrowest page the column leaves. In a window with less to spare it lies over the page. */
 export const PAGE_MIN = 320;
@@ -28,9 +28,8 @@ export function dockWidth(): number {
 
 /**
  * The panel is `px` wide now, or glides there, as it says each time it takes
- * a width: the rows' or a view's, as its edge sets them. The frame hears, and
- * gives a pinned panel's column that much room. A width that is no size is
- * left out.
+ * a width, as its edge sets it. The frame hears, and gives a pinned panel's
+ * column that much room. A width that is no size is left out.
  */
 export function setDockWidth(px: number): void {
   if (!(px > 0) || px === width) return;

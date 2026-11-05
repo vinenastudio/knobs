@@ -5,6 +5,8 @@ import {
   type Answer,
   type Carry,
   detachMessage,
+  editsKey,
+  editsToForget,
   KEYS_KEY,
   PREFER_KEY,
   REAL_PHONE_KEY,
@@ -782,6 +784,27 @@ function unbypass(tabId: number): Promise<void> {
   });
 }
 
+/** Keep a page's edits, on the tab's own origin, or with null forget them. */
+async function keepEdits(
+  url: string | undefined,
+  { kept, path }: Extract<Question, { type: 'edits' }>,
+) {
+  const origin = url ? URL.parse(url)?.origin : undefined;
+  if (!origin || origin === 'null') {
+    throw new Error('this page keeps no edits');
+  }
+  const key = editsKey(origin, path);
+  if (kept === null) {
+    await chrome.storage.local.remove(key);
+    return;
+  }
+  await chrome.storage.local.set({ [key]: { ...kept, at: Date.now() } });
+  const old = editsToForget(await chrome.storage.local.get(null), key);
+  if (old.length > 0) {
+    await chrome.storage.local.remove(old);
+  }
+}
+
 async function answer(tabId: number, question: Question, url: string | undefined): Promise<Answer> {
   switch (question.type) {
     case 'why': {
@@ -807,6 +830,10 @@ async function answer(tabId: number, question: Question, url: string | undefined
     }
     case 'keys': {
       await chrome.storage.local.set({ [KEYS_KEY]: question.keys });
+      return {};
+    }
+    case 'edits': {
+      await keepEdits(url, question);
       return {};
     }
     case 'carry': {
@@ -858,6 +885,7 @@ chrome.runtime.onMessage.addListener(
       request.type === 'prefer' ||
       request.type === 'realPhone' ||
       request.type === 'keys' ||
+      request.type === 'edits' ||
       request.type === 'carry'
     ) {
       answer(tabId, request, sender.url).then(reply, (error) =>

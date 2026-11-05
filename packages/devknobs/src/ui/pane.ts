@@ -68,9 +68,6 @@ export interface PaneView {
 /** Hears the id of the view that opened, or null when the view closed. */
 export type PaneListener = (view: string | null) => void;
 
-/** How wide the panel is while a view shows, until the user drags its edge, in px. */
-export const PANE_WIDTH = 340;
-
 /** What the view needs from the panel. */
 export interface PaneContext {
   /** The panel's shadow root, which knows where the focus is in it. */

@@ -7,13 +7,16 @@
  *
  *   Enter    edit the text           a    add an attribute
  *   F2       edit as html            h    hide, or show again
- *   Delete   delete the node
+ *   Delete   delete the node         ⇧↑   move up among its siblings
+ *                                    ⇧↓   move down among its siblings
  *
+ * An element's line is also dragged by its handle, before or after another
+ * element, or into one, through `move`.
  * A one-line field puts its edit on with Enter and leaves with esc. The html
  * field, and the field of a text or a value with line breaks in it, takes
  * line breaks with Enter, and puts its edit on with ⇧↩ (Shift Enter
  * elsewhere), its apply button, or as the focus leaves it; ⌘↩ and Ctrl Enter
- * put it on too. A field closed as it was opened makes no edit. An element
+ * put it on too. The html field is the editor of htmledit.ts. A field closed as it was opened makes no edit. An element
  * that holds devknobs' own nodes, as the body holds the panel, is not
  * replaced, hidden or deleted. To use it, as the tree does:
  *
@@ -21,17 +24,33 @@
  *   editor.dblclick(row, target); editor.key(event, row); editor.selected(row);
  */
 
-import { attrEdit, attributeName, deleteEdit, HIDE_ATTRIBUTE, hideEdit, htmlEdit, parseHtml, textEdit } from "../edit/html";
+import {
+  attrEdit,
+  attributeName,
+  canHold,
+  deleteEdit,
+  HIDE_ATTRIBUTE,
+  hideEdit,
+  htmlEdit,
+  movable,
+  moveEdit,
+  nextElementOf,
+  parseHtml,
+  previousElementOf,
+  textEdit,
+} from "../edit/html";
 import type { Change, EditLog } from "../edit/log";
 import { type Locate, locateSource, recordAt } from "../edit/source";
 import { isMac } from "../engine/ua";
-import { editField, selectorOf } from "./cssedit";
+import { editField, fitField, selectorOf } from "./cssedit";
 import { button, el } from "./dom";
 import { type Entry, isElement, markupOf, parentOf, type Row } from "./domtree";
+import { htmlEditor } from "./htmledit";
 import { comboLabel, letterMatches, typesInField, withShift } from "./keys";
+import type { HtmlSize } from "./prefs";
 
 /** What a key on the selected line does. */
-export type TreeEditAction = "text" | "attr" | "html" | "hide" | "delete";
+export type TreeEditAction = "text" | "attr" | "html" | "hide" | "delete" | "up" | "down";
 
 /** What the bar's buttons say. */
 export const ACTIONS: Record<TreeEditAction, string> = {
@@ -40,6 +59,8 @@ export const ACTIONS: Record<TreeEditAction, string> = {
   html: "edit as html",
   hide: "hide",
   delete: "delete",
+  up: "move up",
+  down: "move down",
 };
 
 /** What the tree lends its editor. */
@@ -62,6 +83,8 @@ export interface DomEditorOptions {
   locate?: Locate;
   /** Parses html in a document. Defaults to the page's own parser. */
   parse?: typeof parseHtml;
+  /** How tall the html editor starts, and where the size the user gives it is kept. */
+  htmlSize?: { get(): HtmlSize; set(size: HtmlSize): void };
 }
 
 export interface DomEditor {
@@ -77,6 +100,8 @@ export interface DomEditor {
   busy(): boolean;
   /** Close the field open, with or without its edit; one whose edit is refused closes without it. Says whether one was open. */
   close(commit: boolean): boolean;
+  /** Move an element into `parent`, before `next`, or at its end with null, and select it. Says whether it moved. */
+  move(element: Element, parent: Element, next: Element | null): boolean;
   destroy(): void;
 }
 
@@ -93,6 +118,8 @@ export function commitsHtml(event: Pick<KeyboardEvent, "key" | "shiftKey" | "met
 /** What a key on the selected line does: no modifier but shift, and never in a field. Null for any other key. */
 export function treeEditKey(event: KeyboardEvent): TreeEditAction | null {
   if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing || typesInField(event)) return null;
+  if (event.shiftKey && event.key === "ArrowUp") return "up";
+  if (event.shiftKey && event.key === "ArrowDown") return "down";
   switch (event.key) {
     case "Enter":
       return "text";
@@ -165,6 +192,8 @@ export function actionsFor(row: Row | null): TreeEditAction[] {
     out.push("attr");
     // The root element goes only with its document; the head and body, and one with the panel in it, stay.
     if (node.parentNode?.nodeType !== 9 && !isFrame(node) && !holdsOwn(node)) out.push("html", "hide", "delete");
+    if (movable(node) && previousElementOf(node)) out.push("up");
+    if (movable(node) && nextElementOf(node)) out.push("down");
   } else if ((row.kind === "text" || row.kind === "comment") && inElement(node)) out.push("delete");
   return out;
 }
@@ -187,7 +216,7 @@ function pieceAt(at: EventTarget | null, code: HTMLElement | null): HTMLElement 
 }
 
 /** A one-line field of the tree. */
-function field(value: string, label: string): HTMLInputElement {
+function field(value: string, label: string): HTMLTextAreaElement {
   const input = editField(value, label);
   input.classList.add("dom-edit");
   return input;
@@ -196,7 +225,9 @@ function field(value: string, label: string): HTMLInputElement {
 /** How a field opens: the pieces of a line it stands in for, and what it does. */
 interface FieldOptions {
   pieces: Node[];
-  input: HTMLInputElement | HTMLTextAreaElement;
+  input: HTMLTextAreaElement;
+  /** What stands in the line for the pieces, the field in it. Defaults to the field. */
+  frame?: HTMLElement;
   /** Make the edits, and say whether they took: where they did not, the field stays open, marked. */
   commit(text: string): boolean;
   /** Line breaks go in, and shift and Enter puts the edit on. */
@@ -207,17 +238,17 @@ interface FieldOptions {
   closed?(): void;
 }
 
-/** A field that keeps line breaks, with its apply button, as tall as what it holds. */
-function boxField(value: string, label: string, className = ""): Pick<FieldOptions, "input" | "multiline" | "apply"> {
+/** A field that keeps line breaks, with its apply button, as tall as what it holds up to a height that scrolls. */
+function boxField(value: string, label: string): Pick<FieldOptions, "input" | "multiline" | "apply"> {
   const area = document.createElement("textarea");
-  area.className = `css-edit inline-field dom-edit ${className}`.trim();
+  area.className = "css-edit inline-field dom-edit";
   area.value = value;
+  area.rows = 2;
   area.spellcheck = false;
-  const fit = (): void => {
-    area.rows = Math.min(12, Math.max(2, area.value.split("\n").length + 1));
-  };
+  const fit = (): void => fitField(area);
   fit();
   area.addEventListener("input", fit);
+  area.addEventListener("focus", fit);
   const hint = applyHint(isMac());
   area.setAttribute("aria-label", `${label}, ${hint} to apply, esc to leave`);
   return { input: area, multiline: true, apply: button("chip dom-apply", `apply ${hint}`) };
@@ -256,11 +287,11 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
   }
 
   /** Show a field in place of pieces of a line, and close it with Enter, esc, or as the focus leaves. */
-  function openField({ pieces, input, commit, multiline = false, apply: applies, closed }: FieldOptions): void {
+  function openField({ pieces, input, frame = input, commit, multiline = false, apply: applies, closed }: FieldOptions): void {
     const first = pieces[0];
     const parent = first?.parentNode;
     if (!first || !parent) return;
-    parent.insertBefore(input, first);
+    parent.insertBefore(frame, first);
     if (applies) parent.insertBefore(applies, first);
     for (const piece of pieces) parent.removeChild(piece);
     // As the field holds it: a field drops what it cannot hold, so an edit is told from this, not the page's text.
@@ -278,9 +309,9 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
         input.focus({ preventScroll: true });
         return;
       }
-      if (input.parentNode) {
-        for (const piece of pieces) input.parentNode.insertBefore(piece, input);
-        input.remove();
+      if (frame.parentNode) {
+        for (const piece of pieces) frame.parentNode.insertBefore(piece, frame);
+        frame.remove();
       }
       applies?.remove();
       closed?.();
@@ -373,9 +404,15 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
     const code = hooks.code(row);
     if (!isElement(element) || !code) return;
     const before = markupOf(element);
+    const hint = applyHint(isMac());
+    const editor = htmlEditor(before, `edit as html, ${hint} to apply, esc to leave`, options.htmlSize ?? null);
     openField({
       pieces: Array.from(code.childNodes),
-      ...boxField(before, "edit as html", "dom-html"),
+      input: editor.area,
+      frame: editor.frame,
+      multiline: true,
+      apply: button("chip dom-apply", `apply ${hint}`),
+      closed: () => editor.restore(),
       commit(text) {
         if (text.trim() === before.trim()) return true;
         const nodes = parse(element.ownerDocument, text);
@@ -386,6 +423,7 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
         return true;
       },
     });
+    editor.shown();
   }
 
   function hide(row: Row): void {
@@ -406,6 +444,35 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
     if (next) hooks.select(next);
   }
 
+  /** Move an element, the places read as selectors before it moves, and select it where it went. */
+  function move(element: Element, parent: Element, next: Element | null): boolean {
+    const home = element.parentNode;
+    if (!home || !isElement(home) || !movable(element) || !canHold(parent, element)) return false;
+    const was = nextElementOf(element);
+    const places = {
+      from: { parent: selectorOf(home), next: was ? selectorOf(was) : null },
+      to: { parent: selectorOf(parent), next: next ? selectorOf(next) : null },
+    };
+    const change = moveEdit(target(element), element, { parent, next }, places);
+    if (!change || !record(change, element)) return false;
+    hooks.select(element);
+    return true;
+  }
+
+  /** Move the line's element one place up or down among the elements beside it. */
+  function step(row: Row, up: boolean): void {
+    const element = row.node;
+    const parent = element.parentNode;
+    if (!isElement(element) || !parent || !isElement(parent)) return;
+    if (up) {
+      const before = previousElementOf(element);
+      if (before) move(element, parent, before);
+      return;
+    }
+    const after = nextElementOf(element);
+    if (after) move(element, parent, nextElementOf(after));
+  }
+
   /** Put the open field's edit on. False where it refused it: the field stays open, marked, and nothing else is done. */
   function done(): boolean {
     open?.close(true);
@@ -419,6 +486,7 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
     else if (action === "attr") editAttr(row, null);
     else if (action === "html") editHtml(row);
     else if (action === "hide") hide(row);
+    else if (action === "up" || action === "down") step(row, action === "up");
     else remove(row);
   }
 
@@ -467,6 +535,9 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
       // The tree goes on, as to another node: a field whose edit is refused gives way all the same.
       open.close(commit, commit);
       return true;
+    },
+    move(element, parent, next) {
+      return done() && move(element, parent, next);
     },
     destroy() {
       open?.close(false);
