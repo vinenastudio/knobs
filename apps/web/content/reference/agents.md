@@ -78,7 +78,7 @@ did not take it`, `not an edit devknobs reads`). anything but a list
   [grab and inspect](/docs/grab)).
 - `reset()` leaves the panel as it is: open or closed, docked or not, its
   handle shown or hidden, its dev tab icon (`devIcon`) and real phone mode (`realPhone`) as set.
-- edits kept after a reload with the extension (the Elements view's switch): only a change made during a user gesture is kept, so `setEdits()` and `undoEdit()` from a script change the page and the panel, and not what is kept, unless they run right after a click or a key on the page.
+- edits kept after a reload with the extension (the settings' `keep edits after reload` switch): only a change made during a user gesture is kept, so `setEdits()` and `undoEdit()` from a script change the page and the panel, and not what is kept, unless they run right after a click or a key on the page.
 - `setState({ panel: { realPhone } })` with the extension: a change made during a user gesture, such as a click (the panel's switch included), is saved for every tab and site; a change a script makes without one stays in that tab, so a page's script cannot turn it for the others.
 
 ```js

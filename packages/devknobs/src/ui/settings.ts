@@ -1,3 +1,4 @@
+import type { Keeper } from "../edit/keep";
 import type { GrabControl } from "../grab/control";
 import { PREFER_HINT, type PreferValue } from "../host";
 import { BINDING_WORDS, type LiveKeys, recordStep } from "./bindings";
@@ -13,7 +14,7 @@ import { createRefusal, type Tips } from "./tooltip";
 /**
  * The settings view, which slides in over the rows: whether the handle shows
  * while the panel is closed, the host's switch for its native driver where it
- * gives one, which copy runs the panel where a host gives the choice, whether the tab's icon has the dev ribbon, and each binding's
+ * gives one, which copy runs the panel where a host gives the choice, whether the page keeps its Elements edits after a reload, whether the tab's icon has the dev ribbon, and each binding's
  * key, recorded from the next
  * keys pressed. A key a binding cannot take is refused, and the chip says why.
  */
@@ -62,6 +63,8 @@ export interface SettingsContext {
   realPhone: boolean;
   /** The user turned real phone mode off or on. */
   setRealPhone(on: boolean): void;
+  /** What keeps the page's edits after a reload, null with none. It starts after the panel, so it is asked again as the settings open. */
+  keep(): Keeper | null;
   /** The words of the host's switch for its native driver, null with none. */
   native: { label: string; hint: string } | null;
   /** The user turned the native driver off or on. */
@@ -103,6 +106,67 @@ export interface Settings {
 
 /** What real phone mode costs, under its switch. */
 export const REAL_PHONE_HINT = "sends the phone's user agent to sites, so they serve their mobile site. some sites may sign you out.";
+
+/** The title of the switch that keeps the page's edits after a reload. */
+export const KEEP_LABEL = "keep edits after reload";
+
+/** What the keep switch does, under it. */
+export const KEEP_HINT = "keeps your Elements edits on this page after a reload.";
+
+export interface KeepRow {
+  /** The row, hidden while there is no keeper. */
+  node: HTMLElement;
+  /** Ask for the keeper again, and show it. */
+  sync(): void;
+  destroy(): void;
+}
+
+/**
+ * The switch that keeps the page's edits after a reload, as the keeper has
+ * it, and off to a click until the keeper knows what the page keeps.
+ */
+export function keepRow(resolve: () => Keeper | null): KeepRow {
+  const control = button("switch row-control", "");
+  control.setAttribute("role", "switch");
+  control.setAttribute("aria-label", KEEP_LABEL);
+  const hint = el("div", "row-hint", KEEP_HINT);
+  hint.id = "devknobs-keep-hint";
+  control.setAttribute("aria-describedby", hint.id);
+  const node = rowBox({
+    main: el("div", "main"),
+    glyph: icon("rotate-ccw"),
+    title: KEEP_LABEL,
+    ends: [control],
+  }).box;
+  node.append(hint);
+  let keep: Keeper | null = null;
+  let stop: (() => void) | null = null;
+  const draw = (): void => {
+    if (!keep) return;
+    mark(control, keep.on(), "aria-checked");
+    control.disabled = !keep.known();
+  };
+  control.addEventListener("click", () => keep?.set(!keep.on()));
+  function sync(): void {
+    const now = resolve();
+    if (now !== keep) {
+      stop?.();
+      keep = now;
+      stop = keep ? keep.subscribe(draw) : null;
+    }
+    node.hidden = !keep;
+    draw();
+  }
+  sync();
+  return {
+    node,
+    sync,
+    destroy(): void {
+      stop?.();
+      stop = null;
+    },
+  };
+}
 
 export function createSettings(context: SettingsContext): Settings {
   const { keys, prefs, grab, mac, bindingsHere, keysToggle, said, tips, render, renderKeys } =
@@ -203,14 +267,20 @@ export function createSettings(context: SettingsContext): Settings {
   const devIconSwitch = button("switch row-control", "");
   devIconSwitch.setAttribute("role", "switch");
   devIconSwitch.setAttribute("aria-label", "dev tab icon");
-  keysView.append(
-    rowBox({
-      main: el("div", "main"),
-      glyph: icon("image"),
-      title: "dev tab icon",
-      ends: [devIconSwitch],
-    }).box,
-  );
+  const devIconRow = rowBox({
+    main: el("div", "main"),
+    glyph: icon("image"),
+    title: "dev tab icon",
+    ends: [devIconSwitch],
+  }).box;
+  keysView.append(devIconRow);
+  const keepEdits = keepRow(context.keep);
+  /** Show the keep switch before the dev tab icon's once the page has a keeper, which starts after the panel. */
+  const placeKeep = (): void => {
+    keepEdits.sync();
+    if (!keepEdits.node.hidden && !keysView.contains(keepEdits.node)) keysView.insertBefore(keepEdits.node, devIconRow);
+  };
+  placeKeep();
   devIconSwitch.addEventListener("click", () => context.setDevIcon(!context.devIconShown()));
   keysView.append(rowsLabel("shortcuts"));
   const keyViews = new Map<
@@ -321,6 +391,7 @@ export function createSettings(context: SettingsContext): Settings {
   function openKeys(): void {
     if (context.searching()) context.leaveSearch();
     editingKeys = true;
+    placeKeep();
     render();
     focusView("keys");
   }
@@ -398,6 +469,9 @@ export function createSettings(context: SettingsContext): Settings {
     stopRecording,
     openKeys,
     leaveKeys,
-    destroy: stopRefusing,
+    destroy(): void {
+      stopRefusing();
+      keepEdits.destroy();
+    },
   };
 }

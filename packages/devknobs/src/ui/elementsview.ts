@@ -9,8 +9,8 @@
  * and the edits are listed at the foot, with Z to undo and ⇧Z to redo while
  * the focus is in the view and not in a field. Where an undo takes away the
  * node selected, as one of an element written anew as html, the node put
- * back in its place is selected. A switch at the top keeps the edits after a
- * reload, as `edit/keep.ts` says. To use it, as the styles view:
+ * back in its place is selected. A switch in the settings keeps the edits
+ * after a reload, as `edit/keep.ts` says. To use it, as the styles view:
  *
  *   const view = createElementsView(context);
  *   body.append(view.node); view.show(element); view.destroy();
@@ -25,7 +25,6 @@ import { el } from "./dom";
 import { createDomEditor } from "./domedit";
 import { createDomTree, type DomTree, elementOf } from "./domtree";
 import { letterMatches, typesInField } from "./keys";
-import { switchLine } from "./kit";
 import { createStylesView, type StylesContext, type StylesPage, type StylesView } from "./stylesview";
 
 /** The name the console knows the node selected in the Elements panel by. */
@@ -39,12 +38,12 @@ export interface ElementsParts {
   copy?: Copy;
   /** The log the edits go to. Defaults to the page's one. */
   edits?: EditLog;
-  /** What keeps the edits after a reload. Defaults to the page's one; without one the view has no switch. */
+  /** What keeps the edits after a reload. Defaults to the page's one. */
   keep?: Keeper | null;
 }
 
-/** What the switch at the top of the view says. */
-export const KEEP_LABEL = "keep edits after reload";
+/** The least height the DOM tree is dragged to, as its css has it. */
+const TREE_MIN = 96;
 
 /** Whether a keydown is the view's undo, z, or its redo, shift z: no other modifier, and not in a field. */
 export function undoKey(event: KeyboardEvent): "undo" | "redo" | null {
@@ -133,18 +132,86 @@ export function createElementsView(context: StylesContext, parts: ElementsParts 
   );
   const keep = parts.keep === undefined ? keeper() : parts.keep;
   const changes = createChanges(log, copy, undefined, keep, context.diff ?? null);
-  const keepSwitch = keep ? switchLine({ label: KEEP_LABEL, on: keep.on(), onChange: (on) => keep.set(on) }) : null;
-  keepSwitch?.node.classList.add("keep-line");
-  /** The switch as the keeper has it, and off to a click until it knows what the page keeps. */
-  const syncKeep = (): void => {
-    if (!keep || !keepSwitch) return;
-    keepSwitch.set(keep.on());
-    keepSwitch.control.disabled = !keep.known();
-  };
-  syncKeep();
-  const stopKeep = keep ? keep.subscribe(syncKeep) : null;
-  if (keepSwitch) node.append(keepSwitch.node);
-  node.append(tree.node, styles.node, changes.node);
+  const split = el("div", "dom-split");
+  split.setAttribute("role", "separator");
+  split.setAttribute("aria-orientation", "horizontal");
+  split.setAttribute("aria-label", "drag to resize the DOM tree");
+  split.setAttribute("aria-valuemin", String(TREE_MIN));
+  split.tabIndex = 0;
+  node.append(tree.node, split, styles.node, changes.node);
+
+  /** The tallest the tree goes: 85% of its window's height. */
+  function tallest(): number {
+    const view = tree.node.ownerDocument?.defaultView ?? window;
+    return Math.max(TREE_MIN, Math.round(view.innerHeight * 0.85));
+  }
+
+  /** Tells the separator's range and the tree's height now. */
+  function tell(most: number, now: number): void {
+    split.setAttribute("aria-valuemax", String(most));
+    split.setAttribute("aria-valuenow", String(now));
+  }
+
+  /** Tells the tree's height as laid out now: on the first frame and on each focus of the line. */
+  function measure(): void {
+    tell(tallest(), Math.round(tree.node.offsetHeight));
+  }
+
+  /** Sets the tree's height, kept between its least and 85% of its window's height. */
+  function size(height: number): void {
+    const most = tallest();
+    const next = Math.round(Math.min(most, Math.max(TREE_MIN, height)));
+    tree.node.style.height = `${next}px`;
+    tell(most, next);
+  }
+
+  const frameView = tree.node.ownerDocument?.defaultView ?? window;
+  const firstFrame = frameView.requestAnimationFrame?.(measure);
+
+  /** The drag going on, to take its listeners off when the view goes mid drag. */
+  let stopDrag: (() => void) | null = null;
+
+  function onSplitDown(event: PointerEvent): void {
+    if (event.button !== 0) return;
+    stopDrag?.();
+    event.preventDefault();
+    const id = event.pointerId;
+    const from = event.clientY;
+    const was = tree.node.offsetHeight;
+    split.setPointerCapture?.(id);
+    split.setAttribute("data-drag", "true");
+    const move = (next: PointerEvent): void => {
+      if (next.pointerId === id) size(was + next.clientY - from);
+    };
+    const end = (next: PointerEvent): void => {
+      if (next.pointerId === id) up();
+    };
+    const up = (): void => {
+      split.removeEventListener("pointermove", move);
+      split.removeEventListener("pointerup", end);
+      split.removeEventListener("pointercancel", end);
+      split.removeEventListener("lostpointercapture", end);
+      split.removeAttribute("data-drag");
+      stopDrag = null;
+    };
+    stopDrag = up;
+    split.addEventListener("pointermove", move);
+    split.addEventListener("pointerup", end);
+    split.addEventListener("pointercancel", end);
+    split.addEventListener("lostpointercapture", end);
+  }
+
+  function onSplitKey(event: KeyboardEvent): void {
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    event.preventDefault();
+    event.stopPropagation();
+    const step = event.shiftKey ? 64 : 16;
+    size(tree.node.offsetHeight + (event.key === "ArrowDown" ? step : -step));
+  }
+
+  split.addEventListener("pointerdown", onSplitDown);
+  split.addEventListener("keydown", onSplitKey);
+  split.addEventListener("focus", measure);
 
   function onKeydown(event: KeyboardEvent): void {
     const key = undoKey(event);
@@ -174,8 +241,12 @@ export function createElementsView(context: StylesContext, parts: ElementsParts 
     focus: () => styles.focus(),
     destroy(): void {
       node.removeEventListener("keydown", onKeydown);
+      stopDrag?.();
+      split.removeEventListener("pointerdown", onSplitDown);
+      split.removeEventListener("keydown", onSplitKey);
+      split.removeEventListener("focus", measure);
+      if (firstFrame !== undefined) frameView.cancelAnimationFrame?.(firstFrame);
       stopFollow();
-      stopKeep?.();
       tree.destroy();
       styles.destroy();
       changes.destroy();

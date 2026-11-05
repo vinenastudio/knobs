@@ -10,6 +10,7 @@ import { rewriteMediaText } from "../engine/media";
 import { keepMounted } from "../engine/remount";
 import { HOST_RESET, holdInTopLayer, LAYER } from "../engine/toplayer";
 import { devIconFor, devIconShown } from "../engine/tabicon";
+import { keeper } from "../edit/keep";
 import { type EditLog, edits } from "../edit/log";
 import { clearForced } from "../styles/force";
 import { type SystemMedia, watchSystemMedia } from "../engine/system";
@@ -272,6 +273,7 @@ export function createPanel(options: PanelOptions = {}): Panel {
       engine.setState({ panel: { devIcon: devIconFor(on, window.location.hostname) } }),
     realPhone: engine.hostSendsUa(),
     setRealPhone: (on) => engine.setState({ panel: { realPhone: on } }),
+    keep: keeper,
     native: engine.nativeSwitch()?.setting ?? null,
     setNative: (on) => {
       // The host hears it first, so it is ready for what the driver hands it next.

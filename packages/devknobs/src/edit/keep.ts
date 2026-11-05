@@ -1,5 +1,5 @@
 /**
- * Edits kept after a reload. With the Elements view's switch on, the edits
+ * Edits kept after a reload. With the settings' keep switch on, the edits
  * in force are kept for the page, its address without the query, as plain
  * json: each one's kind, target, property and values, no node of the page.
  * As the page loads again and settles, the kept edits are made again in

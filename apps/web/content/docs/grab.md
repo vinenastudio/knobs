@@ -85,7 +85,7 @@ component, as a re-render may undo an edit of the DOM. `<html>`, `<head>`
 and `<body>` and devknobs' own nodes and attributes cannot be replaced,
 hidden, deleted or moved.
 
-the switch `keep edits after reload` at the top of the view keeps the edits
+the switch `keep edits after reload` in the panel's settings keeps the edits
 for the page: after a reload they are made again where the page still has
 them, and the changes say how many came back and which could not be found.
 it is off at first, and off forgets them. html and attribute edits are

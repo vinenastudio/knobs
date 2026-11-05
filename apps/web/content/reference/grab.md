@@ -223,8 +223,8 @@ selected line ends with `== $0`, and `$0` on the page's window is that node
 while the view is open, unless the page has a `$0` of its own. its `copy`,
 or cmd or ctrl and c in the tree, copies the node's outer html, as Copy
 element does. the tree follows the page as it changes, and a node that
-changed lights for a moment. drag the tree's bottom corner for more or less
-of it.
+changed lights for a moment. drag the line under the tree, or focus it and
+press ↑ ↓ (⇧ for bigger steps), for more or less of it.
 
 ### edit the html
 
@@ -376,7 +376,7 @@ under the buttons says so: `agents read and apply edits: devknobs.edits() / setE
 
 ### keep edits after reload
 
-the switch `keep edits after reload` at the top of the view is off at
+the switch `keep edits after reload` in the panel's settings is off at
 first, and a reload loses the edits. on, it keeps the edits in force for the
 page, its origin and path without the query, and keeps them again on each
 change: their kinds, selectors, rules and values before and after, as plain

@@ -215,7 +215,7 @@ component renders. Make each one
 in the component or template that renders the element, never by patching the
 DOM from a script: they were made on the live DOM, and the framework's next
 render may undo them. The edits live on the page: a reload drops them, unless
-the user turned on `keep edits after reload` at the top of the Elements view,
+the user turned on `keep edits after reload` in the panel's settings,
 which makes them again as the page loads where it still has their targets.
 
 To try the edits again on a fresh load, before or after they are in the code,
