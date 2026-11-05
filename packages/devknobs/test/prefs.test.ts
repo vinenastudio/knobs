@@ -99,6 +99,8 @@ describe("readPrefs", () => {
     expect(resolvePrefs(BASE, readPrefs(kept))).toEqual({ ...BASE, stylesBox: false });
     expect(readPrefs(JSON.stringify({ changesDiff: true, htmlHeight: 320, htmlFull: true }))).toEqual({ changesDiff: true, htmlHeight: 320, htmlFull: true });
     expect(readPrefs(JSON.stringify({ changesDiff: "yes", htmlHeight: -1, htmlFull: 1 }))).toEqual({});
+    // A height under the least the editor is dragged to comes back as that least.
+    expect(readPrefs(JSON.stringify({ htmlHeight: 1 }))).toEqual({ htmlHeight: 64 });
   });
 
   test("reads its own version and one kept before versions, and leaves a newer one alone", () => {

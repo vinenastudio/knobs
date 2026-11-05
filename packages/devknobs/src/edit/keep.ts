@@ -337,10 +337,11 @@ export const SETTLE_MAX = 3000;
 /**
  * The window inside devknobs' frame, from `inner`, while it shows the page
  * `view` loaded at `path`: on its origin, at that path, and loaded so far.
- * Null for no frame, for one still blank or on another page, or another origin.
+ * Null for no frame, for one still blank or on another page, or another origin,
+ * and while `framed` is false, as the frame is closing and takes its document with it.
  */
-export function framedPage(view: Window, inner: Window | null, path: string): Window | null {
-  if (!inner) return null;
+export function framedPage(view: Window, inner: Window | null, path: string, framed: boolean): Window | null {
+  if (!inner || !framed) return null;
   try {
     return inner.location.origin === view.location.origin && inner.location.pathname === path ? inner : null;
   } catch {

@@ -26,6 +26,9 @@ export const CHANGES_DIFF = false;
 /** How tall the box of the html editor starts, in px. */
 export const HTML_HEIGHT = 200;
 
+/** The least the editor's box is dragged to, in px. The most is as the panel allows. */
+export const HTML_MIN = 64;
+
 /**
  * The panel's preferences: whether the handle shows while the panel is
  * closed, how wide the panel is, in px, whatever it shows, the mode of the
@@ -78,7 +81,7 @@ export function readPrefs(json: string | null | undefined): StoredPrefs {
   const diff: unknown = Reflect.get(value, "changesDiff");
   if (typeof diff === "boolean") prefs.changesDiff = diff;
   const height: unknown = Reflect.get(value, "htmlHeight");
-  if (typeof height === "number" && Number.isFinite(height) && height > 0) prefs.htmlHeight = height;
+  if (typeof height === "number" && Number.isFinite(height) && height > 0) prefs.htmlHeight = Math.max(HTML_MIN, height);
   const full: unknown = Reflect.get(value, "htmlFull");
   if (typeof full === "boolean") prefs.htmlFull = full;
   return prefs;

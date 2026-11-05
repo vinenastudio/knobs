@@ -78,6 +78,7 @@ describe("what the html editor types", () => {
     expect(type("<div|", ">")).toBe("<div>|</div>");
     expect(type('<a href="x"|', ">")).toBe('<a href="x">|</a>');
     expect(type("<img|", ">")).toBe(null);
+    expect(type('<param name="a"|', ">")).toBe(null);
     expect(type("<x-y /|", ">")).toBe(null);
     expect(type('<a title="1 |', ">")).toBe(null);
     expect(type("a |", ">")).toBe(null);
@@ -194,7 +195,40 @@ describe("the html editor", () => {
     expand?.fire("click");
     expect(kept).toEqual([{ height: 320, full: true }]);
     expect([expand?.textContent, expand?.getAttribute("aria-pressed")]).toEqual(["shrink", "true"]);
+    // No panel to measure: it stays at the size kept.
+    expect(frame.find("html-ed-body")[0]?.style.height).toBe("320px");
     expand?.fire("click");
     expect(kept.at(-1)).toEqual({ height: 320, full: false });
+  });
+
+  test("expanded, it is as tall as the panel allows, and the tree's box gives back what it grew once it is smaller", () => {
+    const view = new FakeNode("div");
+    view.className = "view-body";
+    const box = new FakeNode("div");
+    box.className = "dom";
+    box.style.height = "";
+    box.style.maxHeight = "";
+    view.append(box);
+    Reflect.set(view, "clientHeight", 600);
+    Reflect.set(box, "clientHeight", 300);
+    for (const node of [view, box]) Reflect.set(node, "getBoundingClientRect", () => ({ top: 0 }));
+    const editor = htmlEditor("<p></p>", "edit as html", { get: () => ({ height: 100, full: false }), set: () => {} });
+    const frame = editor.frame as unknown as FakeNode;
+    const body = frame.find("html-ed-body")[0] as FakeNode;
+    box.append(frame);
+    // The editor's top 20px down the box, under it a foot of 24px.
+    Reflect.set(frame, "getBoundingClientRect", () => ({ top: 20 }));
+    Object.defineProperty(body, "offsetHeight", { get: () => Number.parseInt(body.style.height ?? "", 10) || 0 });
+    Object.defineProperty(frame, "offsetHeight", { get: () => Number(Reflect.get(body, "offsetHeight")) + 24 });
+    editor.shown();
+    expect([body.style.height, box.style.height]).toEqual(["100px", ""]);
+    const expand = frame.find("html-ed-expand")[0];
+    expand?.fire("click");
+    // The panel's 600px less the foot and 16px of room; the box grows to the panel.
+    expect([body.style.height, box.style.height, box.style.maxHeight]).toEqual(["560px", "600px", "none"]);
+    expand?.fire("click");
+    expect([body.style.height, box.style.height, box.style.maxHeight]).toEqual(["100px", "", ""]);
+    editor.restore();
+    expect([box.style.height, box.style.maxHeight]).toEqual(["", ""]);
   });
 });

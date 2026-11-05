@@ -625,7 +625,7 @@ describe("the simple mode", () => {
     view?.show(as(save));
     const all = node.find("css-decl").map((one) => one.textContent);
     expect(all.join("\n")).not.toContain("important");
-    expect(all).not.toContain("color: black");
+    expect(all).not.toContain("color: black;");
     expect(all.filter((text) => text.startsWith("font-size"))).toEqual(["font-size: 14px;"]);
   });
 
@@ -679,14 +679,14 @@ describe("the simple mode", () => {
       "inherited",
     );
     expect(node.find("css-group")).toEqual([]);
-    expect(lines(node)).not.toContain("font-size: 14px");
+    expect(lines(node)).not.toContain("font-size: 14px;");
     head.fire("click");
     expect(fold?.className).toBe("row open");
     expect(head.getAttribute("aria-expanded")).toBe("true");
     expect(lines(node).slice(-3)).toEqual(["font-size: 14px;", "line-height: 1.5;", "--ink: #111827;"]);
     head.fire("click");
     expect(head.getAttribute("aria-expanded")).toBe("false");
-    expect(lines(node)).not.toContain("line-height: 1.5");
+    expect(lines(node)).not.toContain("line-height: 1.5;");
   });
 
   test("the fold stays as it was left when the styles are read again", () => {

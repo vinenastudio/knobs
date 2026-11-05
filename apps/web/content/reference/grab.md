@@ -312,15 +312,15 @@ modes, and each edit goes on the page at once:
 - typing a property's name, or a value, opens a list of suggestions under
   the field, filtered by what was typed, those that start with it first.
   names are every property the browser knows, asked of the browser, and the
-  custom properties the page sets. values are the property's keywords the
-  browser takes (`CSS.supports`), named colors where it takes a color,
+  custom properties the page sets. values are the keywords devknobs
+  suggests that the browser takes for the property (`CSS.supports`), named colors where it takes a color,
   `var(--x)` for each custom property, and `inherit`, `initial`, `unset`,
   `revert` and `revert-layer`. an empty field shows the whole list as it
   gets the focus. ↑ and ↓ mark one (↓ also opens the list), and ↩ or Tab
   takes the one marked; Tab in a name goes on to the value. with none
   marked, ↩ and Tab take the first only where it starts with the word typed,
-  so `bl` becomes `block`, while a number such as `1`, a `#` color, a word
-  ended with a space and an empty field keep what was typed. esc closes the
+  so `bl` becomes `block`, while a number such as `1`, a `#` color, a value
+  word ended with a space and an empty field keep what was typed. esc closes the
   list, and a second esc leaves the field. a click on one takes it. in a
   value the word at the caret is what a suggestion replaces, so `1px so`
   becomes `1px solid`, and `var(--b` becomes `var(--brand)`
@@ -425,7 +425,8 @@ say `only the first 200 edits are kept after a reload`. edits are kept for 20
 pages at most: the page kept longest ago is forgotten first. forced states
 are no edits and are never kept. edits made in devknobs' frame, for a
 pinned panel or a device, are kept while the frame shows the same page (its
-origin and path), and made again in the frame after a reload. with the npm package they are in the page's `localStorage`, one item
+origin and path), and made again in the frame after a reload; html and
+attribute edits made there wait for `apply` too, as the page's own do. with the npm package they are in the page's `localStorage`, one item
 per page, `devknobs:edits:` and the path; in fresh mode nothing is kept or
 made again; with the
 extension, in the extension's own storage (see

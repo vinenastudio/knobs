@@ -18,16 +18,13 @@
  */
 
 import { button, el } from "./dom";
-import type { HtmlSize } from "./prefs";
+import { HTML_MIN, type HtmlSize } from "./prefs";
 
 /** How much a level of html is indented. */
 export const INDENT = "  ";
 
-/** The least the editor's box is dragged to, in px. The most is as the panel allows. */
-export const HTML_MIN = 64;
-
 /** Elements that have no end tag. */
-export const VOID_ELEMENTS = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"]);
+export const VOID_ELEMENTS = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
 
 /** A piece of html as the editor colors it. */
 export interface HtmlToken {
@@ -291,16 +288,26 @@ export function htmlEditor(value: string, label: string, size: { get(): HtmlSize
     return Math.max(HTML_MIN, panel - (frame.offsetHeight - body.offsetHeight) - applyHeight() - where.bar - where.foot - 16);
   }
 
-  /** Grow the tree's box until it shows the whole editor, up to the panel's height. */
+  /** Grow the tree's box until it shows the whole editor, up to the panel's height, and give back what it no longer needs. */
   function fit(where: Around): void {
     const { box, body: view } = where;
     if (!box || !view || typeof frame.getBoundingClientRect !== "function") return;
+    giveBack();
     const top = frame.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
     const needed = top + frame.offsetHeight + applyHeight() + where.bar + 12;
     if (needed <= box.clientHeight) return;
     boxWas ??= { box, height: box.style.height, maxHeight: box.style.maxHeight };
     box.style.maxHeight = "none";
     box.style.height = `${Math.min(needed, view.clientHeight - where.foot)}px`;
+  }
+
+  /** The tree's box gets back the height it had. */
+  function giveBack(): void {
+    if (boxWas) {
+      boxWas.box.style.height = boxWas.height;
+      boxWas.box.style.maxHeight = boxWas.maxHeight;
+    }
+    boxWas = null;
   }
 
   /** Bring the whole editor into sight, its top at the top of the panel's body. */
@@ -314,7 +321,9 @@ export function htmlEditor(value: string, label: string, size: { get(): HtmlSize
   function apply(next: HtmlSize, keep: boolean): void {
     now = next;
     const where = around(frame);
-    body.style.height = `${Math.round(next.full ? most(where) : Math.min(next.height, most(where)))}px`;
+    const room = most(where);
+    // With no panel measured yet, expanded keeps the height kept.
+    body.style.height = `${Math.round(next.full && Number.isFinite(room) ? room : Math.min(next.height, room))}px`;
     expand.textContent = next.full ? "shrink" : "expand";
     expand.setAttribute("aria-pressed", String(next.full));
     fit(where);
@@ -365,12 +374,6 @@ export function htmlEditor(value: string, label: string, size: { get(): HtmlSize
     frame,
     area,
     shown: () => apply(now, false),
-    restore() {
-      if (boxWas) {
-        boxWas.box.style.height = boxWas.height;
-        boxWas.box.style.maxHeight = boxWas.maxHeight;
-      }
-      boxWas = null;
-    },
+    restore: giveBack,
   };
 }

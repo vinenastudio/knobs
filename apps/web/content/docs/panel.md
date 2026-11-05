@@ -11,7 +11,7 @@ updated: 2026-11-05
 the panel starts closed, as a handle on the right edge of the window. click it or press `⇧K` to open it. it stays open across reloads.
 
 - drag the handle to move the panel along the edge, or past the middle to the other side.
-- drag the panel's inner edge to change its width, from 240px to 720px. it starts at 320px, and a double click on the edge puts it back.
+- drag the panel's inner edge to change its width, from 240px to 720px, or less in a narrow window. it starts at 320px, and a double click on the edge puts it back.
 
 ## rows and search
 

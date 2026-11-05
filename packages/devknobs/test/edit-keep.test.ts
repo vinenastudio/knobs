@@ -489,17 +489,19 @@ describe("the keeper", () => {
     const at = (origin: string, pathname: string) => ({ location: { origin, pathname } }) as unknown as Window;
     const top = at("https://site.test", "/");
     const same = at("https://site.test", "/");
-    expect(framedPage(top, same, "/")).toBe(same);
-    expect(framedPage(top, null, "/")).toBeNull();
-    expect(framedPage(top, at("https://site.test", "/docs"), "/")).toBeNull();
-    expect(framedPage(top, at("null", "blank"), "/")).toBeNull();
-    expect(framedPage(top, at("https://other.test", "/"), "/")).toBeNull();
+    expect(framedPage(top, same, "/", true)).toBe(same);
+    // Framing turned off: the frame goes, and its document with it.
+    expect(framedPage(top, same, "/", false)).toBeNull();
+    expect(framedPage(top, null, "/", true)).toBeNull();
+    expect(framedPage(top, at("https://site.test", "/docs"), "/", true)).toBeNull();
+    expect(framedPage(top, at("null", "blank"), "/", true)).toBeNull();
+    expect(framedPage(top, at("https://other.test", "/"), "/", true)).toBeNull();
     const closed = {
       get location(): never {
         throw new Error("cross origin");
       },
     } as unknown as Window;
-    expect(framedPage(top, closed, "/")).toBeNull();
+    expect(framedPage(top, closed, "/", true)).toBeNull();
   });
 
   describe("the page settled, and the frame's page where it shows in devknobs' frame", () => {

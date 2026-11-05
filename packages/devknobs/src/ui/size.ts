@@ -1,4 +1,4 @@
-import { PAGE_MIN } from "../engine/dock";
+import { DOCK_WIDTH, PAGE_MIN } from "../engine/dock";
 import type { SideValue } from "../types";
 import { between } from "./place";
 import type { LivePrefs } from "./prefs";
@@ -12,7 +12,7 @@ import type { LivePrefs } from "./prefs";
  */
 
 /** How wide the panel is until the user says otherwise, in px. */
-export const PANEL_WIDTH = 320;
+export const PANEL_WIDTH = DOCK_WIDTH;
 
 /** The narrowest the strip makes the panel, in px. */
 export const WIDTH_MIN = 240;

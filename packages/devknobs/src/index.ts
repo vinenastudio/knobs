@@ -251,7 +251,7 @@ export function mount(options: MountOptions = {}): void {
 /** Keep the page's edits, made in the window or, for a pinned panel or a device, in devknobs' frame, which shows the page then. */
 function keepEdits(store: EditsStore | undefined): void {
   const path = pathNow();
-  const frame = (): Window | null => framedPage(window, frameWindow(), path);
+  const frame = (): Window | null => framedPage(window, frameWindow(), path, needsFrame(engine.getState()));
   startKeep(store, { frame, settled: () => pageSettled(window, () => needsFrame(engine.getState()), frame) });
 }
 

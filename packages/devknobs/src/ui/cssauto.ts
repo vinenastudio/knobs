@@ -314,7 +314,11 @@ export function autocomplete(input: HTMLInputElement | HTMLTextAreaElement, item
   function place(): { start: number; end: number; word: string } {
     const text = input.value;
     if (kind === "name") return { start: 0, end: text.length, word: text.trim() };
-    return wordAt(text, input.selectionStart ?? text.length);
+    const from = input.selectionStart ?? text.length;
+    const to = input.selectionEnd ?? from;
+    // A selection, as the field opens with its value selected, is replaced whole, as typing would.
+    if (to > from) return { start: from, end: to, word: "" };
+    return wordAt(text, from);
   }
 
   function mark(to: number): void {
@@ -421,7 +425,8 @@ export function autocomplete(input: HTMLInputElement | HTMLTextAreaElement, item
         else close();
         return false;
       }
-      event.preventDefault();
+      // ⇧Tab closes the list and still moves the focus.
+      if (event.key !== "Tab") event.preventDefault();
       if (what.act === "close") close();
       else if (shown.length === 0) {
         // Down opens the list for what is typed, the first marked.

@@ -283,6 +283,27 @@ describe("the list under a field", () => {
     expect(input.value).toBe("1px solid");
   });
 
+  test("a value selected whole, as the field opens with it, is what a suggestion replaces", () => {
+    const { input } = field();
+    const auto = autocomplete(input as unknown as HTMLInputElement, () => ["auto", "none"], "value");
+    input.value = "1px solid red";
+    Reflect.set(input, "selectionStart", 0);
+    Reflect.set(input, "selectionEnd", input.value.length);
+    key(input, auto, "ArrowDown");
+    expect(auto.open()).toBe(true);
+    key(input, auto, "Enter");
+    expect(input.value).toBe("auto");
+  });
+
+  test("⇧Tab closes the list and still moves the focus, as the field's own", () => {
+    const { input } = field();
+    const auto = autocomplete(input as unknown as HTMLInputElement, () => ["solid", "dashed"], "value");
+    typed(input, "so");
+    expect(key(input, auto, "Tab", true)).toEqual({ mine: false, prevented: false });
+    expect(auto.open()).toBe(false);
+    expect(input.value).toBe("so");
+  });
+
   test("an empty field shows the whole list as it gets the focus, a filled one does not, and blur closes it", () => {
     const { row, input } = field();
     const auto = autocomplete(input as unknown as HTMLInputElement, () => ["padding", "margin"], "name");
