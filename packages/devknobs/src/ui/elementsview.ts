@@ -152,7 +152,7 @@ export function createElementsView(context: StylesContext, parts: ElementsParts 
     split.setAttribute("aria-valuenow", String(now));
   }
 
-  /** Tells the tree's height as laid out, before any resize. */
+  /** Tells the tree's height as laid out now: on the first frame and on each focus of the line. */
   function measure(): void {
     tell(tallest(), Math.round(tree.node.offsetHeight));
   }
