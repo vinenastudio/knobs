@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, jest, spyOn, test } from "bun:test";
 import * as engine from "../src/engine";
+import type { Keeper } from "../src/edit/keep";
 import { DEFAULT_PINNED, DEFAULT_STATE, merge } from "../src/engine/store";
 import type { GrabControl } from "../src/grab/control";
 import { PREFER_HINT } from "../src/host";
@@ -12,7 +13,7 @@ import { isListed } from "../src/ui/list";
 import { viewHead } from "../src/ui/pane";
 import type { LivePrefs } from "../src/ui/prefs";
 import { createRows, type Rows, rowLine } from "../src/ui/rows";
-import { createSettings, REAL_PHONE_HINT, type Settings, type SettingsContext } from "../src/ui/settings";
+import { createSettings, KEEP_LABEL, REAL_PHONE_HINT, type Settings, type SettingsContext } from "../src/ui/settings";
 import { stage } from "../src/ui/stage";
 import { CSS } from "../src/ui/styles";
 import type { Tips } from "../src/ui/tooltip";
@@ -94,6 +95,7 @@ function buildSettings(more: Partial<SettingsContext> = {}): Settings {
     setDevIcon: () => {},
     realPhone: false,
     setRealPhone: () => {},
+    keep: () => null,
     native: null,
     setNative: () => {},
     prefer: null,
@@ -483,6 +485,33 @@ describe("the settings' real phone mode switch", () => {
     expect(toggle?.attributes.get("aria-checked")).toBe("true");
     toggle?.fire("click");
     expect(picked).toEqual([true, false]);
+  });
+});
+
+describe("the settings' keep edits switch", () => {
+  test("is not there until the page keeps its edits, then sits before the dev tab icon once the settings open", () => {
+    let keep: Keeper | null = null;
+    const made = buildSettings({ keep: () => keep });
+    const labels = (): (string | undefined)[] =>
+      fake(made.view).find("switch").map((node) => node.attributes.get("aria-label"));
+    expect(labels()).not.toContain(KEEP_LABEL);
+    keep = {
+      on: () => true,
+      set: () => undefined,
+      restored: () => null,
+      known: () => true,
+      waiting: () => [],
+      applyWaiting: () => undefined,
+      kept: () => 0,
+      cut: () => 0,
+      subscribe: () => () => undefined,
+      stop: () => undefined,
+    };
+    made.openKeys();
+    expect(labels().slice(-2)).toEqual([KEEP_LABEL, "dev tab icon"]);
+    const toggle = fake(made.view).find("switch").find((node) => node.attributes.get("aria-label") === KEEP_LABEL);
+    expect(toggle?.attributes.get("aria-checked")).toBe("true");
+    made.destroy();
   });
 });
 

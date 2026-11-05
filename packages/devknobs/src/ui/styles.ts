@@ -1440,12 +1440,40 @@ input[type="checkbox"]:focus-visible { outline: 1px solid var(--faint); outline-
   min-height: 96px;
   max-height: 85vh;
   overflow: auto;
-  resize: vertical;
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--line) transparent;
 }
 .dom[style*="height"] { flex-grow: 0; }
+/* The line between the tree and the styles, which drags for the tree's
+   height as the browser's own does: 7 tall to the pointer, 1 in the flow,
+   a hairline that darkens under the pointer, the keys' focus or a
+   drag. */
+.dom-split {
+  position: relative;
+  flex: none;
+  height: 7px;
+  margin: -5px 0 -1px;
+  cursor: row-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: none;
+  z-index: 1;
+}
+.dom-split::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 3px;
+  height: 1px;
+  background: var(--line);
+  transition: background-color 120ms ease-out;
+}
+.dom-split:hover::after,
+.dom-split:focus-visible::after,
+.dom-split[data-drag]::after { background: var(--faint); }
 .dom-tree { width: min-content; min-width: 100%; font: 11px/1.6 var(--mono); }
 .dom-row {
   display: flex;
@@ -1802,8 +1830,6 @@ s.css-decl, s.css-decl .css-var, s.css-decl .css-name { color: var(--faint); tex
 .changes-wait { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .changes-missed { padding-left: var(--col-pad); font: 10.5px/1.5 var(--mono); color: var(--faint); overflow-wrap: anywhere; }
 /* The switch that keeps the edits after a reload, over the tree. */
-.keep-line { padding: 4px 0 6px; border-bottom: 1px solid var(--line); }
-.keep-line .knob-label { color: var(--fg); }
 .changes-list {
   max-height: 30vh;
   overflow: auto;

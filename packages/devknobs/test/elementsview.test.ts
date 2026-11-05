@@ -4,7 +4,7 @@ import type { DomTree, DomTreeContext } from "../src/ui/domtree";
 import { attrEdit, htmlEdit } from "../src/edit/html";
 import { type Change, createEditLog, type EditLog } from "../src/edit/log";
 import type { Keeper } from "../src/edit/keep";
-import { createDollar, createElementsView, DOLLAR, KEEP_LABEL, undoKey } from "../src/ui/elementsview";
+import { createDollar, createElementsView, DOLLAR, undoKey } from "../src/ui/elementsview";
 import type { StylesPage, StylesView } from "../src/ui/stylesview";
 import type { Tips } from "../src/ui/tooltip";
 import { as as pageNode, elem, page as pageOf } from "./dom-page";
@@ -220,48 +220,9 @@ describe("the elements view", () => {
     picked = null;
   });
 
-  test("has the switch that keeps the edits after a reload at its top, as the keeper has it, only with a keeper", () => {
-    expect(start().all().some((one) => one.classList.contains("keep-line"))).toBe(false);
-    view?.destroy();
-    let on = false;
-    const listeners = new Set<() => void>();
-    const turned: boolean[] = [];
-    let known = false;
-    const keep: Keeper = {
-      on: () => on,
-      set: (next) => void turned.push(next),
-      restored: () => null,
-      known: () => known,
-      waiting: () => [],
-      applyWaiting: () => undefined,
-      kept: () => 0,
-      cut: () => 0,
-      subscribe: (listener) => {
-        listeners.add(listener);
-        return () => listeners.delete(listener);
-      },
-      stop: () => undefined,
-    };
-    const node = start(keep);
-    const line = node.all().find((one) => one.classList.contains("keep-line"));
-    expect(node.all().findIndex((one) => one === line)).toBe(1);
-    expect(line?.classList.contains("keep-line")).toBe(true);
-    expect(line?.textContent).toBe(KEEP_LABEL);
-    const control = line?.all().find((one) => one.tag === "button");
-    expect(control?.getAttribute("aria-checked")).toBe("false");
-    // Off to a click until the keeper knows what the page keeps.
-    expect(control && Reflect.get(control, "disabled")).toBe(true);
-    known = true;
-    for (const listener of listeners) listener();
-    expect(control && Reflect.get(control, "disabled")).toBe(false);
-    control?.fire("click");
-    expect(turned).toEqual([true]);
-    on = false;
-    for (const listener of listeners) listener();
-    expect(control?.getAttribute("aria-checked")).toBe("false");
-    on = true;
-    for (const listener of listeners) listener();
-    expect(control?.getAttribute("aria-checked")).toBe("true");
+  test("has no switch to keep the edits after a reload: it is in the settings", () => {
+    const node = start();
+    expect(node.all().some((one) => one.getAttribute("role") === "switch")).toBe(false);
   });
 
   test("undoes on Z and redoes on ⇧Z, and leaves a key in a field to it", () => {
@@ -287,9 +248,67 @@ describe("the elements view", () => {
   test("is the tree over the styles, the crumbs first under it", () => {
     const node = start();
     expect(node.className).toBe("elements");
-    expect(node.children.map((child) => (typeof child === "string" ? child : child.className))).toEqual(["", "styles", "changes"]);
-    const styles = node.children[1] as FakeNode;
+    expect(node.children.map((child) => (typeof child === "string" ? child : child.className))).toEqual(["", "dom-split", "styles", "changes"]);
+    const styles = node.children[2] as FakeNode;
     expect((styles.children[0] as FakeNode).className).toBe("crumbs");
+  });
+
+  /** The view's split line, and the tree's node over it, a given height tall. */
+  function splitOf(node: FakeNode, height: number): { split: FakeNode; dom: FakeNode } {
+    const dom = node.children[0] as FakeNode;
+    Object.assign(dom, { offsetHeight: height });
+    Object.assign(globalThis.window, { innerHeight: 1000 });
+    return { split: node.children[1] as FakeNode, dom };
+  }
+
+  test("has a line between the tree and the styles that drags for the tree's height", () => {
+    const { split, dom } = splitOf(start(), 300);
+    expect(split.className).toBe("dom-split");
+    expect(split.getAttribute("role")).toBe("separator");
+    expect(split.getAttribute("aria-orientation")).toBe("horizontal");
+    const down = split.fire("pointerdown", { button: 0, clientY: 500, pointerId: 1 });
+    expect(down.prevented).toBe(true);
+    expect(split.getAttribute("data-drag")).toBe("true");
+    split.fire("pointermove", { clientY: 540 });
+    expect(dom.style.height).toBe("340px");
+    split.fire("pointermove", { clientY: 100 });
+    expect(dom.style.height).toBe("96px");
+    split.fire("pointermove", { clientY: 2000 });
+    expect(dom.style.height).toBe("850px");
+    expect(split.getAttribute("aria-valuenow")).toBe("850");
+    split.fire("pointerup");
+    expect(split.getAttribute("data-drag")).toBeNull();
+    split.fire("pointermove", { clientY: 600 });
+    expect(dom.style.height).toBe("850px");
+  });
+
+  test("its line drags on the main button only, and stops when the pointer capture is lost", () => {
+    const { split, dom } = splitOf(start(), 300);
+    const right = split.fire("pointerdown", { button: 2, clientY: 500, pointerId: 1 });
+    expect(right.prevented).toBe(false);
+    expect(split.getAttribute("data-drag")).toBeNull();
+    split.fire("pointermove", { clientY: 540 });
+    expect(dom.style.height).toBeUndefined();
+    split.fire("pointerdown", { button: 0, clientY: 500, pointerId: 1 });
+    split.fire("lostpointercapture");
+    expect(split.getAttribute("data-drag")).toBeNull();
+    split.fire("pointermove", { clientY: 540 });
+    expect(dom.style.height).toBeUndefined();
+  });
+
+  test("its line grows the tree by 16 on ↓, 64 with ⇧, and keeps it to 96 at least, without undoing", () => {
+    const node = start();
+    const { split, dom } = splitOf(node, 300);
+    const key = split.fire("keydown", { key: "ArrowDown" });
+    expect(dom.style.height).toBe("316px");
+    expect(key.prevented).toBe(true);
+    split.fire("keydown", { key: "ArrowDown", shiftKey: true });
+    expect(dom.style.height).toBe("364px");
+    Object.assign(dom, { offsetHeight: 100 });
+    split.fire("keydown", { key: "ArrowUp" });
+    expect(dom.style.height).toBe("96px");
+    node.fire("keydown", { key: "z", target: { tagName: "DIV" } });
+    expect(undid).toEqual(["undo"]);
   });
 
   test("an element shown is revealed in the tree, and is $0 until the view goes", () => {

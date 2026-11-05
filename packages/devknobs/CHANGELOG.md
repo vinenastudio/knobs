@@ -1,5 +1,10 @@
 # changelog
 
+## unreleased
+
+- the `keep edits after reload` switch is in the settings now, with a short hint under it, and no longer at the top of the Elements view. as before, it is not there in fresh mode or in devknobs' frame, which keep no edits
+- the line between the DOM tree and the styles is a full-width drag handle, also moved with ↑ ↓
+
 ## 0.6.0
 
 - every edit field in inspect, the DOM tree's texts and attributes, the html editor and the styles' values, wraps its lines and grows down, so a long value or address never scrolls sideways, at any panel width and in the width knob's frame
