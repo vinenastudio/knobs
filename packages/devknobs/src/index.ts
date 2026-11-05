@@ -2,13 +2,14 @@ import * as engine from "./engine";
 import { checkPatch } from "./engine/check";
 import { describe as describeKnobs, type KnobDescription } from "./engine/describe";
 import { DEVICES } from "./engine/devices";
-import { isDevknobsFrame } from "./engine/frame";
+import { isDevknobsFrame, needsFrame } from "./engine/frame";
+import { frameWindow } from "./engine/frames";
 import { fresh } from "./engine/fresh";
 import { GEO_PRESETS } from "./engine/geo";
 import { LOCALE_PRESETS } from "./engine/locale";
 import { TIME_ZONE_PRESETS } from "./engine/time";
 import { UA_PRESETS } from "./engine/ua";
-import { type EditsStore, forgetReplay, type Replayed, startKeep, stopKeep } from "./edit/keep";
+import { type EditsStore, forgetReplay, framedPage, pageSettled, pathNow, type Replayed, startKeep, stopKeep } from "./edit/keep";
 import { type Edit, edits as editLog } from "./edit/log";
 import { clearForced, type ForcedState, forceState as forceOn } from "./styles/force";
 import { createGrab, type GrabControl } from "./grab/control";
@@ -244,7 +245,14 @@ export function mount(options: MountOptions = {}): void {
   mounted = options;
   attach(options);
   // The edits kept for the page, made again once it settles. The width knob's frame keeps none, nor does fresh mode, which shows a first visit.
-  if (!isDevknobsFrame() && !fresh()) startKeep(options.editsStore);
+  if (!isDevknobsFrame() && !fresh()) keepEdits(options.editsStore);
+}
+
+/** Keep the page's edits, made in the window or, for a pinned panel or a device, in devknobs' frame, which shows the page then. */
+function keepEdits(store: EditsStore | undefined): void {
+  const path = pathNow();
+  const frame = (): Window | null => framedPage(window, frameWindow(), path);
+  startKeep(store, { frame, settled: () => pageSettled(window, () => needsFrame(engine.getState()), frame) });
 }
 
 /** The panel, its keys, grab and inspect, for the engine that runs. */

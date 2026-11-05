@@ -9,8 +9,10 @@
  * script of the page does, is never made as the page loads: it and all after
  * it wait for the user's click on `apply`, as a page script may have planted
  * them. Turning the switch off forgets them. Forced states are no edits, and
- * are never kept, nor are edits made in the width knob's frame, nor one that
- * could run a script (`risk.ts`).
+ * are never kept, nor one that could run a script (`risk.ts`). While the page
+ * shows in devknobs' frame, for a pinned panel or a device, the edits made in
+ * it are the page's, kept while the frame shows the page they are kept for,
+ * and made again in it; those of any other window are not kept.
  *
  * Without the extension they are in the page's `localStorage`, one item per
  * page (`EDITS_KEY` and the path), none in fresh mode; the extension keeps
@@ -223,7 +225,7 @@ function write(storage: Storage, key: string, text: string): void {
 }
 
 /** The page's path now, `/` where it has none to read. */
-function pathNow(): string {
+export function pathNow(): string {
   try {
     return window.location?.pathname ?? "/";
   } catch {
@@ -277,8 +279,8 @@ export interface Replaying extends Replayed {
   waiting: SavedEdit[];
 }
 
-/** Makes kept edits again on the page, through the log. With `hold`, an html or attribute edit and all after it wait. */
-export type Replay = (log: EditLog, list: readonly unknown[], hold: boolean) => Replaying;
+/** Makes kept edits again on `doc`, through the log. With `hold`, an html or attribute edit and all after it wait. */
+export type Replay = (log: EditLog, list: readonly unknown[], hold: boolean, doc: Document) => Replaying;
 
 /** What the replay on load came to: how many edits were made again, and those that were not. */
 export interface Restored {
@@ -321,6 +323,8 @@ export interface KeeperOptions {
   replay?: () => Promise<Replay>;
   /** Waits for the page to be loaded and still. */
   settled?: () => Promise<void>;
+  /** The window inside devknobs' frame while it shows this page, else null: edits made in it are kept, and made again in it. */
+  frame?: () => Window | null;
 }
 
 /** On the page's window once its kept edits were made again, until they are undone with the panel's unmount. */
@@ -329,6 +333,37 @@ const REPLAYED = Symbol.for("devknobs.edits.replayed");
 /** How long the page has to be still before kept edits are made again, and the longest it is waited for, in ms. */
 export const QUIET = 300;
 export const SETTLE_MAX = 3000;
+
+/**
+ * The window inside devknobs' frame, from `inner`, while it shows the page
+ * `view` loaded at `path`: on its origin, at that path, and loaded so far.
+ * Null for no frame, for one still blank or on another page, or another origin.
+ */
+export function framedPage(view: Window, inner: Window | null, path: string): Window | null {
+  if (!inner) return null;
+  try {
+    return inner.location.origin === view.location.origin && inner.location.pathname === path ? inner : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The page settled, as `settled` says, and where it shows in devknobs'
+ * frame, as `framing` says it does, the frame's page too: up to `longest` ms
+ * for `frame` to give it, then as long as `settled` waits for it.
+ */
+export async function pageSettled(view: Window, framing: () => boolean, frame: () => Window | null, longest = SETTLE_MAX): Promise<void> {
+  await settled(view);
+  const until = realNow() + longest;
+  for (;;) {
+    if (!framing()) return;
+    const inner = frame();
+    if (inner) return settled(inner);
+    if (realNow() > until) return;
+    await new Promise((resolve) => view.setTimeout(resolve, 50));
+  }
+}
 
 /** The page loaded, and nothing on it changed for `quiet` ms, or `longest` ms went by: a framework has drawn it. */
 export function settled(view: Window, quiet = QUIET, longest = SETTLE_MAX): Promise<void> {
@@ -361,6 +396,9 @@ export function createKeeper(options: KeeperOptions): Keeper {
   const { log, store, view } = options;
   const loadReplay = options.replay ?? (() => import("./replay").then(({ replayEdits }) => replayEdits));
   const wait = options.settled ?? (() => settled(view));
+  const frame = options.frame ?? (() => null);
+  /** Each edit's window as it was recorded: true for this page, shown in the window or in devknobs' frame. */
+  const ours = new WeakMap<object, boolean>();
   const listeners = new Set<() => void>();
   let known = false;
   let on = false;
@@ -382,13 +420,27 @@ export function createKeeper(options: KeeperOptions): Keeper {
     for (const listener of Array.from(listeners)) listener();
   }
 
+  /** Tell the edits recorded since of this page from those of another window, while each window still shows the page it was made on. */
+  function sort(): void {
+    for (const one of log.recorded()) {
+      if (ours.has(one)) continue;
+      ours.set(one, !one.view || one.view === view || one.view === frame());
+    }
+  }
+
   /** The edits in force made on this page, as recorded, and not in another window. */
   function keepable(): Edit[] {
+    sort();
     const recorded = log.recorded();
     return log.list().filter((_edit, at) => {
-      const made = recorded[at]?.view;
-      return !made || made === view;
+      const one = recorded[at];
+      return !one || ours.get(one) === true;
     });
+  }
+
+  /** The document the page shows in: the frame's while it shows the page. */
+  function shown(): Document {
+    return (frame() ?? view).document;
   }
 
   /** Keep the edits in force, unless kept edits are still to be made, which would be lost. */
@@ -416,7 +468,7 @@ export function createKeeper(options: KeeperOptions): Keeper {
     const changed = dirty;
     pending = true;
     try {
-      result = replay(log, list, hold);
+      result = replay(log, list, hold, shown());
     } finally {
       pending = false;
       dirty = changed;
@@ -474,6 +526,7 @@ export function createKeeper(options: KeeperOptions): Keeper {
 
   const stopStore = store.subscribe(heard);
   const stopLog = log.subscribe(() => {
+    sort();
     if (on && known) save();
     // The cut is told whatever the switch: it shows only while it is on.
     tell();
@@ -524,10 +577,10 @@ export function createKeeper(options: KeeperOptions): Keeper {
 
 let running: Keeper | null = null;
 
-/** Start keeping the page's edits, in `store` or the page's `localStorage`, and make those it kept again. */
-export function startKeep(store: EditsStore = localEditsStore()): Keeper {
+/** Start keeping the page's edits, in `store` or the page's `localStorage`, and make those it kept again, where `page` says the page shows. */
+export function startKeep(store: EditsStore = localEditsStore(), page: Pick<KeeperOptions, "frame" | "settled"> = {}): Keeper {
   running?.stop();
-  running = createKeeper({ log: edits, store, view: window });
+  running = createKeeper({ log: edits, store, view: window, ...page });
   return running;
 }
 

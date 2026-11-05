@@ -6,6 +6,7 @@ import {
   EDITS_KEY,
   EDITS_VERSION,
   type EditsStore,
+  framedPage,
   localEditsStore,
   MAX_BYTES,
   MAX_EDITS,
@@ -454,6 +455,50 @@ describe("the keeper", () => {
     expect(readKept(store.value)?.edits.map((one) => one.after)).toEqual(["main"]);
     expect(keep.kept()).toBe(1);
     keep.stop();
+  });
+
+  test("with the page in devknobs' frame, an edit made there is kept, and kept edits are made again in the frame's page", async () => {
+    const store = memoryStore(toKept([{ id: 1, ...change("kept").edit }]).kept);
+    const log = createEditLog();
+    const top = { document: { title: "top" } } as unknown as Window;
+    const inner = Object.assign(new EventTarget(), { document: { title: "frame" } }) as unknown as Window;
+    let shown: Window | null = inner;
+    const docs: Document[] = [];
+    const run: Replay = (into, _list, _hold, doc) => {
+      docs.push(doc);
+      into.record(change("kept", inner));
+      return { applied: into.list(), skipped: [], waiting: [] };
+    };
+    const keep = createKeeper({ log, store, view: top, replay: async () => run, settled: async () => undefined, frame: () => shown });
+    await flush();
+    await flush();
+    expect(docs.map((doc) => doc.title)).toEqual(["frame"]);
+    log.record(change("in frame", inner));
+    expect(readKept(store.value)?.edits.map((one) => one.after)).toEqual(["kept", "in frame"]);
+    // The frame on another page: an edit made there is not this page's, also once the frame shows this page again.
+    shown = null;
+    log.record(change("elsewhere", inner));
+    shown = inner;
+    log.record(change("main", top));
+    expect(readKept(store.value)?.edits.map((one) => one.after)).toEqual(["kept", "in frame", "main"]);
+    keep.stop();
+  });
+
+  test("the frame's window shows the page only on its origin, at the path the page loaded at", () => {
+    const at = (origin: string, pathname: string) => ({ location: { origin, pathname } }) as unknown as Window;
+    const top = at("https://site.test", "/");
+    const same = at("https://site.test", "/");
+    expect(framedPage(top, same, "/")).toBe(same);
+    expect(framedPage(top, null, "/")).toBeNull();
+    expect(framedPage(top, at("https://site.test", "/docs"), "/")).toBeNull();
+    expect(framedPage(top, at("null", "blank"), "/")).toBeNull();
+    expect(framedPage(top, at("https://other.test", "/"), "/")).toBeNull();
+    const closed = {
+      get location(): never {
+        throw new Error("cross origin");
+      },
+    } as unknown as Window;
+    expect(framedPage(top, closed, "/")).toBeNull();
   });
 
   test("an edit too big to keep leaves the switch on, with a store that tells of its own writes", () => {
