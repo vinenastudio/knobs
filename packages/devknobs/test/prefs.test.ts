@@ -15,6 +15,9 @@ const BASE: Prefs = {
   viewWidth: 340,
   stylesMode: "simple",
   stylesBox: true,
+  changesDiff: false,
+  htmlHeight: 200,
+  htmlFull: false,
 };
 
 describe("readPrefs", () => {
@@ -57,8 +60,8 @@ describe("readPrefs", () => {
     });
   });
 
-  test("is at version 4, and takes up one kept at version 1, which had no widths", () => {
-    expect(PREFS_VERSION).toBe(4);
+  test("is at version 5, and takes up one kept at version 1, which had no widths", () => {
+    expect(PREFS_VERSION).toBe(5);
     expect(readPrefs(JSON.stringify({ v: 1, handle: false }))).toEqual({ handle: false });
     expect(resolvePrefs(BASE, readPrefs(JSON.stringify({ v: 1, handle: false })))).toEqual({
       handle: false,
@@ -66,8 +69,11 @@ describe("readPrefs", () => {
       viewWidth: 340,
       stylesMode: "simple",
       stylesBox: true,
+      changesDiff: false,
+      htmlHeight: 200,
+      htmlFull: false,
     });
-    expect(readPrefs(JSON.stringify({ v: 5, handle: false, listWidth: 300 }))).toEqual({});
+    expect(readPrefs(JSON.stringify({ v: 6, handle: false, listWidth: 300 }))).toEqual({});
   });
 
   test("takes up one kept at version 2, which had no mode: the styles view is simple", () => {
@@ -79,7 +85,17 @@ describe("readPrefs", () => {
       viewWidth: 500,
       stylesMode: "simple",
       stylesBox: true,
+      changesDiff: false,
+      htmlHeight: 200,
+      htmlFull: false,
     });
+  });
+
+  test("takes up one kept at version 4, which had no diff and no html editor: the diff is folded, the editor 200 tall", () => {
+    const kept = JSON.stringify({ v: 4, stylesBox: false });
+    expect(resolvePrefs(BASE, readPrefs(kept))).toEqual({ ...BASE, stylesBox: false });
+    expect(readPrefs(JSON.stringify({ changesDiff: true, htmlHeight: 320, htmlFull: true }))).toEqual({ changesDiff: true, htmlHeight: 320, htmlFull: true });
+    expect(readPrefs(JSON.stringify({ changesDiff: "yes", htmlHeight: -1, htmlFull: 1 }))).toEqual({});
   });
 
   test("reads its own version and one kept before versions, and leaves a newer one alone", () => {
@@ -207,6 +223,9 @@ describe("createPrefs", () => {
       viewWidth: 500,
       stylesMode: "simple",
       stylesBox: true,
+      changesDiff: false,
+      htmlHeight: 200,
+      htmlFull: false,
     });
     prefs.setWidth("view", 340);
     prefs.setWidth("list", 240);
@@ -227,6 +246,9 @@ describe("createPrefs", () => {
       viewWidth: 600,
       stylesMode: "simple",
       stylesBox: true,
+      changesDiff: false,
+      htmlHeight: 200,
+      htmlFull: false,
     });
     prefs.destroy();
   });
@@ -251,7 +273,7 @@ describe("createPrefs", () => {
     prefs.subscribe(() => heard++);
     expect(prefs.get().stylesMode).toBe("simple");
     prefs.setStylesMode("advanced");
-    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({ v: 4, stylesMode: "advanced" });
+    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({ v: PREFS_VERSION, stylesMode: "advanced" });
     expect(prefs.get().stylesMode).toBe("advanced");
     prefs.destroy();
     const next = createPrefs();
@@ -260,6 +282,23 @@ describe("createPrefs", () => {
     expect(local.has(PREFS_KEY)).toBe(false);
     expect(next.get().stylesMode).toBe("simple");
     expect(heard).toBe(1);
+    next.destroy();
+  });
+
+  test("the diff is folded by default, and the way it is left is kept, as is the html editor's size", () => {
+    const { local } = stubWindow();
+    const prefs = createPrefs();
+    expect(prefs.get().changesDiff).toBe(false);
+    expect([prefs.get().htmlHeight, prefs.get().htmlFull]).toEqual([200, false]);
+    prefs.setChangesDiff(true);
+    prefs.setHtmlSize({ height: 320, full: true });
+    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({ v: PREFS_VERSION, changesDiff: true, htmlHeight: 320, htmlFull: true });
+    prefs.destroy();
+    const next = createPrefs();
+    expect([next.get().changesDiff, next.get().htmlHeight, next.get().htmlFull]).toEqual([true, 320, true]);
+    next.setChangesDiff(false);
+    next.setHtmlSize({ height: 200, full: false });
+    expect(local.has(PREFS_KEY)).toBe(false);
     next.destroy();
   });
 

@@ -276,6 +276,9 @@ function rig(start: Partial<Rig["state"]> = {}, stored: Partial<Prefs> = {}): Ri
     viewWidth: 340,
     stylesMode: "simple",
     stylesBox: true,
+    changesDiff: false,
+    htmlHeight: 200,
+    htmlFull: false,
     ...stored,
   };
   const kept: [Showing, number][] = [];
@@ -286,6 +289,8 @@ function rig(start: Partial<Rig["state"]> = {}, stored: Partial<Prefs> = {}): Ri
     setHandle: () => {},
     setStylesMode: () => {},
     setStylesBox: () => {},
+    setChangesDiff: () => {},
+    setHtmlSize: () => {},
     setWidth: (showing, px) => {
       kept.push([showing, px]);
       if (showing === "view") prefs.viewWidth = px;

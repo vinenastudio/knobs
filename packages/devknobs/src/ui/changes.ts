@@ -2,13 +2,14 @@
  * The changes at the foot of the Elements view: how many edits are in force,
  * each as a `-` line before and a `+` line after under the place it is in,
  * and the ways to hand them on: the prompt for an agent, the diff, and undo
- * all. With edits kept after a reload, a line says how many were made again
+ * all. The diff lines are folded away until the count's button shows them,
+ * and the way the user leaves them is kept where `diff` says. With edits kept after a reload, a line says how many were made again
  * as the page loaded and lists those that were not, one says when edits
  * past the caps are not kept, and kept html and attribute edits wait there,
  * listed, for a click on their `apply`: they could change what a script of
  * the page does, so only the user makes them again. It shows only while there is something to say. To use it:
  *
- *   const changes = createChanges(edits, copy, isMac(), keeper());
+ *   const changes = createChanges(edits, copy, isMac(), keeper(), { get, set });
  *   view.append(changes.node); changes.destroy();
  */
 
@@ -83,6 +84,9 @@ export function missedLine(skipped: Skipped): string {
   return line ? `${line}: ${skipped.reason}` : skipped.reason;
 }
 
+/** How many sections were made, for each list's own id. */
+let made = 0;
+
 export interface Changes {
   node: HTMLElement;
   destroy(): void;
@@ -94,10 +98,21 @@ export function undoHint(mac: boolean): string {
   return `undo ${undo}, redo ${comboLabel(withShift("z"), mac)}`;
 }
 
-export function createChanges(log: EditLog, copy: Copy, mac = isMac(), keep: Keeper | null = null): Changes {
+/** Whether the diff lines show, and where the way the user leaves them is kept. */
+export interface DiffShown {
+  get(): boolean;
+  set(open: boolean): void;
+}
+
+export function createChanges(log: EditLog, copy: Copy, mac = isMac(), keep: Keeper | null = null, diffShown: DiffShown | null = null): Changes {
   const node = el("section", "changes");
   node.setAttribute("aria-label", "changes");
   const head = el("div", "changes-head");
+  /** Shows and folds the diff lines. Folded unless the user left them shown. */
+  const fold = button("changes-toggle", "");
+  let open = diffShown?.get() ?? false;
+  const keys = el("span", "", ` · ${undoHint(mac)}`);
+  head.append(fold, keys);
   const kept = el("div", "changes-kept");
   const apply = button("chip changes-apply", "apply");
   /** The waiting edits the user showed whole. */
@@ -109,6 +124,13 @@ export function createChanges(log: EditLog, copy: Copy, mac = isMac(), keep: Kee
     if (event.isTrusted && event.currentTarget === apply && !apply.disabled) keep?.applyWaiting();
   });
   const list = el("div", "changes-list");
+  list.id = `devknobs-changes-${++made}`;
+  fold.setAttribute("aria-controls", list.id);
+  fold.addEventListener("click", () => {
+    open = !open;
+    diffShown?.set(open);
+    draw();
+  });
   const prompt = button("chip changes-go", "copy prompt for agent");
   const diff = button("chip", "copy diff");
   const undoAll = button("chip", "undo all");
@@ -190,7 +212,9 @@ export function createChanges(log: EditLog, copy: Copy, mac = isMac(), keep: Kee
     kept.replaceChildren(...said);
     kept.hidden = said.length === 0;
     node.hidden = count === 0 && said.length === 0;
-    head.textContent = `changes (${count}) · ${undoHint(mac)}`;
+    fold.textContent = `changes (${count})`;
+    fold.setAttribute("aria-expanded", String(open));
+    list.hidden = !open;
     const lines: HTMLElement[] = [];
     for (const group of netChanges(edits)) {
       lines.push(el("div", "diff-place", placeLine(group.target, group.markup)));

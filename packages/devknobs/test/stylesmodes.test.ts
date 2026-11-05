@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import { DEFAULT_STATE } from "../src/engine/store";
 import type { Inspection, RuleBlock, StyleBlock, StyleDeclaration } from "../src/styles/types";
 import type { DevknobsState } from "../src/types";
-import { createPrefs, PREFS_KEY, type StylesMode } from "../src/ui/prefs";
+import { createPrefs, PREFS_KEY, PREFS_VERSION, type StylesMode } from "../src/ui/prefs";
 import { NO_STYLES } from "../src/ui/stylesapplied";
 import {
   createStylesView,
@@ -571,7 +571,7 @@ describe("the mode in the preferences", () => {
     const node = start(door(prefs));
     expect(choices(node)[0]).toEqual(["simple", "true", true]);
     choose(node, "advanced");
-    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({ v: 4, stylesMode: "advanced" });
+    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({ v: PREFS_VERSION, stylesMode: "advanced" });
     view?.destroy();
     prefs.destroy();
     const next = createPrefs();

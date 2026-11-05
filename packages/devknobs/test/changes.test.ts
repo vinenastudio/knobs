@@ -72,6 +72,38 @@ describe("the changes", () => {
     ]);
   });
 
+  test("fold the diff away at first, show it on the count's press, and keep the way it is left", () => {
+    const kept: boolean[] = [];
+    let shown = false;
+    changes = createChanges(log, () => true, true, null, { get: () => shown, set: (open) => void kept.push((shown = open)) });
+    const node = fake(changes.node);
+    edit("color", "blue");
+    const fold = node.find("changes-toggle")[0];
+    if (!fold) throw new Error("no toggle");
+    expect([fold.tag, fold.textContent, fold.getAttribute("aria-expanded")]).toEqual(["button", "changes (1)", "false"]);
+    const list = node.find("changes-list")[0];
+    expect(list?.hidden).toBe(true);
+    expect(fold.getAttribute("aria-controls")).toMatch(/^devknobs-changes-\d+$/);
+    expect(fold.getAttribute("aria-controls")).toBe(Reflect.get(list ?? {}, "id"));
+    // The buttons stay in sight with the diff folded.
+    expect(["copy prompt for agent", "copy diff", "undo all"].map((text) => control(node, text).hidden)).toEqual([false, false, false]);
+    fold.fire("click");
+    expect([list?.hidden, fold.getAttribute("aria-expanded"), kept]).toEqual([false, "true", [true]]);
+    changes.destroy();
+    // A section made again starts as it was left.
+    changes = createChanges(log, () => true, true, null, { get: () => shown, set: (open) => void kept.push((shown = open)) });
+    const again = fake(changes.node);
+    expect(again.find("changes-list")[0]?.hidden).toBe(false);
+    again.find("changes-toggle")[0]?.fire("click");
+    expect([again.find("changes-list")[0]?.hidden, kept]).toEqual([true, [true, false]]);
+  });
+
+  test("with no place to keep it, fold the diff at first all the same", () => {
+    const node = start();
+    edit("color", "blue");
+    expect(node.find("changes-list")[0]?.hidden).toBe(true);
+  });
+
   test("name the keys as the footer does off a Mac", () => {
     expect(undoHint(false)).toBe("undo Z, redo Shift Z");
     expect(undoHint(true)).toBe("undo Z, redo ⇧Z");
@@ -193,6 +225,9 @@ describe("kept html edits that wait", () => {
     expect(waitLine(0, 2, 0)).toBe("2 kept attribute edits wait");
     expect(waitLine(1, 0, 0)).toBe("1 kept html edit waits");
     expect(node.all().some((one) => one.textContent === WAIT_NOTE)).toBe(true);
+    // The diff is folded, and what the waiting edits make shows all the same.
+    expect(node.find("changes-list")[0]?.hidden).toBe(true);
+    expect(node.find("changes-kept")[0]?.hidden).toBe(false);
     expect(node.all().filter((one) => one.className === "changes-missed").map((one) => one.textContent)).toEqual([
       'title on h1: title="Hi"',
       `html on p: <p>${"x".repeat(WAIT_MAX - 4)}… show all`,

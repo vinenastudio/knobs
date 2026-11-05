@@ -657,9 +657,7 @@ describe("a view's chrome", () => {
     // A declaration's hanging indent and swatch, and the cells of the box's diagram.
     ".css-decl",
     ".css-swatch",
-    ".css-applied .css-decl",
-    // An editable line's hanging indent, with room for its box, and the line that adds a property.
-    ".css-applied .css-decl.can-edit",
+    // The line that adds a property, in from the gutter a declaration's checkbox stands in.
     ".css-add, .css-adding",
     ".bm-name",
     ".bm-v",

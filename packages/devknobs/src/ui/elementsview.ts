@@ -116,7 +116,7 @@ export function createElementsView(context: StylesContext, parts: ElementsParts 
     copy: (text) => {
       void Promise.resolve(copy(text)).catch(() => undefined);
     },
-    editor: (hooks) => createDomEditor(hooks, { log, locate: context.locate }),
+    editor: (hooks) => createDomEditor(hooks, { log, locate: context.locate, ...(context.htmlSize && { htmlSize: context.htmlSize }) }),
   });
   const styles: StylesView = createStylesView(
     {
@@ -132,7 +132,7 @@ export function createElementsView(context: StylesContext, parts: ElementsParts 
     parts.page,
   );
   const keep = parts.keep === undefined ? keeper() : parts.keep;
-  const changes = createChanges(log, copy, undefined, keep);
+  const changes = createChanges(log, copy, undefined, keep, context.diff ?? null);
   const keepSwitch = keep ? switchLine({ label: KEEP_LABEL, on: keep.on(), onChange: (on) => keep.set(on) }) : null;
   keepSwitch?.node.classList.add("keep-line");
   /** The switch as the keeper has it, and off to a click until it knows what the page keeps. */

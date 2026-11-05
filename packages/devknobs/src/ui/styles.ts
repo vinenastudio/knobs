@@ -203,6 +203,7 @@ button {
 }
 :focus { outline: none; }
 button:focus-visible { outline: 1px solid var(--faint); outline-offset: -1px; }
+input[type="checkbox"]:focus-visible { outline: 1px solid var(--faint); outline-offset: 1px; }
 
 .handle {
   flex: none;
@@ -1464,7 +1465,62 @@ button:focus-visible { outline: 1px solid var(--faint); outline-offset: -1px; }
 .dom-code > .act { margin-left: var(--col-pad); height: 1.6em; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6em; vertical-align: top; }
 /* A line whose element the panel hid, faint as its box on the page is gone. */
 .dom-hid > .dom-code { opacity: 0.5; }
-.dom-code > .dom-html { display: block; width: 100%; min-width: 30ch; resize: vertical; white-space: pre; }
+/* The html editor: line numbers on the card's fill beside the text, which is
+   colored by the pre under a clear text box, the two set alike to the
+   pixel. The grip under it drags its height, the button makes it the
+   panel's. */
+.dom-code:has(> .html-ed) { flex: 1 1 auto; }
+.dom-code > .html-ed { display: block; width: 100%; min-width: 30ch; margin: 2px 0; }
+.html-ed-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  overflow: hidden;
+  background: var(--bg);
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--faint);
+}
+.html-ed-lines {
+  overflow: hidden;
+  padding: 4px var(--col-pad);
+  color: var(--faint);
+  text-align: right;
+  white-space: pre;
+  background: var(--card);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.html-ed-code { position: relative; overflow: hidden; }
+.html-ed-hl, .html-ed .dom-html {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 4px var(--col-pad);
+  font: 11px/1.6 var(--mono);
+  letter-spacing: normal;
+  white-space: pre;
+  tab-size: 2;
+  overflow-wrap: normal;
+}
+.html-ed-hl { overflow: hidden; color: var(--fg); pointer-events: none; }
+.html-ed .dom-html {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  resize: none;
+  color: transparent;
+  caret-color: var(--fg);
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  scrollbar-width: thin;
+}
+.html-ed .dom-html::selection { background: color-mix(in srgb, var(--faint) 35%, transparent); }
+.html-ed .dom-html.bad { caret-color: var(--hot); }
+.html-ed:has(.bad) > .html-ed-body { box-shadow: inset 0 0 0 1px var(--hot); }
+.html-ed-foot { display: flex; align-items: center; gap: 4px; margin-top: 2px; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+.html-ed-grip { flex: 1 1 auto; display: grid; place-items: center; height: 12px; cursor: ns-resize; touch-action: none; }
+.html-ed-grip::after { content: ""; width: 32px; height: 3px; background: var(--line); border-radius: 2px; transition: background 120ms ease-out; }
+.html-ed-grip:hover::after { background: var(--faint); }
 .dom-code > .dom-apply { margin: 4px 0 2px; }
 /* The selected line's actions, kept in sight at the foot of the tree as it scrolls either way. */
 .dom-acts {
@@ -1568,8 +1624,9 @@ button:focus-visible { outline: 1px solid var(--faint); outline-offset: -1px; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* A declaration that wraps goes on further in than it starts. */
-.css-decl { display: block; padding-left: 24px; text-indent: -12px; text-decoration: none; }
+/* A declaration that wraps goes on further in than it starts. Every line
+   keeps the gutter an editable line's box stands in, so no text moves. */
+.css-decl { display: block; padding-left: 30px; text-indent: -12px; text-decoration: none; }
 /* A name has the color of a key, its value the text's, and the marks between
    them are quiet. A declaration that is struck through is quiet all over. */
 .css-name { color: var(--key); }
@@ -1617,31 +1674,36 @@ s.css-decl, s.css-decl .css-var, s.css-decl .css-name { color: var(--faint); tex
   padding-right: var(--view-end);
   padding-left: var(--view-start);
 }
-.css-applied .css-decl { padding-left: 12px; }
 .css-label { font-size: 10.5px; color: var(--faint); }
 .css-comes { color: var(--faint); }
 .css-hidden { padding: 2px var(--view-end) 2px var(--view-start); font-size: 10.5px; color: var(--faint); overflow-wrap: anywhere; }
-/* Editing, as in the browsers' tools: a box at a line's start turns it off
-   and on, shown on hover, on focus and on a line that is off, filled while
-   the line is on. A value is a
+/* Editing, as in the browsers' tools: a checkbox in a line's gutter turns
+   it off and on, shown on hover, on focus and on a line that is off. Its
+   ring and its check are cut out of a fill by a mask, so they follow the
+   theme with no line drawn. A value is a
    field on a click, as wide as what it holds, on the track's fill, its text
    red where the page did not take it. Adding a property is a quiet line
    under a block, in from its edge as a declaration's first line is. */
 .css-decl.can-edit { position: relative; }
-.css-applied .css-decl.can-edit { padding-left: 24px; }
 .css-toggle {
   position: absolute;
-  top: 3px;
-  left: 0;
-  width: 11px;
-  height: 11px;
+  top: 2.5px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
   opacity: 0;
-  background: var(--track);
-  border-radius: 2px;
+  background: var(--faint);
+  border-radius: 3px;
   cursor: pointer;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill-rule='evenodd' d='M3 0h6a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H3a3 3 0 0 1-3-3V3a3 3 0 0 1 3-3zm0 1.25C2 1.25 1.25 2 1.25 3v6c0 1 .75 1.75 1.75 1.75h6c1 0 1.75-.75 1.75-1.75V3c0-1-.75-1.75-1.75-1.75z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill-rule='evenodd' d='M3 0h6a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H3a3 3 0 0 1-3-3V3a3 3 0 0 1 3-3zm0 1.25C2 1.25 1.25 2 1.25 3v6c0 1 .75 1.75 1.75 1.75h6c1 0 1.75-.75 1.75-1.75V3c0-1-.75-1.75-1.75-1.75z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
   transition: opacity 120ms ease-out;
 }
-.css-toggle:checked { background: var(--faint); }
+.css-toggle:checked {
+  background: var(--fg);
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill-rule='evenodd' d='M3 0h6a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H3a3 3 0 0 1-3-3V3a3 3 0 0 1 3-3zM2.6 6.1 3.7 5l1.6 1.6 3.4-3.4 1.1 1.1-4.5 4.5z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill-rule='evenodd' d='M3 0h6a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H3a3 3 0 0 1-3-3V3a3 3 0 0 1 3-3zM2.6 6.1 3.7 5l1.6 1.6 3.4-3.4 1.1 1.1-4.5 4.5z'/%3E%3C/svg%3E");
+}
 .css-decl.can-edit:hover > .css-toggle, .css-toggle:focus-visible, .css-decl.off > .css-toggle { opacity: 1; }
 .css-editable { border-radius: 2px; cursor: text; }
 .css-editable:hover, .css-editable:focus-visible { background: var(--track); }
@@ -1657,7 +1719,7 @@ s.css-decl, s.css-decl .css-var, s.css-decl .css-name { color: var(--faint); tex
 .css-edit.bad { color: var(--hot); }
 /* The field's ring, as a chip's field has it while focused, in place of the browser's border. */
 .inline-field { border: 0; box-shadow: inset 0 0 0 1px var(--faint); }
-.css-add, .css-adding { padding-left: 12px; }
+.css-add, .css-adding { padding-left: 18px; }
 .css-add, .css-new-rule {
   display: block;
   font: 11px/1.5 var(--mono);
@@ -1667,6 +1729,28 @@ s.css-decl, s.css-decl .css-var, s.css-decl .css-name { color: var(--faint); tex
 }
 .css-add:hover, .css-new-rule:hover { color: var(--fg); }
 .css-adding { text-indent: 0; }
+/* The suggestions under a field of the styles view: a raised list placed
+   under the field, the one marked in the selected line's tint. */
+.ac-list {
+  position: absolute;
+  z-index: 3;
+  display: grid;
+  min-width: 16ch;
+  max-height: 12.8em;
+  overflow-y: auto;
+  padding: 2px 0;
+  font: 11px/1.6 var(--mono);
+  text-indent: 0;
+  white-space: nowrap;
+  color: var(--fg);
+  background: var(--raised);
+  border-radius: 4px;
+  box-shadow: var(--lift), 0 0 0 1px var(--line);
+  scrollbar-width: thin;
+}
+.ac-item { padding: 0 var(--col-pad); cursor: pointer; }
+.ac-item:hover { background: var(--card); }
+.ac-item[aria-selected="true"] { background: var(--pick); }
 /* The line that adds a rule stands under the blocks, as the start of one. */
 .css-new-rule { justify-self: start; padding: 2px var(--view-end) 2px var(--view-start); }
 .css-rule-adding { padding: 2px var(--view-end) 2px var(--view-start); }
@@ -1690,6 +1774,11 @@ s.css-decl, s.css-decl .css-var, s.css-decl .css-name { color: var(--faint); tex
   border-top: 1px solid var(--line);
 }
 .changes-head, .changes-note { font-size: 10.5px; color: var(--faint); }
+/* The count is the button that folds the diff out, its chevron turned while it shows. */
+.changes-toggle { color: inherit; border-radius: 2px; transition: color 120ms ease-out; }
+.changes-toggle:hover { color: var(--fg); }
+.changes-toggle::before { content: "›"; display: inline-block; width: 2ch; text-align: left; transform-origin: 0.5ch 50%; transition: transform 120ms ease-out; }
+.changes-toggle[aria-expanded="true"]::before { transform: rotate(90deg); }
 /* What was made again as the page loaded, and the edits that were not. */
 .changes-kept { display: grid; gap: 2px; font-size: 11px; }
 .changes-kept-line { color: var(--fg); }

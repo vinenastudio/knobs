@@ -617,12 +617,17 @@ describe("the mode of the styles view", () => {
             viewWidth: 340,
             stylesMode: mode,
             stylesBox: true,
+            changesDiff: false,
+            htmlHeight: 200,
+            htmlFull: false,
           }),
           setStylesMode: (next) => {
             mode = next;
             kept.push(next);
           },
           setStylesBox: () => undefined,
+          setChangesDiff: () => undefined,
+          setHtmlSize: () => undefined,
         },
       },
       load,

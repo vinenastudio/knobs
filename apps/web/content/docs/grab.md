@@ -3,7 +3,7 @@ title: grab and inspect
 meta_title: Grab and inspect elements for a coding agent with devknobs
 description: Grab any element on the page and copy its html, the components that rendered it and their source files for a coding agent, or inspect its box and css.
 order: 5
-updated: 2026-11-04
+updated: 2026-11-05
 ---
 
 ## grab
@@ -52,11 +52,17 @@ panel, as the browser's Elements panel shows it:
 while you pick, the box is drawn on the page in the browser's colors, and a
 card shows the color, font, contrast and spacing.
 
-click a value to edit it, the box at a line's start turns it off and on, and
-`+ add property` adds one. the changes at the foot list each edit as `-` and
-`+` lines: `Z` undoes and `⇧Z` (`Shift Z` off a Mac) redoes while the focus
-is in the view and not in a field (⌘Z and Ctrl Z do not), and `copy prompt
-for agent` copies a prompt that asks your agent to put them in the code.
+click a value to edit it, the checkbox at a line's start turns it off and
+on, and `+ add property` adds one. as you type a name or a value, a list
+suggests what the browser takes: every property it knows and the page's
+custom properties, then for a value its keywords, named colors and
+`var(--x)`. ↑ and ↓ pick one, ↩ or Tab takes it (Tab in a name goes on to
+the value), and esc closes the list. the changes at the foot count the edits,
+`changes (N)`: click it to show each edit as `-` and `+` lines, and it stays
+as you leave it. `Z` undoes and `⇧Z` (`Shift Z` off a Mac) redoes while the
+focus is in the view and not in a field (⌘Z and Ctrl Z do not), and `copy
+prompt for agent` copies a prompt that asks your agent to put them in the
+code.
 
 `+ new rule` adds a rule for the element, its selector from the element's
 classes. the chips `:hover`, `:focus`, `:focus-visible`, `:active` and
@@ -68,7 +74,10 @@ element or close the view.
 the DOM tree can be edited too: double-click a text or an attribute to edit
 it, and on the selected line `a` adds an attribute, `F2` edits it as html,
 `h` hides it, Delete deletes it and `⇧↑` / `⇧↓` move it among its
-siblings, or use the bar under the tree. drag an element's line by its
+siblings, or use the bar under the tree. the html editor colors the html and
+numbers its lines; ↩ keeps the indent, `>` closes the tag, `⇧↩` applies and
+esc leaves. drag the grip under it to resize it, or click `expand` to give
+it the panel's height. drag an element's line by its
 handle, `⋮⋮`, to move it before or after another element, or into one. those
 edits go into the same changes, and the prompt asks your agent to change the
 component, as a re-render may undo an edit of the DOM. `<html>`, `<head>`

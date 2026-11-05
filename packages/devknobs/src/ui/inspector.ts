@@ -76,7 +76,7 @@ export function createInspector(
     inspect: InspectControl;
     tips: Tips;
     /** Where the view's mode is kept. Without it the view is the advanced one. */
-    prefs?: Pick<LivePrefs, "get" | "setStylesMode" | "setStylesBox">;
+    prefs?: Pick<LivePrefs, "get" | "setStylesMode" | "setStylesBox" | "setChangesDiff" | "setHtmlSize">;
     /** Inspect's key as it is now, for the select button to say. */
     key?: () => string;
   },
@@ -154,6 +154,8 @@ export function createInspector(
           ...(prefs && {
             mode: { get: () => prefs.get().stylesMode, set: prefs.setStylesMode },
             box: { get: () => prefs.get().stylesBox, set: prefs.setStylesBox },
+            diff: { get: () => prefs.get().changesDiff, set: prefs.setChangesDiff },
+            htmlSize: { get: () => ({ height: prefs.get().htmlHeight, full: prefs.get().htmlFull }), set: prefs.setHtmlSize },
           }),
         });
         view = made;

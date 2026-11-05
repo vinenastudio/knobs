@@ -9,7 +9,7 @@ import { LIST_WIDTH, type Showing, VIEW_WIDTH } from "./size";
 export const PREFS_KEY = "devknobs:prefs";
 
 /** The version of the preferences `PREFS_KEY` keeps. Bump it with a new shape, see stored.ts. */
-export const PREFS_VERSION = 4;
+export const PREFS_VERSION = 5;
 
 /** How the styles view shows an element: what applies to it, or every rule in cascade order. */
 export type StylesMode = "simple" | "advanced";
@@ -20,12 +20,20 @@ export const STYLES_MODE: StylesMode = "simple";
 /** Whether the styles view starts with the element's box folded out. */
 export const STYLES_BOX = true;
 
+/** Whether the changes of the Elements view start with their diff lines shown. */
+export const CHANGES_DIFF = false;
+
+/** How tall the box of the html editor starts, in px. */
+export const HTML_HEIGHT = 200;
+
 /**
  * The panel's preferences: whether the handle shows while the panel is
  * closed, how wide the panel is with the rows or the settings in it and
- * with a feature's view, in px, the mode of the styles view, and whether the
- * box in it is folded out. Version 1 kept the handle alone, version 2 had no
- * mode, and version 3 had no word on the box.
+ * with a feature's view, in px, the mode of the styles view, whether the
+ * box in it is folded out, whether the changes show their diff, and how tall
+ * the html editor is, in px, or whether it takes the panel's height. Version
+ * 1 kept the handle alone, version 2 had no mode, version 3 had no word on
+ * the box, and version 4 none on the diff and the html editor.
  */
 export interface Prefs {
   handle: boolean;
@@ -33,6 +41,15 @@ export interface Prefs {
   viewWidth: number;
   stylesMode: StylesMode;
   stylesBox: boolean;
+  changesDiff: boolean;
+  htmlHeight: number;
+  htmlFull: boolean;
+}
+
+/** How tall the html editor is: its height in px, and whether it takes the panel's height instead. */
+export interface HtmlSize {
+  height: number;
+  full: boolean;
 }
 
 /** The preference that keeps the width of what the panel shows. */
@@ -62,6 +79,12 @@ export function readPrefs(json: string | null | undefined): StoredPrefs {
   if (mode === "simple" || mode === "advanced") prefs.stylesMode = mode;
   const box: unknown = Reflect.get(value, "stylesBox");
   if (typeof box === "boolean") prefs.stylesBox = box;
+  const diff: unknown = Reflect.get(value, "changesDiff");
+  if (typeof diff === "boolean") prefs.changesDiff = diff;
+  const height: unknown = Reflect.get(value, "htmlHeight");
+  if (typeof height === "number" && Number.isFinite(height) && height > 0) prefs.htmlHeight = height;
+  const full: unknown = Reflect.get(value, "htmlFull");
+  if (typeof full === "boolean") prefs.htmlFull = full;
   return prefs;
 }
 
@@ -98,6 +121,10 @@ export interface LivePrefs {
   setStylesMode(mode: StylesMode): void;
   /** Keep whether the box in the styles view is folded out. The way it starts is not kept. */
   setStylesBox(open: boolean): void;
+  /** Keep whether the changes show their diff. The way they start is not kept. */
+  setChangesDiff(open: boolean): void;
+  /** Keep the html editor's height, in px, and whether it takes the panel's height. The size it starts at is not kept. */
+  setHtmlSize(size: HtmlSize): void;
   /** Hear the preferences change. Returns the way to stop. */
   subscribe(listener: () => void): () => void;
   destroy(): void;
@@ -111,6 +138,9 @@ export function createPrefs(options: { handle?: boolean } = {}): LivePrefs {
     viewWidth: VIEW_WIDTH,
     stylesMode: STYLES_MODE,
     stylesBox: STYLES_BOX,
+    changesDiff: CHANGES_DIFF,
+    htmlHeight: HTML_HEIGHT,
+    htmlFull: false,
   };
   let stored = loadPrefs();
   let prefs = resolvePrefs(base, stored);
@@ -163,6 +193,20 @@ export function createPrefs(options: { handle?: boolean } = {}): LivePrefs {
       const next = { ...stored };
       if (open === base.stylesBox) delete next.stylesBox;
       else next.stylesBox = open;
+      keep(next);
+    },
+    setChangesDiff(open) {
+      const next = { ...stored };
+      if (open === base.changesDiff) delete next.changesDiff;
+      else next.changesDiff = open;
+      keep(next);
+    },
+    setHtmlSize({ height, full }) {
+      const next = { ...stored };
+      if (height === base.htmlHeight) delete next.htmlHeight;
+      else next.htmlHeight = height;
+      if (full === base.htmlFull) delete next.htmlFull;
+      else next.htmlFull = full;
       keep(next);
     },
     subscribe(listener) {

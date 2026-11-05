@@ -4,7 +4,7 @@ import type { BoxRing } from "../src/grab/boxmodel";
 import type { Inspection, StyleBlock } from "../src/styles/types";
 import type { DevknobsState } from "../src/types";
 import type { BoxReading } from "../src/ui/boxdiagram";
-import { createPrefs, PREFS_KEY, type StylesMode } from "../src/ui/prefs";
+import { createPrefs, PREFS_KEY, PREFS_VERSION, type StylesMode } from "../src/ui/prefs";
 import { createStylesView, SETTLE, type StylesPage, type StylesView } from "../src/ui/stylesview";
 import type { Tips } from "../src/ui/tooltip";
 import {
@@ -394,7 +394,7 @@ describe("the fold of the box in the preferences", () => {
     expect(fold(node).className).toBe("row open");
     main(node).fire("click");
     expect(fold(node).className).toBe("row");
-    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({ v: 4, stylesBox: false });
+    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({ v: PREFS_VERSION, stylesBox: false });
     view?.destroy();
     prefs.destroy();
     const next = createPrefs();
@@ -415,7 +415,7 @@ describe("the fold of the box in the preferences", () => {
     main(node).fire("click");
     node.find("seg-item")[1]?.fire("click");
     expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({
-      v: 4,
+      v: PREFS_VERSION,
       stylesBox: false,
       stylesMode: "advanced",
     });
@@ -432,6 +432,9 @@ describe("the fold of the box in the preferences", () => {
       viewWidth: 500,
       stylesMode: "advanced",
       stylesBox: true,
+      changesDiff: false,
+      htmlHeight: 200,
+      htmlFull: false,
     });
     const node = start(doors(prefs));
     view?.show(as(save));

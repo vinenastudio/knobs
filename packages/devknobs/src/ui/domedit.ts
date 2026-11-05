@@ -16,7 +16,7 @@
  * field, and the field of a text or a value with line breaks in it, takes
  * line breaks with Enter, and puts its edit on with ⇧↩ (Shift Enter
  * elsewhere), its apply button, or as the focus leaves it; ⌘↩ and Ctrl Enter
- * put it on too. A field closed as it was opened makes no edit. An element
+ * put it on too. The html field is the editor of htmledit.ts. A field closed as it was opened makes no edit. An element
  * that holds devknobs' own nodes, as the body holds the panel, is not
  * replaced, hidden or deleted. To use it, as the tree does:
  *
@@ -45,7 +45,9 @@ import { isMac } from "../engine/ua";
 import { editField, selectorOf } from "./cssedit";
 import { button, el } from "./dom";
 import { type Entry, isElement, markupOf, parentOf, type Row } from "./domtree";
+import { htmlEditor } from "./htmledit";
 import { comboLabel, letterMatches, typesInField, withShift } from "./keys";
+import type { HtmlSize } from "./prefs";
 
 /** What a key on the selected line does. */
 export type TreeEditAction = "text" | "attr" | "html" | "hide" | "delete" | "up" | "down";
@@ -81,6 +83,8 @@ export interface DomEditorOptions {
   locate?: Locate;
   /** Parses html in a document. Defaults to the page's own parser. */
   parse?: typeof parseHtml;
+  /** How tall the html editor starts, and where the size the user gives it is kept. */
+  htmlSize?: { get(): HtmlSize; set(size: HtmlSize): void };
 }
 
 export interface DomEditor {
@@ -222,6 +226,8 @@ function field(value: string, label: string): HTMLInputElement {
 interface FieldOptions {
   pieces: Node[];
   input: HTMLInputElement | HTMLTextAreaElement;
+  /** What stands in the line for the pieces, the field in it. Defaults to the field. */
+  frame?: HTMLElement;
   /** Make the edits, and say whether they took: where they did not, the field stays open, marked. */
   commit(text: string): boolean;
   /** Line breaks go in, and shift and Enter puts the edit on. */
@@ -233,9 +239,9 @@ interface FieldOptions {
 }
 
 /** A field that keeps line breaks, with its apply button, as tall as what it holds. */
-function boxField(value: string, label: string, className = ""): Pick<FieldOptions, "input" | "multiline" | "apply"> {
+function boxField(value: string, label: string): Pick<FieldOptions, "input" | "multiline" | "apply"> {
   const area = document.createElement("textarea");
-  area.className = `css-edit inline-field dom-edit ${className}`.trim();
+  area.className = "css-edit inline-field dom-edit";
   area.value = value;
   area.spellcheck = false;
   const fit = (): void => {
@@ -281,11 +287,11 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
   }
 
   /** Show a field in place of pieces of a line, and close it with Enter, esc, or as the focus leaves. */
-  function openField({ pieces, input, commit, multiline = false, apply: applies, closed }: FieldOptions): void {
+  function openField({ pieces, input, frame = input, commit, multiline = false, apply: applies, closed }: FieldOptions): void {
     const first = pieces[0];
     const parent = first?.parentNode;
     if (!first || !parent) return;
-    parent.insertBefore(input, first);
+    parent.insertBefore(frame, first);
     if (applies) parent.insertBefore(applies, first);
     for (const piece of pieces) parent.removeChild(piece);
     // As the field holds it: a field drops what it cannot hold, so an edit is told from this, not the page's text.
@@ -303,9 +309,9 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
         input.focus({ preventScroll: true });
         return;
       }
-      if (input.parentNode) {
-        for (const piece of pieces) input.parentNode.insertBefore(piece, input);
-        input.remove();
+      if (frame.parentNode) {
+        for (const piece of pieces) frame.parentNode.insertBefore(piece, frame);
+        frame.remove();
       }
       applies?.remove();
       closed?.();
@@ -398,9 +404,15 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
     const code = hooks.code(row);
     if (!isElement(element) || !code) return;
     const before = markupOf(element);
+    const hint = applyHint(isMac());
+    const editor = htmlEditor(before, `edit as html, ${hint} to apply, esc to leave`, options.htmlSize ?? null);
     openField({
       pieces: Array.from(code.childNodes),
-      ...boxField(before, "edit as html", "dom-html"),
+      input: editor.area,
+      frame: editor.frame,
+      multiline: true,
+      apply: button("chip dom-apply", `apply ${hint}`),
+      closed: () => editor.restore(),
       commit(text) {
         if (text.trim() === before.trim()) return true;
         const nodes = parse(element.ownerDocument, text);
@@ -411,6 +423,7 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
         return true;
       },
     });
+    editor.shown();
   }
 
   function hide(row: Row): void {

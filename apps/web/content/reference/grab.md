@@ -243,10 +243,17 @@ the page at once, into the same changes as the style edits:
   in a field that keeps them, where ↩ breaks the line, and `⇧↩`
   (`Shift Enter` off a Mac) or its `apply` button puts it on the page
 - `a` on the selected line adds an attribute, in a field before the tag's end
-- `F2` edits the element as html: a field with its outer html, where ↩
-  breaks the line. `⇧↩` (`Shift Enter` off a Mac), its `apply` button, or a
-  click elsewhere puts the new html in the element's place and selects it;
-  esc leaves it. html with no element in it, or with devknobs' own
+- `F2` edits the element as html: an editor with its outer html, in the
+  panel's monospace, its lines numbered and its tags, attributes, values and
+  comments colored. ↩ breaks the line with the line's indent, one level more
+  after an opening tag, and between a tag and its end tag puts the end on a
+  line of its own. `>` after `<div` writes `</div>` after the caret (not for
+  a void element such as `<img>` or `<br>`), and `"` after `=` in a tag
+  writes the closing quote too, which typing it steps over. the grip under
+  the editor drags its height, and `expand` makes it as tall as the panel
+  (`shrink` makes it as it was); both are kept for the next time. `⇧↩`
+  (`Shift Enter` off a Mac), its `apply` button, or a click elsewhere puts the
+  new html in the element's place and selects it; esc leaves it. html with no element in it, or with devknobs' own
   `data-devknobs` attributes, is refused: applying it with `⇧↩` or the
   button turns the field red and keeps it open, while a click elsewhere
   closes it without the edit. undo puts the very element back, unless the
@@ -297,9 +304,23 @@ modes, and each edit goes on the page at once:
   escape leaves it as it was, and tab puts it on and goes to the next value,
   shift and tab to the one before. a value the page does not take turns red
   and stays open. `!important` at its end is kept
-- the box at a line's start, shown with the pointer on the line, turns the
-  declaration off and on. a line that is off stays where it stood, struck
-  through, and goes back there when it is turned on
+- the checkbox at a line's start, in a gutter every line keeps, turns the
+  declaration off and on. it shows with the pointer or the focus on the line,
+  and always on a line that is off, which stays where it stood, struck
+  through and faint, and goes back there when it is turned on. Tab reaches
+  it and space turns it; it is named `turn off padding` or `turn on padding`
+- typing a property's name, or a value, opens a list of suggestions under
+  the field, filtered by what was typed, those that start with it first.
+  names are every property the browser knows, asked of the browser, and the
+  custom properties the page sets. values are the property's keywords the
+  browser takes (`CSS.supports`), named colors where it takes a color,
+  `var(--x)` for each custom property, and `inherit`, `initial`, `unset`,
+  `revert` and `revert-layer`. ↑ and ↓ mark one (↓ also opens the list), ↩
+  takes the one marked (with none marked ↩ puts on what was typed), Tab
+  takes the one marked or the first, and in a name goes on to the value. esc
+  closes the list, and a second esc leaves the field. a click on one takes
+  it. in a value the word at the caret is what a suggestion replaces, so
+  `1px so` becomes `1px solid`
 - `+ add property` under `element.style` and under each rule takes a name,
   then a value. `element.style` shows even with no `style` attribute, so a
   property can be added to the element itself. in `simple` mode the line is
@@ -318,8 +339,11 @@ modes, and each edit goes on the page at once:
   so a `:hover` rule can be written without the state forced. undo takes it
   off the page
 
-the changes at the foot of the view count the edits and list them as diff
-lines, `-` the value before and `+` the value after, under the rule, what
+the changes at the foot of the view count the edits, `changes (N)`, and
+that count is a button that shows the diff and folds it away again. the diff
+is folded at first, and stays as it is left, for the next view and after a
+reload; the buttons, the kept edits and those that wait for `apply`, with
+their values, show either way. the diff lists the edits as `-` the value before and `+` the value after, under the rule, what
 it sits in (`@media`, `@layer`, the rule a nested `&` is in) and its
 stylesheet, or `style=""` and the element for its own style. a new rule is
 under `new rule for` and the element's selector: `+ .cta:hover { }`, then its
