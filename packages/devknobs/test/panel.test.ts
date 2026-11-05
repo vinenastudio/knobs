@@ -33,7 +33,7 @@ import {
   velocity,
 } from "../src/ui/place";
 import { handleHint } from "../src/ui/settings";
-import { HANDLE_REACH, LIST_MIN, VIEW_WIDTH, WIDTH_MAX, widthIn } from "../src/ui/size";
+import { HANDLE_REACH, PANEL_WIDTH, WIDTH_MAX, WIDTH_MIN, widthIn } from "../src/ui/size";
 import { SLIDE } from "../src/ui/slide";
 import { CSS } from "../src/ui/styles";
 import { TIP_GAP, TIP_MARGIN, tipAt } from "../src/ui/tooltip";
@@ -1158,12 +1158,12 @@ describe("the styles view at any width", () => {
   const PANEL_EDGES = 10;
   const BLOCK_EDGES = 20;
 
-  test("is shown from 240 in a small window, at 340 until dragged, and up to 720", () => {
+  test("is shown at the panel's 240 until dragged, and up to 720", () => {
     const small = 240 + HANDLE_REACH + PANEL_GAP;
-    expect(widthIn("view", 340, small)).toBe(240);
-    expect(widthIn("view", 340, 1440)).toBe(340);
-    expect(widthIn("view", 720, 1440)).toBe(720);
-    expect(widthIn("view", 2000, 1440)).toBe(720);
+    expect(widthIn(340, small)).toBe(240);
+    expect(widthIn(240, 1440)).toBe(240);
+    expect(widthIn(720, 1440)).toBe(720);
+    expect(widthIn(2000, 1440)).toBe(720);
   });
 
   test("has no width of its own to outgrow the narrowest: only the swatch and the box that turns a line off are sized, in px", () => {
@@ -1368,8 +1368,8 @@ describe("the requests, at every width the panel takes", () => {
     return width - AROUND - around - 3 * sheet.px(main, "column-gap") - fixed;
   }
 
-  test("the widths are the panel's: 240 at the least, 340 until it is dragged, 720 at the most", () => {
-    expect([LIST_MIN, VIEW_WIDTH, WIDTH_MAX]).toEqual([240, 340, 720]);
+  test("the widths are the panel's: 240 at the least and until it is dragged, 720 at the most", () => {
+    expect([WIDTH_MIN, PANEL_WIDTH, WIDTH_MAX]).toEqual([240, 240, 720]);
   });
 
   test("only the name gives way or takes the room: the other columns keep their width", () => {

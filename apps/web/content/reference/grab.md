@@ -96,8 +96,8 @@ pass `grabKey: "meta+c"` (`"ctrl+c"` off a Mac) to keep react-grab's key.
 press `⇧C` (`Shift C` off a Mac) to see the css of an element. it picks as
 grab does, with the same box, arrows and escape, and its label says `styles`
 before the element. a click copies nothing: the element's styles open in the
-panel, in place of the rows, and the panel grows wider for them. drag its
-edge for another width.
+panel, in place of the rows, at the panel's width. drag its edge for
+another width, which the rows keep too.
 
 picking is a mode, as in the browsers' own tools. a click picks the element
 and ends the picking: nothing is left drawn on the page, and the page takes

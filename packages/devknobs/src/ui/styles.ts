@@ -291,7 +291,7 @@ input[type="checkbox"]:focus-visible { outline: 1px solid var(--faint); outline-
      would stay on the window's edge as a line the panel's height. It hides
      once the slide is over. The edge side's border and the padding that pays
      for it go once its color has eased out. The width glides to a new one, as
-     a view comes or goes, and the panel turns that off under the strip. */
+     the strip's keys set it, and the panel turns that off under the strip. */
   visibility: hidden;
   transition: visibility 0s linear 150ms, border-top-right-radius var(--glide) ease-out,
     border-bottom-right-radius var(--glide) ease-out, border-right-color var(--glide) ease-out,

@@ -613,8 +613,7 @@ describe("the mode of the styles view", () => {
         prefs: {
           get: () => ({
             handle: true,
-            listWidth: 240,
-            viewWidth: 340,
+            width: 240,
             stylesMode: mode,
             stylesBox: true,
             changesDiff: false,

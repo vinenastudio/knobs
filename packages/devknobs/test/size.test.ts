@@ -5,15 +5,12 @@ import {
   dragWidth,
   HANDLE_REACH,
   keyWidth,
-  LIST_MIN,
-  LIST_WIDTH,
   PAGE_ROOM,
+  PANEL_WIDTH,
   pageRoom,
-  type Showing,
   type Sizer,
-  VIEW_MIN,
-  VIEW_WIDTH,
   WIDTH_MAX,
+  WIDTH_MIN,
   WIDTH_STEP,
   widthGlides,
   widthIn,
@@ -22,89 +19,82 @@ import {
 import { PAGE_MIN } from "../src/engine/dock";
 import type { SideValue } from "../src/types";
 
-describe("the panel's two widths", () => {
-  test("are 240 for the rows and the settings, and 340 for a view", () => {
-    expect(LIST_WIDTH).toBe(240);
-    expect(VIEW_WIDTH).toBe(340);
+describe("the panel's width", () => {
+  test("is 240 until the user says otherwise, for the rows, the settings and every view", () => {
+    expect(PANEL_WIDTH).toBe(240);
   });
 
-  test("go down to 240 and 280, and up to 720 or what leaves the page 96", () => {
-    expect(widthLimits("list", 1440)).toEqual({ min: 240, max: 720 });
-    expect(widthLimits("view", 1440)).toEqual({ min: 280, max: 720 });
-    expect(widthLimits("view", 700)).toEqual({ min: 280, max: 604 });
-    expect(widthLimits("list", 816)).toEqual({ min: 240, max: 720 });
-    expect(widthLimits("list", 815)).toEqual({ min: 240, max: 719 });
-    expect([LIST_MIN, VIEW_MIN, WIDTH_MAX, PAGE_ROOM]).toEqual([240, 280, 720, 96]);
+  test("goes down to 240, and up to 720 or what leaves the page 96", () => {
+    expect(widthLimits(1440)).toEqual({ min: 240, max: 720 });
+    expect(widthLimits(700)).toEqual({ min: 240, max: 604 });
+    expect(widthLimits(816)).toEqual({ min: 240, max: 720 });
+    expect(widthLimits(815)).toEqual({ min: 240, max: 719 });
+    expect([WIDTH_MIN, WIDTH_MAX, PAGE_ROOM]).toEqual([240, 720, 96]);
   });
 
   test("in a window with no room to spare, only the least", () => {
-    expect(widthLimits("list", 300)).toEqual({ min: 240, max: 240 });
-    expect(widthLimits("view", 320)).toEqual({ min: 280, max: 280 });
+    expect(widthLimits(300)).toEqual({ min: 240, max: 240 });
   });
 });
 
-describe("a pinned panel's widths", () => {
-  test("leave the page its least, 320, where a floating panel leaves it 96", () => {
+describe("a pinned panel's width", () => {
+  test("leaves the page its least, 320, where a floating panel leaves it 96", () => {
     expect([pageRoom(true), pageRoom(false)]).toEqual([PAGE_MIN, PAGE_ROOM]);
     expect(PAGE_MIN).toBe(320);
   });
 
-  test("go up to what leaves the page that, or 720", () => {
+  test("goes up to what leaves the page that, or 720", () => {
     const page = pageRoom(true);
-    expect(widthLimits("list", 1440, page)).toEqual({ min: 240, max: 720 });
-    expect(widthLimits("view", 1040, page)).toEqual({ min: 280, max: 720 });
-    expect(widthLimits("view", 1039, page)).toEqual({ min: 280, max: 719 });
-    expect(widthLimits("view", 900, page)).toEqual({ min: 280, max: 580 });
-    expect(widthIn("view", 700, 900, page)).toBe(580);
-    expect(widthIn("list", 5000, 800, page)).toBe(480);
+    expect(widthLimits(1440, page)).toEqual({ min: 240, max: 720 });
+    expect(widthLimits(1040, page)).toEqual({ min: 240, max: 720 });
+    expect(widthLimits(1039, page)).toEqual({ min: 240, max: 719 });
+    expect(widthLimits(900, page)).toEqual({ min: 240, max: 580 });
+    expect(widthIn(700, 900, page)).toBe(580);
+    expect(widthIn(5000, 800, page)).toBe(480);
   });
 
   test("in a window with no room for the page beside it, only the least, and the panel lies over the page", () => {
     const page = pageRoom(true);
-    expect(widthLimits("list", 559, page)).toEqual({ min: 240, max: 240 });
-    expect(widthLimits("view", 599, page)).toEqual({ min: 280, max: 280 });
-    expect(widthIn("view", 340, 599, page)).toBe(280);
-    expect(widthIn("list", 400, 500, page)).toBe(240);
+    expect(widthLimits(559, page)).toEqual({ min: 240, max: 240 });
+    expect(widthIn(400, 500, page)).toBe(240);
   });
 });
 
 describe("widthIn", () => {
   test("keeps a width between the limits", () => {
-    expect(widthIn("list", 240, 1440)).toBe(240);
-    expect(widthIn("view", 340, 1440)).toBe(340);
-    expect(widthIn("view", 500, 1440)).toBe(500);
-    expect(widthIn("list", 100, 1440)).toBe(240);
-    expect(widthIn("view", 100, 1440)).toBe(280);
-    expect(widthIn("view", 5000, 1440)).toBe(720);
-    expect(widthIn("list", 5000, 1440)).toBe(720);
+    expect(widthIn(240, 1440)).toBe(240);
+    expect(widthIn(500, 1440)).toBe(500);
+    expect(widthIn(100, 1440)).toBe(240);
+    expect(widthIn(5000, 1440)).toBe(720);
   });
 
   test("is whole px", () => {
-    expect(widthIn("view", 412.6, 1440)).toBe(413);
+    expect(widthIn(412.6, 1440)).toBe(413);
   });
 
   test("in a narrow window, shows one kept wider at what leaves the page its room", () => {
-    expect(widthIn("view", 600, 700)).toBe(600);
-    expect(widthIn("view", 700, 700)).toBe(604);
-    expect(widthIn("list", 600, 500)).toBe(404);
+    expect(widthIn(600, 700)).toBe(600);
+    expect(widthIn(700, 700)).toBe(604);
+    expect(widthIn(600, 500)).toBe(404);
   });
 
-  test("a view never leaves the window, handle and gap included, down to the rows' own width", () => {
+  test("never leaves the window, handle and gap included, down to its least", () => {
     for (let view = 0; view <= 1600; view += 7) {
-      const width = widthIn("view", VIEW_WIDTH, view);
-      expect(width).toBeGreaterThanOrEqual(LIST_MIN);
+      const width = widthIn(400, view);
+      expect(width).toBeGreaterThanOrEqual(WIDTH_MIN);
       expect(width).toBeLessThanOrEqual(WIDTH_MAX);
       // 269 is the narrowest window the panel at its least and its handle fit, with the gap.
-      if (view >= LIST_MIN + HANDLE_REACH + 8) {
+      if (view >= WIDTH_MIN + HANDLE_REACH + 8) {
         expect(width + HANDLE_REACH).toBeLessThanOrEqual(view - 8);
       }
     }
-    expect(widthIn("view", 340, 300)).toBe(300 - 21 - 8);
-    expect(widthIn("view", 340, 260)).toBe(240);
+    expect(widthIn(340, 340)).toBe(244);
+    expect(widthIn(340, 300)).toBe(240);
+    expect(widthIn(340, 260)).toBe(240);
   });
 
-  test("the rows are 240 in any window, as they always were", () => {
-    for (const view of [0, 200, 261, 300, 336]) expect(widthIn("list", 240, view)).toBe(240);
+  test("the least is 240 in any window, as it always was", () => {
+    for (const view of [0, 200, 261, 300, 336]) expect(widthIn(240, view)).toBe(240);
   });
 });
 
@@ -151,7 +141,7 @@ describe("keyWidth", () => {
 describe("widthGlides", () => {
   const cue = { first: false, dragging: false, resizing: false };
 
-  test("glides to a new width, as a view comes or goes", () => {
+  test("glides to a new width, as the keys set it", () => {
     expect(widthGlides(cue)).toBe(true);
   });
 
@@ -236,15 +226,14 @@ interface Rig {
   /** Each width the panel said it has, or glides to. */
   wide: number[];
   /** What the preferences were asked to keep. */
-  kept: [Showing, number][];
-  state: { showing: Showing; open: boolean; side: SideValue; docked: boolean; view: number };
+  kept: number[];
+  state: { open: boolean; side: SideValue; docked: boolean; view: number };
   prefs: Prefs;
   dataset: Record<string, string>;
 }
 
 function rig(start: Partial<Rig["state"]> = {}, stored: Partial<Prefs> = {}): Rig {
   const state: Rig["state"] = {
-    showing: "list",
     open: true,
     side: "right",
     docked: false,
@@ -272,8 +261,7 @@ function rig(start: Partial<Rig["state"]> = {}, stored: Partial<Prefs> = {}): Ri
   };
   const prefs: Prefs = {
     handle: true,
-    listWidth: 240,
-    viewWidth: 340,
+    width: 240,
     stylesMode: "simple",
     stylesBox: true,
     changesDiff: false,
@@ -281,7 +269,7 @@ function rig(start: Partial<Rig["state"]> = {}, stored: Partial<Prefs> = {}): Ri
     htmlFull: false,
     ...stored,
   };
-  const kept: [Showing, number][] = [];
+  const kept: number[] = [];
   const sized: Rig["sized"] = [];
   const wide: number[] = [];
   const live: LivePrefs = {
@@ -291,10 +279,9 @@ function rig(start: Partial<Rig["state"]> = {}, stored: Partial<Prefs> = {}): Ri
     setStylesBox: () => {},
     setChangesDiff: () => {},
     setHtmlSize: () => {},
-    setWidth: (showing, px) => {
-      kept.push([showing, px]);
-      if (showing === "view") prefs.viewWidth = px;
-      else prefs.listWidth = px;
+    setWidth: (px) => {
+      kept.push(px);
+      prefs.width = px;
       // The panel draws again as the preferences change.
       sizer.size();
     },
@@ -306,7 +293,6 @@ function rig(start: Partial<Rig["state"]> = {}, stored: Partial<Prefs> = {}): Ri
     wrap,
     panel,
     prefs: live,
-    showing: () => state.showing,
     place: () => ({ open: state.open, side: state.side, docked: state.docked }),
     wide: (px) => wide.push(px),
     sized: (glide) => sized.push({ glide, host: host.style.width }),
@@ -332,38 +318,39 @@ afterEach(() => {
 });
 
 describe("the width the panel takes", () => {
-  test("is the rows' at first, set with no glide and no word to the frame", () => {
+  test("is 240 at first, set with no glide and no word to the frame", () => {
     const { widths, host, sized } = rig();
     expect(widths).toEqual(["240px still", "240px"]);
     expect(host.style.width).toBe(`${240 + HANDLE_REACH}px`);
     expect(sized).toEqual([]);
   });
 
-  test("is the view's while a view shows, and the rows' again after", () => {
-    const { sizer, state, width, host } = rig();
-    state.showing = "view";
-    sizer.size();
-    expect(width()).toBe("340px");
-    expect(host.style.width).toBe("361px");
-    state.showing = "list";
-    sizer.size();
-    expect(width()).toBe("240px");
-    expect(host.style.width).toBe("261px");
+  test("stays as what the panel shows changes: no new width, no glide, no word to the frame", () => {
+    const { sizer, widths, sized, wide } = rig({}, { width: 300 });
+    widths.length = 0;
+    let drawn = 0;
+    // A view opens, and closes again.
+    sizer.size(() => drawn++);
+    sizer.size(() => drawn++);
+    expect(drawn).toBe(2);
+    expect(widths).toEqual([]);
+    expect(sized).toEqual([]);
+    expect(wide).toEqual([300]);
   });
 
-  test("glides there: drawn at the new width, put back at the old, and let go", () => {
-    const { sizer, state, widths } = rig();
+  test("glides to a new one: drawn at the new width, put back at the old, and let go", () => {
+    const { sizer, prefs, widths } = rig();
     widths.length = 0;
     const drawnAt: (string | undefined)[] = [];
-    state.showing = "view";
+    prefs.width = 340;
     sizer.size(() => drawnAt.push(widths.at(-1)));
     expect(drawnAt).toEqual(["340px still"]);
     expect(widths).toEqual(["340px still", "240px still", "340px"]);
   });
 
   test("tells the frame once, at the start, when the host is already as wide as the panel ends", () => {
-    const { sizer, state, sized } = rig();
-    state.showing = "view";
+    const { sizer, prefs, sized } = rig();
+    prefs.width = 340;
     sizer.size();
     expect(sized).toEqual([{ glide: true, host: "361px" }]);
     sizer.size();
@@ -378,18 +365,15 @@ describe("the width the panel takes", () => {
     expect(drawn).toBe(1);
   });
 
-  test("is what the preferences keep, each for what it shows", () => {
-    const { sizer, state, width } = rig({}, { listWidth: 300, viewWidth: 520 });
+  test("is what the preferences keep", () => {
+    const { width } = rig({}, { width: 300 });
     expect(width()).toBe("300px");
-    state.showing = "view";
-    sizer.size();
-    expect(width()).toBe("520px");
   });
 
   test("a closed panel keeps its width until it opens, as its handle would jump with it", () => {
-    const { sizer, state, width, sized } = rig({ open: false });
+    const { sizer, state, prefs, width, sized } = rig({ open: false });
     expect(width()).toBe("240px");
-    state.showing = "view";
+    prefs.width = 340;
     let drawn = 0;
     sizer.size(() => drawn++);
     expect(width()).toBe("240px");
@@ -404,18 +388,15 @@ describe("the width the panel takes", () => {
 
 describe("a narrow window", () => {
   test("shows a width kept wider at what fits, and leaves what is kept alone", () => {
-    const { width, kept, prefs, host } = rig({ showing: "view", view: 700 }, { viewWidth: 680 });
+    const { width, kept, prefs, host } = rig({ view: 700 }, { width: 680 });
     expect(width()).toBe("604px");
     expect(host.style.width).toBe("625px");
     expect(kept).toEqual([]);
-    expect(prefs.viewWidth).toBe(680);
+    expect(prefs.width).toBe(680);
   });
 
   test("gives the width back as the window grows, at once and with no glide", () => {
-    const { sizer, state, widths, sized, kept } = rig(
-      { showing: "view", view: 700 },
-      { viewWidth: 680 },
-    );
+    const { sizer, state, widths, sized, kept } = rig({ view: 700 }, { width: 680 });
     widths.length = 0;
     state.view = 1440;
     sizer.fit();
@@ -427,33 +408,33 @@ describe("a narrow window", () => {
     expect(kept).toEqual([]);
   });
 
-  test("keeps a view inside a window too narrow for its least", () => {
-    const { width } = rig({ showing: "view", view: 300 });
-    expect(width()).toBe("271px");
+  test("shows one kept wider at the least in a window with no room to spare", () => {
+    const { width } = rig({ view: 300 }, { width: 340 });
+    expect(width()).toBe("240px");
   });
 });
 
 describe("the width the panel says it has", () => {
   test("is its first one too, which the frame is not told of", () => {
-    const { wide, sized } = rig({}, { listWidth: 300 });
+    const { wide, sized } = rig({}, { width: 300 });
     expect(wide).toEqual([300]);
     expect(sized).toEqual([]);
   });
 
   test("is the one it glides to, said before the frame hears that it glides", () => {
     const order: string[] = [];
-    const { sizer, state, wide, sized } = rig();
+    const { sizer, prefs, wide, sized } = rig();
     wide.push = (px) => order.push(`wide ${px}`);
     sized.push = (told) => order.push(`sized ${told.glide}`);
-    state.showing = "view";
+    prefs.width = 340;
     sizer.size();
-    state.showing = "list";
+    prefs.width = 240;
     sizer.size();
     expect(order).toEqual(["wide 340", "sized true", "wide 240", "sized true"]);
   });
 
   test("follows the strip: each move of a drag, a double click, the keys, and the window", () => {
-    const { strip, sizer, state, wide } = rig({ showing: "view" });
+    const { strip, sizer, state, wide } = rig({}, { width: 340 });
     wide.length = 0;
     strip.fire("pointerdown", { clientX: 1000 });
     strip.fire("pointermove", { clientX: 940 });
@@ -461,20 +442,20 @@ describe("the width the panel says it has", () => {
     strip.fire("pointerup", { clientX: 900 });
     expect(wide).toEqual([400, 440]);
     strip.fire("dblclick");
-    expect(wide).toEqual([400, 440, 340]);
+    expect(wide).toEqual([400, 440, 240]);
     strip.fire("keydown", { key: "ArrowLeft" });
-    expect(wide).toEqual([400, 440, 340, 340 + WIDTH_STEP]);
-    state.view = 400;
+    expect(wide).toEqual([400, 440, 240, 240 + WIDTH_STEP]);
+    state.view = 270;
     sizer.fit();
-    expect(wide.at(-1)).toBe(widthIn("view", 340 + WIDTH_STEP, 400));
+    expect(wide.at(-1)).toBe(widthIn(240 + WIDTH_STEP, 270));
   });
 
   test("is not said again where the width stays, or while the panel is closed", () => {
-    const { sizer, state, wide } = rig();
+    const { sizer, state, prefs, wide } = rig();
     sizer.size();
     expect(wide).toEqual([240]);
     state.open = false;
-    state.showing = "view";
+    prefs.width = 340;
     sizer.size();
     expect(wide).toEqual([240]);
     state.open = true;
@@ -485,25 +466,25 @@ describe("the width the panel says it has", () => {
 
 describe("the strip of a pinned panel", () => {
   test("stops where the page is left its least, under the pointer and the keys", () => {
-    const { strip, width, kept, state } = rig({ showing: "view", docked: true, view: 1000 });
+    const { strip, width, kept, state } = rig({ docked: true, view: 1000 });
     expect(strip.attributes.get("aria-valuemax")).toBe("680");
     strip.fire("pointerdown", { clientX: 600 });
     strip.fire("pointermove", { clientX: 100 });
     expect(width()).toBe("680px");
     strip.fire("pointerup", { clientX: 100 });
-    expect(kept).toEqual([["view", 680]]);
+    expect(kept).toEqual([680]);
     strip.fire("keydown", { key: "ArrowLeft" });
     expect(width()).toBe("680px");
     strip.fire("keydown", { key: "End" });
-    expect(kept.at(-1)).toEqual(["view", 680]);
+    expect(kept.at(-1)).toBe(680);
     // Floating, the same window lets it go on to 720.
     state.docked = false;
     strip.fire("keydown", { key: "End" });
-    expect(kept.at(-1)).toEqual(["view", 720]);
+    expect(kept.at(-1)).toBe(720);
   });
 
   test("gives way as the panel is pinned: a width kept wider shows at what the page leaves", () => {
-    const { sizer, state, width, wide, prefs, strip } = rig({ view: 1000 }, { listWidth: 700 });
+    const { sizer, state, width, wide, prefs, strip } = rig({ view: 1000 }, { width: 700 });
     expect(width()).toBe("700px");
     state.docked = true;
     sizer.size();
@@ -511,14 +492,14 @@ describe("the strip of a pinned panel", () => {
     expect(wide).toEqual([700, 680]);
     expect(strip.attributes.get("aria-valuemax")).toBe("680");
     // What is kept stays, for when the panel floats again.
-    expect(prefs.listWidth).toBe(700);
+    expect(prefs.width).toBe(700);
     state.docked = false;
     sizer.size();
     expect(width()).toBe("700px");
   });
 
   test("narrows with the window down to its least, where the panel lies over the page", () => {
-    const { sizer, state, width } = rig({ docked: true, view: 1000 }, { listWidth: 600 });
+    const { sizer, state, width } = rig({ docked: true, view: 1000 }, { width: 600 });
     expect(width()).toBe("600px");
     state.view = 800;
     sizer.fit();
@@ -531,7 +512,7 @@ describe("the strip of a pinned panel", () => {
 
 describe("the strip", () => {
   test("is a separator the keys reach, that says its value and its limits", () => {
-    const { strip, sizer, state } = rig();
+    const { strip, sizer, state, prefs } = rig();
     expect(strip.className).toBe("sizer");
     expect(strip.tabIndex).toBe(0);
     expect(strip.attributes.get("role")).toBe("separator");
@@ -540,16 +521,16 @@ describe("the strip", () => {
     expect(strip.attributes.get("aria-valuenow")).toBe("240");
     expect(strip.attributes.get("aria-valuemin")).toBe("240");
     expect(strip.attributes.get("aria-valuemax")).toBe("720");
-    state.showing = "view";
+    prefs.width = 340;
     state.view = 700;
     sizer.size();
     expect(strip.attributes.get("aria-valuenow")).toBe("340");
-    expect(strip.attributes.get("aria-valuemin")).toBe("280");
+    expect(strip.attributes.get("aria-valuemin")).toBe("240");
     expect(strip.attributes.get("aria-valuemax")).toBe("604");
   });
 
-  test("a drag changes the width of what shows, live, with no glide, and keeps it once let go", () => {
-    const { strip, widths, sized, kept, dataset } = rig({ showing: "view" });
+  test("a drag changes the width, live, with no glide, and keeps it once let go", () => {
+    const { strip, widths, sized, kept, dataset } = rig({}, { width: 340 });
     widths.length = 0;
     strip.fire("pointerdown", { clientX: 1000 });
     expect(strip.captured).toBe(1);
@@ -563,33 +544,38 @@ describe("the strip", () => {
     ]);
     expect(kept).toEqual([]);
     strip.fire("pointerup", { clientX: 900 });
-    expect(kept).toEqual([["view", 440]]);
+    expect(kept).toEqual([440]);
     expect(strip.captured).toBeNull();
     expect(dataset.sizing).toBeUndefined();
     expect(sized).toHaveLength(2);
   });
 
-  test("a drag while the rows show changes their width, not a view's", () => {
-    const { strip, kept, prefs } = rig();
+  test("a width set while a view shows is the width once the rows show again", () => {
+    const { strip, sizer, kept, prefs, width } = rig();
+    // A view shows: the panel draws it at the width it has.
+    sizer.size();
     strip.fire("pointerdown", { clientX: 1000 });
     strip.fire("pointermove", { clientX: 950 });
     strip.fire("pointerup", { clientX: 950 });
-    expect(kept).toEqual([["list", 290]]);
-    expect(prefs.viewWidth).toBe(340);
+    expect(kept).toEqual([290]);
+    // The rows show again.
+    sizer.size();
+    expect(width()).toBe("290px");
+    expect(prefs.width).toBe(290);
   });
 
   test("stops at the least and the most", () => {
-    const { strip, width } = rig({ showing: "view" });
+    const { strip, width } = rig();
     strip.fire("pointerdown", { clientX: 1000 });
     strip.fire("pointermove", { clientX: 1500 });
-    expect(width()).toBe("280px");
+    expect(width()).toBe("240px");
     strip.fire("pointermove", { clientX: -500 });
     expect(width()).toBe("720px");
     strip.fire("pointerup");
   });
 
   test("on the left it is the panel's right edge, and a drag to the right is wider", () => {
-    const { strip, width } = rig({ showing: "view", side: "left" });
+    const { strip, width } = rig({ side: "left" }, { width: 340 });
     strip.fire("pointerdown", { clientX: 361 });
     strip.fire("pointermove", { clientX: 421 });
     expect(width()).toBe("400px");
@@ -597,7 +583,7 @@ describe("the strip", () => {
   });
 
   test("a press that never moves keeps nothing, and neither does another button or pointer", () => {
-    const { strip, kept, widths } = rig({ showing: "view" });
+    const { strip, kept, widths } = rig();
     const before = widths.length;
     strip.fire("pointerdown", { clientX: 1000 });
     strip.fire("pointermove", { clientX: 900, pointerId: 2 });
@@ -612,7 +598,7 @@ describe("the strip", () => {
 
   test("a drag the browser or the window takes away goes back to the width that is kept", () => {
     for (const how of ["pointercancel", "lostpointercapture", "cancel"]) {
-      const { strip, sizer, width, kept, dataset } = rig({ showing: "view" });
+      const { strip, sizer, width, kept, dataset } = rig({}, { width: 340 });
       strip.fire("pointerdown", { clientX: 1000 });
       strip.fire("pointermove", { clientX: 900 });
       expect(width()).toBe("440px");
@@ -628,42 +614,33 @@ describe("the strip", () => {
     }
   });
 
-  test("a double click puts the width of what shows back to its default", () => {
-    const view = rig({ showing: "view" }, { listWidth: 300, viewWidth: 520 });
-    view.strip.fire("dblclick");
-    expect(view.kept).toEqual([["view", 340]]);
-    expect(view.width()).toBe("340px");
-    expect(view.prefs.listWidth).toBe(300);
-    const list = rig({}, { listWidth: 300, viewWidth: 520 });
-    list.strip.fire("dblclick");
-    expect(list.kept).toEqual([["list", 240]]);
-    expect(list.width()).toBe("240px");
+  test("a double click puts the width back to its default", () => {
+    const { strip, kept, width } = rig({}, { width: 520 });
+    strip.fire("dblclick");
+    expect(kept).toEqual([240]);
+    expect(width()).toBe("240px");
   });
 
   test("the arrows change the width by 16, Home and End go to the limits, and each is kept", () => {
-    const { strip, kept, width } = rig({ showing: "view" });
+    const { strip, kept, width } = rig({}, { width: 340 });
     expect(strip.fire("keydown", { key: "ArrowLeft" })).toBe(true);
     expect(strip.fire("keydown", { key: "ArrowLeft" })).toBe(true);
     expect(strip.fire("keydown", { key: "ArrowRight" })).toBe(true);
-    expect(kept).toEqual([
-      ["view", 356],
-      ["view", 372],
-      ["view", 356],
-    ]);
+    expect(kept).toEqual([356, 372, 356]);
     strip.fire("keydown", { key: "Home" });
-    expect(width()).toBe("280px");
+    expect(width()).toBe("240px");
     strip.fire("keydown", { key: "End" });
     expect(width()).toBe("720px");
   });
 
   test("the keys glide the panel, which the frame follows", () => {
-    const { strip, sized } = rig({ showing: "view" });
+    const { strip, sized } = rig();
     strip.fire("keydown", { key: "ArrowLeft" });
-    expect(sized).toEqual([{ glide: true, host: "377px" }]);
+    expect(sized).toEqual([{ glide: true, host: "277px" }]);
   });
 
   test("leaves every other key, and one with a modifier, to the panel", () => {
-    const { strip, kept } = rig({ showing: "view" });
+    const { strip, kept } = rig();
     expect(strip.fire("keydown", { key: "a" })).toBe(false);
     expect(strip.fire("keydown", { key: "Escape" })).toBe(false);
     expect(strip.fire("keydown", { key: "ArrowLeft", metaKey: true })).toBe(false);
@@ -672,8 +649,8 @@ describe("the strip", () => {
   });
 
   test("the keys start from the width that shows, in a window that holds a kept one narrower", () => {
-    const { strip, kept } = rig({ showing: "view", view: 700 }, { viewWidth: 680 });
+    const { strip, kept } = rig({ view: 700 }, { width: 680 });
     strip.fire("keydown", { key: "ArrowRight" });
-    expect(kept).toEqual([["view", 604 - 16]]);
+    expect(kept).toEqual([604 - 16]);
   });
 });

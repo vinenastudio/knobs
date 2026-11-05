@@ -40,8 +40,7 @@ function quietPrefs(onHandle: (on: boolean) => void = () => {}): LivePrefs {
   return {
     get: () => ({
       handle: true,
-      listWidth: 240,
-      viewWidth: 340,
+      width: 240,
       stylesMode: "simple",
       stylesBox: true,
       changesDiff: false,

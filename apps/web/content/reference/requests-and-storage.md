@@ -8,8 +8,8 @@ order: 6
 
 press `⇧N` (`Shift N` off a Mac), or find `requests` in the search, to see what
 the page asks for, as a view in the panel: a row a request, the newest on top,
-with its method, name, status and time. the panel is wider while the view
-shows, and as wide as you drag its edge. a filter finds rows by address, method
+with its method, name, status and time. the view shows at the panel's
+width, as wide as you drag its edge. a filter finds rows by address, method
 or status, and `all`, `fetch/xhr` and `other` pick whose requests show. a click
 on a row, or enter, shows it in full, laid out and worded as the browser's own
 network panel does it: the method, path, status and time on top, then the tabs
