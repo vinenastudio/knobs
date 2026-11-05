@@ -140,41 +140,65 @@ export function createElementsView(context: StylesContext, parts: ElementsParts 
   split.tabIndex = 0;
   node.append(tree.node, split, styles.node, changes.node);
 
+  /** The tallest the tree goes: 85% of its window's height. */
+  function tallest(): number {
+    const view = tree.node.ownerDocument?.defaultView ?? window;
+    return Math.max(TREE_MIN, Math.round(view.innerHeight * 0.85));
+  }
+
+  /** Tells the separator's range and the tree's height now. */
+  function tell(most: number, now: number): void {
+    split.setAttribute("aria-valuemax", String(most));
+    split.setAttribute("aria-valuenow", String(now));
+  }
+
+  /** Tells the tree's height as laid out, before any resize. */
+  function measure(): void {
+    tell(tallest(), Math.round(tree.node.offsetHeight));
+  }
+
   /** Sets the tree's height, kept between its least and 85% of its window's height. */
   function size(height: number): void {
-    const view = tree.node.ownerDocument?.defaultView ?? window;
-    const most = Math.max(TREE_MIN, Math.round(view.innerHeight * 0.85));
+    const most = tallest();
     const next = Math.round(Math.min(most, Math.max(TREE_MIN, height)));
     tree.node.style.height = `${next}px`;
-    split.setAttribute("aria-valuemax", String(most));
-    split.setAttribute("aria-valuenow", String(next));
+    tell(most, next);
   }
+
+  const frameView = tree.node.ownerDocument?.defaultView ?? window;
+  const firstFrame = frameView.requestAnimationFrame?.(measure);
 
   /** The drag going on, to take its listeners off when the view goes mid drag. */
   let stopDrag: (() => void) | null = null;
 
   function onSplitDown(event: PointerEvent): void {
     if (event.button !== 0) return;
+    stopDrag?.();
     event.preventDefault();
+    const id = event.pointerId;
     const from = event.clientY;
     const was = tree.node.offsetHeight;
-    split.setPointerCapture?.(event.pointerId);
+    split.setPointerCapture?.(id);
     split.setAttribute("data-drag", "true");
-    const move = (next: PointerEvent): void => size(was + next.clientY - from);
+    const move = (next: PointerEvent): void => {
+      if (next.pointerId === id) size(was + next.clientY - from);
+    };
+    const end = (next: PointerEvent): void => {
+      if (next.pointerId === id) up();
+    };
     const up = (): void => {
       split.removeEventListener("pointermove", move);
-      split.removeEventListener("pointerup", up);
-      split.removeEventListener("pointercancel", up);
-      split.removeEventListener("lostpointercapture", up);
+      split.removeEventListener("pointerup", end);
+      split.removeEventListener("pointercancel", end);
+      split.removeEventListener("lostpointercapture", end);
       split.removeAttribute("data-drag");
       stopDrag = null;
     };
-    stopDrag?.();
     stopDrag = up;
     split.addEventListener("pointermove", move);
-    split.addEventListener("pointerup", up);
-    split.addEventListener("pointercancel", up);
-    split.addEventListener("lostpointercapture", up);
+    split.addEventListener("pointerup", end);
+    split.addEventListener("pointercancel", end);
+    split.addEventListener("lostpointercapture", end);
   }
 
   function onSplitKey(event: KeyboardEvent): void {
@@ -187,6 +211,7 @@ export function createElementsView(context: StylesContext, parts: ElementsParts 
 
   split.addEventListener("pointerdown", onSplitDown);
   split.addEventListener("keydown", onSplitKey);
+  split.addEventListener("focus", measure);
 
   function onKeydown(event: KeyboardEvent): void {
     const key = undoKey(event);
@@ -219,6 +244,8 @@ export function createElementsView(context: StylesContext, parts: ElementsParts 
       stopDrag?.();
       split.removeEventListener("pointerdown", onSplitDown);
       split.removeEventListener("keydown", onSplitKey);
+      split.removeEventListener("focus", measure);
+      if (firstFrame !== undefined) frameView.cancelAnimationFrame?.(firstFrame);
       stopFollow();
       tree.destroy();
       styles.destroy();

@@ -2,7 +2,7 @@
 
 ## unreleased
 
-- the `keep edits after reload` switch is in the settings now, with a short hint under it, and no longer at the top of the Elements view. as before, it is not there in fresh mode or in devknobs' frame, which keep no edits
+- the `keep edits after reload` switch is in the settings now, with a short hint under it, and no longer at the top of the Elements view. as before, it is not there in fresh mode or in the copy of devknobs inside its own frame, which keeps nothing itself; the page's keeper still keeps edits made in the frame
 - the line between the DOM tree and the styles is a full-width drag handle, also moved with ↑ ↓
 
 ## 0.6.0

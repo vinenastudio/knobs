@@ -1446,14 +1446,15 @@ input[type="checkbox"]:focus-visible { outline: 1px solid var(--faint); outline-
 }
 .dom[style*="height"] { flex-grow: 0; }
 /* The line between the tree and the styles, which drags for the tree's
-   height as the browser's own does: 7 tall to the pointer, 1 in the flow,
-   a hairline that darkens under the pointer, the keys' focus or a
+   height as the browser's own does: 7 tall to the pointer, -4 in the flow
+   so with the two 4px gaps 4 stay between the tree and the styles, a
+   hairline at 2 of them that darkens under the pointer, the keys' focus or a
    drag. */
 .dom-split {
   position: relative;
   flex: none;
   height: 7px;
-  margin: -5px 0 -1px;
+  margin: -5px 0 -6px;
   cursor: row-resize;
   touch-action: none;
   user-select: none;

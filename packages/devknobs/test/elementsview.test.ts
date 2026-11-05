@@ -220,8 +220,20 @@ describe("the elements view", () => {
     picked = null;
   });
 
-  test("has no switch to keep the edits after a reload: it is in the settings", () => {
-    const node = start();
+  test("has no switch to keep the edits after a reload, even with a keeper: it is in the settings", () => {
+    const keep: Keeper = {
+      known: () => true,
+      on: () => false,
+      set: () => undefined,
+      restored: () => null,
+      waiting: () => [],
+      applyWaiting: () => undefined,
+      kept: () => 0,
+      cut: () => 0,
+      subscribe: () => () => undefined,
+      stop: () => undefined,
+    };
+    const node = start(keep);
     expect(node.all().some((one) => one.getAttribute("role") === "switch")).toBe(false);
   });
 
@@ -269,14 +281,14 @@ describe("the elements view", () => {
     const down = split.fire("pointerdown", { button: 0, clientY: 500, pointerId: 1 });
     expect(down.prevented).toBe(true);
     expect(split.getAttribute("data-drag")).toBe("true");
-    split.fire("pointermove", { clientY: 540 });
+    split.fire("pointermove", { clientY: 540, pointerId: 1 });
     expect(dom.style.height).toBe("340px");
-    split.fire("pointermove", { clientY: 100 });
+    split.fire("pointermove", { clientY: 100, pointerId: 1 });
     expect(dom.style.height).toBe("96px");
-    split.fire("pointermove", { clientY: 2000 });
+    split.fire("pointermove", { clientY: 2000, pointerId: 1 });
     expect(dom.style.height).toBe("850px");
     expect(split.getAttribute("aria-valuenow")).toBe("850");
-    split.fire("pointerup");
+    split.fire("pointerup", { pointerId: 1 });
     expect(split.getAttribute("data-drag")).toBeNull();
     split.fire("pointermove", { clientY: 600 });
     expect(dom.style.height).toBe("850px");
@@ -290,10 +302,30 @@ describe("the elements view", () => {
     split.fire("pointermove", { clientY: 540 });
     expect(dom.style.height).toBeUndefined();
     split.fire("pointerdown", { button: 0, clientY: 500, pointerId: 1 });
-    split.fire("lostpointercapture");
+    split.fire("lostpointercapture", { pointerId: 1 });
     expect(split.getAttribute("data-drag")).toBeNull();
     split.fire("pointermove", { clientY: 540 });
     expect(dom.style.height).toBeUndefined();
+  });
+
+  test("its line leaves a second pointer alone during a drag", () => {
+    const { split, dom } = splitOf(start(), 300);
+    split.fire("pointerdown", { button: 0, clientY: 500, pointerId: 1 });
+    split.fire("pointermove", { clientY: 900, pointerId: 2 });
+    expect(dom.style.height).toBeUndefined();
+    split.fire("pointerup", { pointerId: 2 });
+    expect(split.getAttribute("data-drag")).toBe("true");
+    split.fire("pointermove", { clientY: 540, pointerId: 1 });
+    expect(dom.style.height).toBe("340px");
+    split.fire("pointerup", { pointerId: 1 });
+    expect(split.getAttribute("data-drag")).toBeNull();
+  });
+
+  test("its line tells the tree's height and its most before any resize", () => {
+    const { split } = splitOf(start(), 300);
+    split.fire("focus");
+    expect(split.getAttribute("aria-valuenow")).toBe("300");
+    expect(split.getAttribute("aria-valuemax")).toBe("850");
   });
 
   test("its line grows the tree by 16 on ↓, 64 with ⇧, and keeps it to 96 at least, without undoing", () => {
