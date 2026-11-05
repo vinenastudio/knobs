@@ -9,12 +9,13 @@
  * the field is typed in, filtered by what was typed, its start first, and
  * whole as an empty field gets the focus:
  *
- *   ↑ ↓      mark one in the list     ↩       take the one marked, then the field goes on
- *   Tab      take the one marked, or the first, then the field goes on
+ *   ↑ ↓      mark one in the list     ↩ Tab   take the one marked, then the field goes on
  *   esc      close the list           click   take it, the field stays open
  *
- * None is marked as the list opens, so ↩ on what was typed puts that on.
- * ↩ in an empty field takes from the list only once it was moved in.
+ * None is marked as the list opens. With none marked, ↩ and Tab take the
+ * first only where it completes the word typed: a number, a `#` color or an
+ * empty field keeps what was typed. ↩ in an empty field takes from the list
+ * only once it was moved in.
  *
  * To use it:
  *
@@ -244,6 +245,18 @@ export function wordAt(text: string, caret: number): { start: number; end: numbe
   return { start, end, word: text.slice(start, caret) };
 }
 
+/**
+ * Whether a suggestion completes the word typed, so ↩ with none marked may
+ * take it: it starts with the word, case aside, past a `var(` of its own.
+ * A number or a `#` color is a value of its own, never the start of a keyword.
+ */
+export function completes(word: string, suggestion: string): boolean {
+  if (word === "" || /^(\d|\.|-\d|#)/.test(word)) return false;
+  const typed = word.toLowerCase();
+  const lower = suggestion.toLowerCase();
+  return lower.startsWith(typed) || lower.startsWith(`var(${typed}`);
+}
+
 /** What a key does while the list is open: move the mark to `to`, close it, take the one marked, or nothing of the list's. */
 export type ListKey = { act: "move"; to: number } | { act: "close" } | { act: "take" } | null;
 
@@ -260,7 +273,7 @@ export function listKey(event: Pick<KeyboardEvent, "key" | "shiftKey" | "metaKey
 }
 
 export interface Autocomplete {
-  /** A key on the field. True where it was the list's own: the field leaves it alone. Enter and Tab take the one marked, else the first, and still go to the field. */
+  /** A key on the field. True where it was the list's own: the field leaves it alone. Enter and Tab take the one marked, else the first where it completes the word, and still go to the field. */
   key(event: KeyboardEvent): boolean;
   /** Whether the list shows. */
   open(): boolean;
@@ -297,8 +310,6 @@ export function autocomplete(input: HTMLInputElement | HTMLTextAreaElement, item
   let options: HTMLElement[] = [];
   /** The escape that closed the list from the panel, which the field is still to hear. */
   let ate = false;
-  /** Whether the list was typed or moved in since it opened, so ↩ in an empty field may take from it. */
-  let touched = false;
 
   function place(): { start: number; end: number; word: string } {
     const text = input.value;
@@ -328,8 +339,11 @@ export function autocomplete(input: HTMLInputElement | HTMLTextAreaElement, item
   }
 
   function take(value: string): void {
-    const { start, end } = place();
+    let { start, end } = place();
     const text = input.value;
+    // `var(` typed already, and its `)`, are the suggestion's own.
+    if (value.startsWith("var(") && text.slice(0, start).endsWith("var(")) start -= 4;
+    if (value.startsWith("var(") && text[end] === ")") end++;
     input.value = `${text.slice(0, start)}${value}${text.slice(end)}`;
     const caret = start + value.length;
     input.setSelectionRange?.(caret, caret);
@@ -352,12 +366,6 @@ export function autocomplete(input: HTMLInputElement | HTMLTextAreaElement, item
       const option = el("div", "ac-item", value);
       option.id = `${id}-${index}`;
       option.setAttribute("role", "option");
-      // Pressed, not clicked, so the field keeps the focus.
-      option.addEventListener("pointerdown", (event: Event) => event.preventDefault());
-      option.addEventListener("click", () => {
-        take(value);
-        input.focus({ preventScroll: true });
-      });
       return option;
     });
     list.replaceChildren(...options);
@@ -371,10 +379,19 @@ export function autocomplete(input: HTMLInputElement | HTMLTextAreaElement, item
     mark(-1);
   }
 
+  // A press on the list, an option or its scrollbar, leaves the focus in the field.
+  list.addEventListener("mousedown", (event: Event) => event.preventDefault());
+  list.addEventListener("click", (event: Event) => {
+    const option = (event.target as Element | null)?.closest?.(".ac-item");
+    const value = shown[options.indexOf(option as HTMLElement)];
+    if (value === undefined) return;
+    take(value);
+    input.focus({ preventScroll: true });
+  });
+
   input.addEventListener("input", (event: Event) => {
     // A suggestion taken says so too, and leaves the list closed.
     if (event.isTrusted === false && shown.length === 0) return;
-    touched = true;
     update();
   });
   input.addEventListener("blur", close);
@@ -383,7 +400,6 @@ export function autocomplete(input: HTMLInputElement | HTMLTextAreaElement, item
     all = null;
     // An empty field shows all it may take, with nothing typed.
     if (input.value !== "") return;
-    touched = false;
     update();
   });
 
@@ -398,12 +414,10 @@ export function autocomplete(input: HTMLInputElement | HTMLTextAreaElement, item
       const what = listKey(event, shown.length > 0, shown.length, at);
       if (!what) return false;
       if (what.act === "take") {
-        if (at < 0 && !touched && input.value === "") {
-          close();
-          return false;
-        }
-        const value = shown[Math.max(at, 0)];
-        if (value !== undefined && value !== place().word) take(value);
+        const { word } = place();
+        const first = shown[0];
+        const value = at >= 0 ? shown[at] : first !== undefined && completes(word, first) ? first : undefined;
+        if (value !== undefined && value !== word) take(value);
         else close();
         return false;
       }
@@ -413,10 +427,7 @@ export function autocomplete(input: HTMLInputElement | HTMLTextAreaElement, item
         // Down opens the list for what is typed, the first marked.
         update();
         if (shown.length > 0) mark(0);
-      } else {
-        touched = true;
-        mark(what.to);
-      }
+      } else mark(what.to);
       return what.act !== "close" || event.key === "Escape";
     },
     open: () => shown.length > 0,

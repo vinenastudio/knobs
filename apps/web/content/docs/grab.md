@@ -56,8 +56,9 @@ click a value to edit it, the checkbox at a line's start turns it off and
 on, and `+ add property` adds one. as you type a name or a value, a list
 suggests what the browser takes: every property it knows and the page's
 custom properties, then for a value its keywords, named colors and
-`var(--x)`. ↑ and ↓ pick one, ↩ or Tab takes it (Tab in a name goes on to
-the value), and esc closes the list. the changes at the foot count the edits,
+`var(--x)`; an empty field shows the whole list. ↑ and ↓ pick one, ↩ or Tab
+takes it, or the first where it completes what you typed (Tab in a name goes
+on to the value), and esc closes the list. the changes at the foot count the edits,
 `changes (N)`: click it to show each edit as `-` and `+` lines, and it stays
 as you leave it. `Z` undoes and `⇧Z` (`Shift Z` off a Mac) redoes while the
 focus is in the view and not in a field (⌘Z and Ctrl Z do not), and `copy
@@ -91,6 +92,8 @@ it is off at first, and off forgets them. html and attribute edits are
 never made on load: they wait in the changes until you click `apply`, as a
 page script could have planted them, and one that could run a script is
 never made. a page keeps its first 200 edits, up to 256 KB, for 20 pages at
-most; forced states and edits in the width knob's frame are never kept. kept edits hold the page's text, attribute values and markup as
+most; forced states are never kept. edits made in devknobs' frame, for a
+pinned panel or a device, are kept while it shows the same page, and made
+again in the frame after a reload. kept edits hold the page's text, attribute values and markup as
 edited. with the npm package they are in the page's `localStorage`, with the
 extension in its own storage.

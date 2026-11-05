@@ -211,13 +211,17 @@ function around(frame: HTMLElement): Around {
   return { box, body, bar: height(box?.querySelector?.(".dom-acts")), foot: height(body?.querySelector?.(".changes")) };
 }
 
-/** Insert text in place of the selection, as typing does, so the browser's undo takes it back. */
-function insertText(area: HTMLTextAreaElement, insert: string): void {
-  if (insert === "") return;
+/**
+ * Insert text in place of the selection, as typing does, so the browser's undo
+ * takes it back. True where the browser put it in, which says so with `input`.
+ */
+function insertText(area: HTMLTextAreaElement, insert: string): boolean {
+  if (insert === "") return false;
   const doc: unknown = area.ownerDocument;
   const exec: unknown = doc ? Reflect.get(doc, "execCommand") : null;
-  if (typeof exec === "function" && Reflect.apply(exec, doc, ["insertText", false, insert]) === true) return;
+  if (typeof exec === "function" && Reflect.apply(exec, doc, ["insertText", false, insert]) === true) return true;
   area.setRangeText(insert, area.selectionStart, area.selectionEnd, "end");
+  return false;
 }
 
 /** The editor for `value`, its size from `size`, which keeps what the user sets. */
@@ -326,9 +330,9 @@ export function htmlEditor(value: string, label: string, size: { get(): HtmlSize
     if (!typed) return;
     event.preventDefault();
     const start = area.selectionStart ?? 0;
-    insertText(area, typed.insert);
+    const heard = insertText(area, typed.insert);
     area.setSelectionRange(start + typed.caret, start + typed.caret);
-    paint();
+    if (!heard) paint();
   });
   // A press on the editor's own parts keeps the focus in the text, which would put the edit on as it left.
   frame.addEventListener("pointerdown", (event: Event) => {

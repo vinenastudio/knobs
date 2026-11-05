@@ -315,12 +315,15 @@ modes, and each edit goes on the page at once:
   custom properties the page sets. values are the property's keywords the
   browser takes (`CSS.supports`), named colors where it takes a color,
   `var(--x)` for each custom property, and `inherit`, `initial`, `unset`,
-  `revert` and `revert-layer`. ↑ and ↓ mark one (↓ also opens the list), ↩
-  takes the one marked (with none marked ↩ puts on what was typed), Tab
-  takes the one marked or the first, and in a name goes on to the value. esc
-  closes the list, and a second esc leaves the field. a click on one takes
-  it. in a value the word at the caret is what a suggestion replaces, so
-  `1px so` becomes `1px solid`
+  `revert` and `revert-layer`. an empty field shows the whole list as it
+  gets the focus. ↑ and ↓ mark one (↓ also opens the list), and ↩ or Tab
+  takes the one marked; Tab in a name goes on to the value. with none
+  marked, ↩ and Tab take the first only where it starts with the word typed,
+  so `bl` becomes `block`, while a number such as `1`, a `#` color, a word
+  ended with a space and an empty field keep what was typed. esc closes the
+  list, and a second esc leaves the field. a click on one takes it. in a
+  value the word at the caret is what a suggestion replaces, so `1px so`
+  becomes `1px solid`, and `var(--b` becomes `var(--brand)`
 - `+ add property` under `element.style` and under each rule takes a name,
   then a value. `element.style` shows even with no `style` attribute, so a
   property can be added to the element itself. in `simple` mode the line is
@@ -420,8 +423,9 @@ page. the switch is on for a page while it keeps edits, in every tab. a
 page keeps its first 200 edits, up to 256 KB of json; past that the changes
 say `only the first 200 edits are kept after a reload`. edits are kept for 20
 pages at most: the page kept longest ago is forgotten first. forced states
-are no edits and are never kept, nor are edits made in the width knob's
-frame. with the npm package they are in the page's `localStorage`, one item
+are no edits and are never kept. edits made in devknobs' frame, for a
+pinned panel or a device, are kept while the frame shows the same page (its
+origin and path), and made again in the frame after a reload. with the npm package they are in the page's `localStorage`, one item
 per page, `devknobs:edits:` and the path; in fresh mode nothing is kept or
 made again; with the
 extension, in the extension's own storage (see

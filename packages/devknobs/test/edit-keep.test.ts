@@ -11,6 +11,7 @@ import {
   MAX_BYTES,
   MAX_EDITS,
   MAX_PAGES,
+  pageSettled,
   REASONS,
   type Replay,
   readKept,
@@ -499,6 +500,65 @@ describe("the keeper", () => {
       },
     } as unknown as Window;
     expect(framedPage(top, closed, "/")).toBeNull();
+  });
+
+  describe("the page settled, and the frame's page where it shows in devknobs' frame", () => {
+    /** A window whose timers count the polls, and the windows `settled` was asked of. */
+    function polling(): { view: Window; polls: () => number; asked: Window[]; settle: (view: Window) => Promise<void> } {
+      let polls = 0;
+      const asked: Window[] = [];
+      const view = {
+        setTimeout: (run: () => void, delay: number) => {
+          polls++;
+          return setTimeout(run, delay);
+        },
+      } as unknown as Window;
+      return {
+        view,
+        polls: () => polls,
+        asked,
+        settle: async (one) => {
+          asked.push(one);
+        },
+      };
+    }
+
+    test("with no frame shown, waits for the page alone and never asks for the frame", async () => {
+      const { view, polls, asked, settle } = polling();
+      let askedFrame = 0;
+      await pageSettled(
+        view,
+        () => false,
+        () => {
+          askedFrame++;
+          return null;
+        },
+        3000,
+        settle,
+      );
+      expect(asked).toEqual([view]);
+      expect(askedFrame).toBe(0);
+      expect(polls()).toBe(0);
+    });
+
+    test("waits for the frame to come, then for its page to settle", async () => {
+      const { view, polls, asked, settle } = polling();
+      const inner = {} as Window;
+      let tries = 0;
+      await pageSettled(view, () => true, () => (++tries > 3 ? inner : null), 3000, settle);
+      expect(asked).toEqual([view, inner]);
+      expect(polls()).toBe(3);
+    });
+
+    test("gives up on a frame that never comes after `longest`", async () => {
+      const { view, polls, asked, settle } = polling();
+      const began = Date.now();
+      await pageSettled(view, () => true, () => null, 120, settle);
+      expect(asked).toEqual([view]);
+      expect(Date.now() - began).toBeGreaterThanOrEqual(120);
+      expect(polls()).toBeGreaterThanOrEqual(2);
+      expect(polls()).toBeLessThan(10);
+    });
   });
 
   test("an edit too big to keep leaves the switch on, with a store that tells of its own writes", () => {

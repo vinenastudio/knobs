@@ -353,13 +353,19 @@ export function framedPage(view: Window, inner: Window | null, path: string): Wi
  * frame, as `framing` says it does, the frame's page too: up to `longest` ms
  * for `frame` to give it, then as long as `settled` waits for it.
  */
-export async function pageSettled(view: Window, framing: () => boolean, frame: () => Window | null, longest = SETTLE_MAX): Promise<void> {
-  await settled(view);
+export async function pageSettled(
+  view: Window,
+  framing: () => boolean,
+  frame: () => Window | null,
+  longest = SETTLE_MAX,
+  settle: (view: Window) => Promise<void> = settled,
+): Promise<void> {
+  await settle(view);
   const until = realNow() + longest;
   for (;;) {
     if (!framing()) return;
     const inner = frame();
-    if (inner) return settled(inner);
+    if (inner) return settle(inner);
     if (realNow() > until) return;
     await new Promise((resolve) => view.setTimeout(resolve, 50));
   }

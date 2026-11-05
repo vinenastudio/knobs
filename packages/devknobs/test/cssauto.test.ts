@@ -239,6 +239,42 @@ describe("the list under a field", () => {
     expect(input.value).toBe("1px zz");
   });
 
+  test("↩ and Tab with none marked keep a number or an ended word as typed, and still finish a word", () => {
+    const { row, input } = field();
+    const auto = autocomplete(input as unknown as HTMLInputElement, () => ["auto", "none", "100%", "block"], "value");
+    typed(input, "1");
+    expect(options(row)).toEqual(["100%"]);
+    expect(key(input, auto, "Enter").mine).toBe(false);
+    expect(input.value).toBe("1");
+    expect(auto.open()).toBe(false);
+    typed(input, "1");
+    key(input, auto, "Tab");
+    expect(input.value).toBe("1");
+    typed(input, "1px ");
+    expect(auto.open()).toBe(true);
+    key(input, auto, "Enter");
+    expect(input.value).toBe("1px ");
+    typed(input, "bl");
+    key(input, auto, "Enter");
+    expect(input.value).toBe("block");
+  });
+
+  test("a var() taken keeps one var( and one )", () => {
+    const { input } = field();
+    const auto = autocomplete(input as unknown as HTMLInputElement, () => ["var(--brand)", "var(--gap)"], "value");
+    typed(input, "var(--b");
+    key(input, auto, "Enter");
+    expect(input.value).toBe("var(--brand)");
+    input.value = "var(--br)";
+    Reflect.set(input, "selectionStart", "var(--br".length);
+    input.fire("input");
+    key(input, auto, "Enter");
+    expect(input.value).toBe("var(--brand)");
+    typed(input, "1px var(--g");
+    key(input, auto, "Tab");
+    expect(input.value).toBe("1px var(--gap)");
+  });
+
   test("Tab takes the first, and a value keeps the words around its own", () => {
     const { input } = field();
     const auto = autocomplete(input as unknown as HTMLInputElement, () => ["solid", "dashed"], "value");
@@ -291,7 +327,12 @@ describe("the list under a field", () => {
     const { row, input } = field();
     const auto = autocomplete(input as unknown as HTMLInputElement, () => ["red", "rebeccapurple"], "value");
     typed(input, "re");
-    row.find("ac-item")[1]?.fire("click");
+    const [list] = row.find("ac-list");
+    // A press on the list, its scrollbar too, leaves the focus in the field.
+    expect(list?.fire("mousedown", { target: list }).prevented).toBe(true);
+    list?.fire("click", { target: list });
+    expect(auto.open()).toBe(true);
+    list?.fire("click", { target: row.find("ac-item")[1] });
     expect(input.value).toBe("rebeccapurple");
     expect(input.focused).toBe(true);
     typed(input, "re");

@@ -135,6 +135,40 @@ describe("the html editor", () => {
     expect(frame.find("tok-tag").map((one) => one.textContent)).toEqual(["<p>", "</p>"]);
   });
 
+  test("a key it types paints the colors once, by the browser's input or by itself", () => {
+    const editor = htmlEditor("<p", "edit as html");
+    const frame = editor.frame as unknown as FakeNode;
+    const area = editor.area as unknown as FakeNode;
+    const inner = frame.find("html-ed-inner")[0] as FakeNode;
+    let paints = 0;
+    const replace = inner.replaceChildren.bind(inner);
+    inner.replaceChildren = (...nodes) => {
+      paints++;
+      replace(...nodes);
+    };
+    const put = (text: string) => {
+      area.value += text;
+    };
+    Reflect.set(area, "ownerDocument", {
+      execCommand: (_: string, __: boolean, text: string) => {
+        put(text);
+        area.fire("input");
+        return true;
+      },
+    });
+    Reflect.set(area, "selectionStart", 2);
+    Reflect.set(area, "selectionEnd", 2);
+    area.fire("keydown", { key: ">" });
+    expect(area.value).toBe("<p></p>");
+    expect(paints).toBe(1);
+    Reflect.set(area, "ownerDocument", {});
+    Reflect.set(area, "setRangeText", put);
+    area.value = "<i";
+    area.fire("keydown", { key: ">" });
+    expect(area.value).toBe("<i></i>");
+    expect(paints).toBe(2);
+  });
+
   test("wraps a long line in the text and its colors alike, its number at its first row", () => {
     const editor = htmlEditor(`<a href="https://example.com/${"x".repeat(400)}">go</a>\n<p></p>`, "edit as html");
     const frame = editor.frame as unknown as FakeNode;
