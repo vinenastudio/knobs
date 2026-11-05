@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { htmlEditor, htmlTokens, INDENT, lineNumbers, typedKey } from "../src/ui/htmledit";
+import { htmlEditor, htmlTokens, INDENT, tokenLines, typedKey } from "../src/ui/htmledit";
 import { FakeNode } from "./styles-dom";
 
 describe("the html editor's colors", () => {
@@ -95,9 +95,16 @@ describe("what the html editor types", () => {
     expect(typedKey("<p>ab", 3, 5, "Enter")).toEqual({ insert: `\n${INDENT}`, caret: 3 });
   });
 
-  test("numbers each line", () => {
-    expect(lineNumbers("a\nb\n")).toBe("1\n2\n3");
-    expect(lineNumbers("")).toBe("1");
+  test("cuts the colors by line, a token that spans lines in pieces, an empty line empty", () => {
+    expect(tokenLines("<!-- a\nb --><p>\n")).toEqual([
+      [{ kind: "com", text: "<!-- a" }],
+      [
+        { kind: "com", text: "b -->" },
+        { kind: "tag", text: "<p>" },
+      ],
+      [],
+    ]);
+    expect(tokenLines("")).toEqual([[]]);
   });
 });
 
@@ -120,11 +127,26 @@ describe("the html editor", () => {
     expect(area.className).toContain("dom-html");
     expect(frame.find("html-ed-hl")[0]?.getAttribute("aria-hidden")).toBe("true");
     expect(frame.find("tok-attr").map((one) => one.textContent)).toEqual(["class"]);
-    expect(frame.find("html-ed-lines")[0]?.textContent).toBe("1");
+    expect(frame.find("html-ed-num").map((one) => one.textContent)).toEqual(["1"]);
     area.value = "<p>\n  x\n</p>";
     area.fire("input");
-    expect(frame.find("html-ed-lines")[0]?.textContent).toBe("1\n2\n3");
+    expect(frame.find("html-ed-num").map((one) => one.textContent)).toEqual(["1", "2", "3"]);
+    expect(frame.find("html-ed-text").map((one) => one.textContent)).toEqual(["<p>", "  x", "</p>"]);
     expect(frame.find("tok-tag").map((one) => one.textContent)).toEqual(["<p>", "</p>"]);
+  });
+
+  test("wraps a long line in the text and its colors alike, its number at its first row", () => {
+    const editor = htmlEditor(`<a href="https://example.com/${"x".repeat(400)}">go</a>\n<p></p>`, "edit as html");
+    const frame = editor.frame as unknown as FakeNode;
+    const area = editor.area as unknown as FakeNode;
+    // The browser's own wrap, never off: a line wider than the box goes on under itself.
+    expect(area.getAttribute("wrap")).toBeNull();
+    const inner = frame.find("html-ed-inner")[0] as FakeNode;
+    // A number and its line in one grid row, so the row is as tall as the line wraps to.
+    expect(inner.childNodes.map((one) => one.className)).toEqual(["html-ed-num", "html-ed-text", "html-ed-num", "html-ed-text"]);
+    // The text box starts its lines past the gutter, as the colored text does.
+    expect(inner.style.gridTemplateColumns).toBe("calc(1ch + 2 * var(--col-pad)) minmax(0, 1fr)");
+    expect(area.style.paddingLeft).toBe("calc(calc(1ch + 2 * var(--col-pad)) + var(--col-pad))");
   });
 
   test("starts at the size kept, and the expand button makes it the panel's and keeps that", () => {

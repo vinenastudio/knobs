@@ -42,7 +42,7 @@ import {
 import type { Change, EditLog } from "../edit/log";
 import { type Locate, locateSource, recordAt } from "../edit/source";
 import { isMac } from "../engine/ua";
-import { editField, selectorOf } from "./cssedit";
+import { editField, fitField, selectorOf } from "./cssedit";
 import { button, el } from "./dom";
 import { type Entry, isElement, markupOf, parentOf, type Row } from "./domtree";
 import { htmlEditor } from "./htmledit";
@@ -216,7 +216,7 @@ function pieceAt(at: EventTarget | null, code: HTMLElement | null): HTMLElement 
 }
 
 /** A one-line field of the tree. */
-function field(value: string, label: string): HTMLInputElement {
+function field(value: string, label: string): HTMLTextAreaElement {
   const input = editField(value, label);
   input.classList.add("dom-edit");
   return input;
@@ -225,7 +225,7 @@ function field(value: string, label: string): HTMLInputElement {
 /** How a field opens: the pieces of a line it stands in for, and what it does. */
 interface FieldOptions {
   pieces: Node[];
-  input: HTMLInputElement | HTMLTextAreaElement;
+  input: HTMLTextAreaElement;
   /** What stands in the line for the pieces, the field in it. Defaults to the field. */
   frame?: HTMLElement;
   /** Make the edits, and say whether they took: where they did not, the field stays open, marked. */
@@ -238,17 +238,17 @@ interface FieldOptions {
   closed?(): void;
 }
 
-/** A field that keeps line breaks, with its apply button, as tall as what it holds. */
+/** A field that keeps line breaks, with its apply button, as tall as what it holds up to a height that scrolls. */
 function boxField(value: string, label: string): Pick<FieldOptions, "input" | "multiline" | "apply"> {
   const area = document.createElement("textarea");
   area.className = "css-edit inline-field dom-edit";
   area.value = value;
+  area.rows = 2;
   area.spellcheck = false;
-  const fit = (): void => {
-    area.rows = Math.min(12, Math.max(2, area.value.split("\n").length + 1));
-  };
+  const fit = (): void => fitField(area);
   fit();
   area.addEventListener("input", fit);
+  area.addEventListener("focus", fit);
   const hint = applyHint(isMac());
   area.setAttribute("aria-label", `${label}, ${hint} to apply, esc to leave`);
   return { input: area, multiline: true, apply: button("chip dom-apply", `apply ${hint}`) };

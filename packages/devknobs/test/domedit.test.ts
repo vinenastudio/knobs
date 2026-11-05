@@ -109,7 +109,7 @@ describe("the tree's editor", () => {
     expect(bar(node)).toEqual(["edit text", "+ attribute", "edit as html", "hide", "delete"]);
     dblclick(node, line(node).find("tok-text")[0] as FakeNode);
     const input = field(node) as FakeNode;
-    expect([input.tag, input.value]).toEqual(["input", "Save"]);
+    expect([input.tag, input.value]).toEqual(["textarea", "Save"]);
     key(input, "Enter");
     expect(field(node)).toBeUndefined();
     expect(log.list()).toEqual([]);
@@ -151,6 +151,34 @@ describe("the tree's editor", () => {
     expect(box.classList.contains("bad")).toBe(true);
     expect(old.parentNode).not.toBeNull();
     expect(log.list()).toEqual([]);
+  });
+
+  test("a field wraps a long value in the line's width and grows down, never wider than its line", () => {
+    const url = `https://example.com/${"long-path-segment".repeat(12)}`;
+    const link = elem("a", { href: url }, text("Docs"));
+    page(() => [elem("body", {}, link)]);
+    const node = start(link);
+    key(list(node), "Enter");
+    const input = field(node) as FakeNode;
+    expect(input.tag).toBe("textarea");
+    expect(input.style.width).toBe("min(5ch, 100%)");
+    expect(input.parentElement?.className).toContain("dom-code");
+    // A long one pasted in: on the page, it takes the height its wrapped text needs.
+    Object.assign(input, { scrollHeight: 66 });
+    input.value = url;
+    input.fire("input");
+    expect(input.style.height).toBe("66px");
+    expect(input.style.width).toBe(`min(${url.length + 1}ch, 100%)`);
+    // A line break pasted in goes: the field is still one line.
+    input.value = "a\nb";
+    input.fire("input");
+    expect(input.value).toBe("ab");
+    key(input, "Escape");
+
+    // An attribute's field the same.
+    dblclick(node, line(node).all().find((one) => one.getAttribute("data-attr") === "href") as FakeNode);
+    const attr = field(node) as FakeNode;
+    expect([attr.tag, attr.style.width]).toEqual(["textarea", `min(${`href="${url}"`.length + 1}ch, 100%)`]);
   });
 
   test("a text with line breaks opens in a box that keeps them, Enter breaks the line and ⇧↩ puts it on", () => {

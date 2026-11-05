@@ -1467,29 +1467,23 @@ input[type="checkbox"]:focus-visible { outline: 1px solid var(--faint); outline-
 .dom-hid > .dom-code { opacity: 0.5; }
 /* The html editor: line numbers on the card's fill beside the text, which is
    colored by the pre under a clear text box, the two set alike to the
-   pixel. The grip under it drags its height, the button makes it the
-   panel's. */
-.dom-code:has(> .html-ed) { flex: 1 1 auto; }
+   pixel, a scrollbar's room kept in both, so a long line wraps at the same
+   place in each and its number stays at its first row. The grip under it
+   drags its height, the button makes it the panel's. */
+.dom-code:has(> .html-ed), .dom-code:has(> .dom-edit) { flex: 1 1 auto; }
 .dom-code > .html-ed { display: block; width: 100%; min-width: 30ch; margin: 2px 0; }
 .html-ed-body {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
   overflow: hidden;
   background: var(--bg);
   border-radius: 4px;
   box-shadow: inset 0 0 0 1px var(--faint);
 }
-.html-ed-lines {
+.html-ed-code {
+  position: relative;
+  height: 100%;
   overflow: hidden;
-  padding: 4px var(--col-pad);
-  color: var(--faint);
-  text-align: right;
-  white-space: pre;
-  background: var(--card);
-  user-select: none;
-  -webkit-user-select: none;
+  background: linear-gradient(var(--card), var(--card)) no-repeat;
 }
-.html-ed-code { position: relative; overflow: hidden; }
 .html-ed-hl, .html-ed .dom-html {
   position: absolute;
   inset: 0;
@@ -1497,14 +1491,27 @@ input[type="checkbox"]:focus-visible { outline: 1px solid var(--faint); outline-
   padding: 4px var(--col-pad);
   font: 11px/1.6 var(--mono);
   letter-spacing: normal;
-  white-space: pre;
+  white-space: pre-wrap;
   tab-size: 2;
-  overflow-wrap: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
 }
-.html-ed-hl { overflow: hidden; color: var(--fg); pointer-events: none; }
+.html-ed-hl { padding-left: 0; overflow: hidden; color: var(--fg); pointer-events: none; }
+.html-ed-hl > .html-ed-inner { display: grid; }
+.html-ed-num {
+  padding: 0 var(--col-pad);
+  color: var(--faint);
+  text-align: right;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.html-ed-text { min-height: 1.6em; padding-left: var(--col-pad); }
 .html-ed .dom-html {
   width: 100%;
   height: 100%;
+  max-height: none;
   overflow: auto;
   resize: none;
   color: transparent;
@@ -1707,11 +1714,20 @@ s.css-decl, s.css-decl .css-var, s.css-decl .css-name { color: var(--faint); tex
 .css-decl.can-edit:hover > .css-toggle, .css-toggle:focus-visible, .css-decl.off > .css-toggle { opacity: 1; }
 .css-editable { border-radius: 2px; cursor: text; }
 .css-editable:hover, .css-editable:focus-visible { background: var(--track); }
+/* A field wraps where its value is wider than its line, and grows down, as
+   tall as what it holds up to a height it scrolls in: nothing scrolls sideways. */
 .css-edit {
   max-width: 100%;
+  max-height: 18em;
   padding: 0;
   font: inherit;
   text-indent: 0;
+  vertical-align: top;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: hidden auto;
+  resize: none;
+  scrollbar-width: thin;
   color: var(--fg);
   background: var(--track);
   border-radius: 2px;

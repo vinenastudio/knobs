@@ -1,7 +1,9 @@
 /**
  * The editor of the tree's "edit as html": a text box over the same text
  * colored as html (tags, attributes, values, comments), the two kept in step
- * as it scrolls, with the line numbers beside it. It types as a code editor:
+ * as it scrolls, with the line numbers beside it. A line wider than the box
+ * wraps, in the text and its colors alike, and its number stands at its
+ * first row. It types as a code editor:
  *
  *   ↩        a new line with the line's indent, one more after an opening tag
  *   >        closes the tag it ends, `<div>` making `<div></div>`, but a void one
@@ -163,10 +165,16 @@ export function typedKey(text: string, start: number, end: number, key: string):
   return null;
 }
 
-/** The numbers of a text's lines, one under the other. */
-export function lineNumbers(text: string): string {
-  const count = text.split("\n").length;
-  return Array.from({ length: count }, (_, at) => String(at + 1)).join("\n");
+/** A text's tokens by line, each cut where it has a line break, so a line wraps as a block of its own. */
+export function tokenLines(text: string): HtmlToken[][] {
+  const lines: HtmlToken[][] = [[]];
+  for (const token of htmlTokens(text)) {
+    token.text.split("\n").forEach((piece, at) => {
+      if (at > 0) lines.push([]);
+      if (piece !== "") lines[lines.length - 1]?.push({ kind: token.kind, text: piece });
+    });
+  }
+  return lines;
 }
 
 export interface HtmlEditor {
@@ -216,10 +224,6 @@ function insertText(area: HTMLTextAreaElement, insert: string): void {
 export function htmlEditor(value: string, label: string, size: { get(): HtmlSize; set(next: HtmlSize): void } | null = null): HtmlEditor {
   const frame = el("div", "html-ed");
   const body = el("div", "html-ed-body");
-  const gutter = el("div", "html-ed-lines");
-  gutter.setAttribute("aria-hidden", "true");
-  const numbers = el("div", "html-ed-inner");
-  gutter.append(numbers);
   const code = el("div", "html-ed-code");
   const shade = el("pre", "html-ed-hl");
   shade.setAttribute("aria-hidden", "true");
@@ -229,10 +233,9 @@ export function htmlEditor(value: string, label: string, size: { get(): HtmlSize
   area.className = "css-edit inline-field dom-edit dom-html";
   area.value = value;
   area.spellcheck = false;
-  area.setAttribute("wrap", "off");
   area.setAttribute("aria-label", label);
   code.append(shade, area);
-  body.append(gutter, code);
+  body.append(code);
   const foot = el("div", "html-ed-foot");
   const grip = el("div", "html-ed-grip");
   grip.setAttribute("role", "separator");
@@ -245,18 +248,30 @@ export function htmlEditor(value: string, label: string, size: { get(): HtmlSize
   /** The tree's box the editor grew, and its own height before. */
   let boxWas: { box: HTMLElement; height: string; maxHeight: string } | null = null;
 
+  /**
+   * Each line is its number and its colored text, in a grid whose rows are
+   * as tall as the text wraps to. The gutter is as wide as the last number,
+   * and the text box starts its lines past it, so both wrap at one width.
+   */
   function paint(): void {
-    colored.replaceChildren(...htmlTokens(area.value).map((token) => el("span", `tok-${token.kind}`, token.text)));
-    // A last empty line still takes its height.
-    if (area.value.endsWith("\n") || area.value === "") colored.append(" ");
-    numbers.textContent = lineNumbers(area.value);
+    const lines = tokenLines(area.value);
+    const gutter = `calc(${String(lines.length).length}ch + 2 * var(--col-pad))`;
+    colored.style.gridTemplateColumns = `${gutter} minmax(0, 1fr)`;
+    area.style.paddingLeft = `calc(${gutter} + var(--col-pad))`;
+    code.style.backgroundSize = `${gutter} 100%`;
+    colored.replaceChildren(
+      ...lines.flatMap((tokens, at) => {
+        const text = el("span", "html-ed-text");
+        text.append(...tokens.map((token) => el("span", `tok-${token.kind}`, token.text)));
+        return [el("span", "html-ed-num", String(at + 1)), text];
+      }),
+    );
     follow();
   }
 
-  /** The colored text and the numbers scroll with the box. */
+  /** The colored text and its numbers scroll with the box. */
   function follow(): void {
-    colored.style.transform = `translate(${-area.scrollLeft || 0}px, ${-area.scrollTop || 0}px)`;
-    numbers.style.transform = `translateY(${-area.scrollTop || 0}px)`;
+    colored.style.transform = `translateY(${-area.scrollTop || 0}px)`;
   }
 
   /** How tall the apply button after the editor is. */

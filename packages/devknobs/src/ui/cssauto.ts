@@ -278,7 +278,7 @@ let made = 0;
  * Suggestions under a field: the whole of it for a name, the word at the
  * caret for a value. `items` is asked as the list opens.
  */
-export function autocomplete(input: HTMLInputElement, items: () => string[], kind: "name" | "value"): Autocomplete {
+export function autocomplete(input: HTMLInputElement | HTMLTextAreaElement, items: () => string[], kind: "name" | "value"): Autocomplete {
   const list = el("div", "ac-list");
   const id = `devknobs-ac-${++made}`;
   list.id = id;

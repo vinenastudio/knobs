@@ -114,19 +114,41 @@ export function selectorOf(element: Element): string {
   }
 }
 
-/** A one-line field of the editor, as wide as what it holds. */
-export function editField(value: string, label: string): HTMLInputElement {
-  const input = document.createElement("input");
+/**
+ * Fit a field to what it holds: as wide as its longest line, but never wider
+ * than the line it stands in, and as tall as its text wraps to, so a long
+ * value goes on under itself and nothing scrolls sideways.
+ */
+export function fitField(area: HTMLTextAreaElement): void {
+  const longest = Math.max(...area.value.split("\n").map((line) => line.length));
+  area.style.width = `min(${Math.max(longest + 1, 3)}ch, 100%)`;
+  area.style.height = "auto";
+  // Only a field on the page has a height to take.
+  const tall = Number(area.scrollHeight) || 0;
+  if (tall > 0) area.style.height = `${tall}px`;
+}
+
+/** A one-line field of the editor, as wide as what it holds, that wraps where it is wider than its line. */
+export function editField(value: string, label: string): HTMLTextAreaElement {
+  const input = document.createElement("textarea");
   input.className = "css-edit inline-field";
   input.value = value;
+  input.rows = 1;
   input.spellcheck = false;
   input.autocomplete = "off";
   input.setAttribute("aria-label", label);
-  const fit = (): void => {
-    input.size = Math.max(input.value.length + 1, 3);
-  };
-  fit();
-  input.addEventListener("input", fit);
+  input.addEventListener("input", () => {
+    // One line: a line break pasted in goes, as a one-line field drops it.
+    if (/[\r\n]/.test(input.value)) {
+      const caret = input.value.slice(0, input.selectionStart ?? input.value.length).replace(/[\r\n]/g, "").length;
+      input.value = input.value.replace(/[\r\n]/g, "");
+      input.setSelectionRange(caret, caret);
+    }
+    fitField(input);
+  });
+  // Its height is known once it is on the page, as it takes the focus.
+  input.addEventListener("focus", () => fitField(input));
+  fitField(input);
   return input;
 }
 
