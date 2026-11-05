@@ -1,7 +1,9 @@
 # changelog
 
-## unreleased
+## 0.6.0
 
+- every edit field in inspect, the DOM tree's texts and attributes, the html editor and the styles' values, wraps its lines and grows down, so a long value or address never scrolls sideways, at any panel width and in the width knob's frame
+- the styles show `;` after every declaration, in the simple mode too and on a line that is off, as the browsers' tools do. it is drawn apart from the value, never part of what is edited
 - edits made in devknobs' frame, with the panel pinned or a device shown, are kept for the page while the frame shows it (same origin and path), and after a reload they are made again in the frame once its page settles. edits made in any other window are still not kept
 - in inspect's styles, ↩ and Tab with no suggestion marked take the first only where it completes the word typed (`bl` takes `block`); a number such as `1`, a `#` color, a word ended with a space and an empty field keep what was typed. taking `var(--x)` after a typed `var(` no longer doubles it
 - an empty name or value field in inspect's styles shows every suggestion as it gets the focus. ↩ and Tab in it, before an arrow key, fill nothing; ↑ or ↓ then ↩ takes the one marked. a press on the list or its scrollbar keeps the focus in the field
