@@ -113,6 +113,7 @@ describe("the suggestions for what was typed", () => {
     expect(matching(["padding", "scroll-padding", "padding-top", "margin"], "PAD")).toEqual(["padding", "padding-top", "scroll-padding"]);
     expect(matching(["a", "b"], "")).toEqual(["a", "b"]);
     expect(matching(Array.from({ length: 80 }, (_, at) => `p${at}`), "p")).toHaveLength(MOST);
+    expect(matching(Array.from({ length: 80 }, (_, at) => `p${at}`), "")).toHaveLength(80);
   });
 
   test("of a value, are for the word the caret is in", () => {

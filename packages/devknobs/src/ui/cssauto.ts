@@ -232,7 +232,7 @@ export function matching(items: readonly string[], typed: string, most = MOST): 
     if (lower.startsWith(word)) starts.push(item);
     else if (word !== "" && lower.includes(word)) holds.push(item);
   }
-  return [...starts, ...holds].slice(0, most);
+  return word === "" ? starts : [...starts, ...holds].slice(0, most);
 }
 
 /** The word of a value the caret is in, which a suggestion takes the place of: after the last space, comma, slash or paren. */
