@@ -246,6 +246,46 @@ describe("the list under a field", () => {
     expect(input.value).toBe("1px solid");
   });
 
+  test("an empty field shows the whole list as it gets the focus, a filled one does not, and blur closes it", () => {
+    const { row, input } = field();
+    const auto = autocomplete(input as unknown as HTMLInputElement, () => ["padding", "margin"], "name");
+    input.fire("focus");
+    expect(options(row)).toEqual(["padding", "margin"]);
+    input.fire("blur");
+    expect(auto.open()).toBe(false);
+    input.value = "pad";
+    input.fire("focus");
+    expect(auto.open()).toBe(false);
+  });
+
+  test("a field with nothing to suggest shows nothing as it gets the focus", () => {
+    const { row, input } = field();
+    const auto = autocomplete(input as unknown as HTMLInputElement, () => [], "value");
+    input.fire("focus");
+    expect(auto.open()).toBe(false);
+    expect(row.find("ac-list")).toEqual([]);
+  });
+
+  test("↩ in an empty field takes from the list only once it was moved in, and typing still filters", () => {
+    const { row, input } = field();
+    const auto = autocomplete(input as unknown as HTMLInputElement, () => ["padding", "margin"], "name");
+    input.fire("focus");
+    expect(auto.open()).toBe(true);
+    expect(key(input, auto, "Enter").mine).toBe(false);
+    expect(input.value).toBe("");
+    input.fire("focus");
+    key(input, auto, "ArrowDown");
+    key(input, auto, "ArrowDown");
+    key(input, auto, "Enter");
+    expect(input.value).toBe("margin");
+    input.value = "";
+    input.fire("focus");
+    typed(input, "ma");
+    expect(options(row)).toEqual(["margin"]);
+    key(input, auto, "Tab");
+    expect(input.value).toBe("margin");
+  });
+
   test("a click on one takes it, and the escape the panel heard first closes the list alone", () => {
     const { row, input } = field();
     const auto = autocomplete(input as unknown as HTMLInputElement, () => ["red", "rebeccapurple"], "value");

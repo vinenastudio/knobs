@@ -6,13 +6,15 @@
  * each custom property, and the global keywords. What the browser knows is
  * asked of it, never listed here: the names come from a style's own keys,
  * and a keyword shows only where `CSS.supports` takes it. The list opens as
- * the field is typed in, filtered by what was typed, its start first:
+ * the field is typed in, filtered by what was typed, its start first, and
+ * whole as an empty field gets the focus:
  *
  *   ↑ ↓      mark one in the list     ↩       take the one marked, then the field goes on
  *   Tab      take the one marked, or the first, then the field goes on
  *   esc      close the list           click   take it, the field stays open
  *
  * None is marked as the list opens, so ↩ on what was typed puts that on.
+ * ↩ in an empty field takes from the list only once it was moved in.
  *
  * To use it:
  *
@@ -295,6 +297,8 @@ export function autocomplete(input: HTMLInputElement | HTMLTextAreaElement, item
   let options: HTMLElement[] = [];
   /** The escape that closed the list from the panel, which the field is still to hear. */
   let ate = false;
+  /** Whether the list was typed or moved in since it opened, so ↩ in an empty field may take from it. */
+  let touched = false;
 
   function place(): { start: number; end: number; word: string } {
     const text = input.value;
@@ -358,7 +362,10 @@ export function autocomplete(input: HTMLInputElement | HTMLTextAreaElement, item
     });
     list.replaceChildren(...options);
     if (!list.parentNode) input.parentNode?.append(list);
-    list.style.left = `${input.offsetLeft ?? 0}px`;
+    // Kept inside the field's row, where a long name would run past the panel.
+    const room = (list.parentNode as HTMLElement | null)?.clientWidth;
+    const left = input.offsetLeft ?? 0;
+    list.style.left = `${typeof room === "number" && room > 0 ? Math.max(0, Math.min(left, room - (list.offsetWidth ?? 0))) : left}px`;
     list.style.top = `${(input.offsetTop ?? 0) + (input.offsetHeight ?? 0)}px`;
     input.setAttribute("aria-expanded", "true");
     mark(-1);
@@ -367,12 +374,17 @@ export function autocomplete(input: HTMLInputElement | HTMLTextAreaElement, item
   input.addEventListener("input", (event: Event) => {
     // A suggestion taken says so too, and leaves the list closed.
     if (event.isTrusted === false && shown.length === 0) return;
+    touched = true;
     update();
   });
   input.addEventListener("blur", close);
   // What a value may be follows the name, which may have changed since.
   input.addEventListener("focus", () => {
     all = null;
+    // An empty field shows all it may take, with nothing typed.
+    if (input.value !== "") return;
+    touched = false;
+    update();
   });
 
   return {
@@ -386,6 +398,10 @@ export function autocomplete(input: HTMLInputElement | HTMLTextAreaElement, item
       const what = listKey(event, shown.length > 0, shown.length, at);
       if (!what) return false;
       if (what.act === "take") {
+        if (at < 0 && !touched && input.value === "") {
+          close();
+          return false;
+        }
         const value = shown[Math.max(at, 0)];
         if (value !== undefined && value !== place().word) take(value);
         else close();
@@ -397,7 +413,10 @@ export function autocomplete(input: HTMLInputElement | HTMLTextAreaElement, item
         // Down opens the list for what is typed, the first marked.
         update();
         if (shown.length > 0) mark(0);
-      } else mark(what.to);
+      } else {
+        touched = true;
+        mark(what.to);
+      }
       return what.act !== "close" || event.key === "Escape";
     },
     open: () => shown.length > 0,

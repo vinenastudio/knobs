@@ -1752,6 +1752,7 @@ s.css-decl, s.css-decl .css-var, s.css-decl .css-name { color: var(--faint); tex
   z-index: 3;
   display: grid;
   min-width: 16ch;
+  max-width: 100%;
   max-height: 12.8em;
   overflow-y: auto;
   padding: 2px 0;
@@ -1764,7 +1765,7 @@ s.css-decl, s.css-decl .css-var, s.css-decl .css-name { color: var(--faint); tex
   box-shadow: var(--lift), 0 0 0 1px var(--line);
   scrollbar-width: thin;
 }
-.ac-item { padding: 0 var(--col-pad); cursor: pointer; }
+.ac-item { padding: 0 var(--col-pad); overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 .ac-item:hover { background: var(--card); }
 .ac-item[aria-selected="true"] { background: var(--pick); }
 /* The line that adds a rule stands under the blocks, as the start of one. */
