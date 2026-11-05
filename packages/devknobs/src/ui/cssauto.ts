@@ -252,13 +252,13 @@ export function listKey(event: Pick<KeyboardEvent, "key" | "shiftKey" | "metaKey
   if (event.key === "ArrowDown") return { act: "move", to: (at + 1) % count };
   if (event.key === "ArrowUp") return { act: "move", to: at <= 0 ? count - 1 : at - 1 };
   if (event.key === "Escape") return { act: "close" };
-  if (event.key === "Enter") return at >= 0 ? { act: "take" } : null;
+  if (event.key === "Enter") return { act: "take" };
   if (event.key === "Tab") return event.shiftKey ? { act: "close" } : { act: "take" };
   return null;
 }
 
 export interface Autocomplete {
-  /** A key on the field. True where it was the list's own: the field leaves it alone. Enter and Tab take a suggestion and still go to the field. */
+  /** A key on the field. True where it was the list's own: the field leaves it alone. Enter and Tab take the one marked, else the first, and still go to the field. */
   key(event: KeyboardEvent): boolean;
   /** Whether the list shows. */
   open(): boolean;

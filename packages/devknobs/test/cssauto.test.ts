@@ -134,7 +134,7 @@ describe("the keys of the list", () => {
 
   test("↩ takes the one marked, and with none marked is the field's; Tab takes one; ⇧Tab and esc close it", () => {
     expect(listKey(press("Enter"), true, 3, 1)).toEqual({ act: "take" });
-    expect(listKey(press("Enter"), true, 3, -1)).toBeNull();
+    expect(listKey(press("Enter"), true, 3, -1)).toEqual({ act: "take" });
     expect(listKey(press("Tab"), true, 3, -1)).toEqual({ act: "take" });
     expect(listKey(press("Tab", true), true, 3, 0)).toEqual({ act: "close" });
     expect(listKey(press("Escape"), true, 3, 0)).toEqual({ act: "close" });
@@ -227,12 +227,20 @@ describe("the list under a field", () => {
     expect(key(input, auto, "Escape").mine).toBe(false);
   });
 
-  test("↩ with none marked leaves what was typed, Tab takes the first, and a value keeps the words around its own", () => {
+  test("↩ with none marked takes the first, as Tab does, and a list with no match leaves what was typed", () => {
     const { input } = field();
     const auto = autocomplete(input as unknown as HTMLInputElement, () => ["solid", "dashed"], "value");
     typed(input, "1px so");
     expect(key(input, auto, "Enter").mine).toBe(false);
-    expect(input.value).toBe("1px so");
+    expect(input.value).toBe("1px solid");
+    typed(input, "1px zz");
+    expect(key(input, auto, "Enter").mine).toBe(false);
+    expect(input.value).toBe("1px zz");
+  });
+
+  test("Tab takes the first, and a value keeps the words around its own", () => {
+    const { input } = field();
+    const auto = autocomplete(input as unknown as HTMLInputElement, () => ["solid", "dashed"], "value");
     typed(input, "1px so");
     key(input, auto, "Tab");
     expect(input.value).toBe("1px solid");

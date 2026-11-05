@@ -380,7 +380,7 @@ describe("the control of the two modes", () => {
       "color: black;",
     ]);
     choose(node, "simple");
-    expect(lines(node)).toEqual(["color: var(--ink) → #111827", "transition: color 120ms"]);
+    expect(lines(node)).toEqual(["color: var(--ink); → #111827", "transition: color 120ms;"]);
   });
 
   test("before a pick shows with the bar hidden, and a switch then draws nothing", () => {
@@ -602,12 +602,12 @@ describe("the simple mode", () => {
       set.getAttribute("aria-label"),
       set.find("css-decl").map((one) => one.textContent),
     ])).toEqual([
-      ["layout", ["display: inline-flex"]],
-      ["size and spacing", ["margin-top: 8px", "padding: 4px 8px", "margin: 0"]],
-      ["text", ["color: var(--ink) → #111827"]],
-      ["look", ["background: #2563eb"]],
-      ["motion", ["transition: color 120ms"]],
-      ["other", ["cursor: pointer", "--ring: 2px"]],
+      ["layout", ["display: inline-flex;"]],
+      ["size and spacing", ["margin-top: 8px;", "padding: 4px 8px;", "margin: 0;"]],
+      ["text", ["color: var(--ink); → #111827"]],
+      ["look", ["background: #2563eb;"]],
+      ["motion", ["transition: color 120ms;"]],
+      ["other", ["cursor: pointer;", "--ring: 2px;"]],
     ]);
     expect(labels(node)).toEqual(["layout", "size and spacing", "text", "look", "motion", "other"]);
     for (const gone of ["css-selector", "css-head", "css-source", "css-context"]) {
@@ -626,14 +626,14 @@ describe("the simple mode", () => {
     const all = node.find("css-decl").map((one) => one.textContent);
     expect(all.join("\n")).not.toContain("important");
     expect(all).not.toContain("color: black");
-    expect(all.filter((text) => text.startsWith("font-size"))).toEqual(["font-size: 14px"]);
+    expect(all.filter((text) => text.startsWith("font-size"))).toEqual(["font-size: 14px;"]);
   });
 
   test("names no group where all the lines are of one", () => {
     answer = () => found([rule(".primary", [declaration("color", "red"), declaration("font-size", "12px")])]);
     const node = start();
     view?.show(as(save));
-    expect(lines(node)).toEqual(["color: red", "font-size: 12px"]);
+    expect(lines(node)).toEqual(["color: red;", "font-size: 12px;"]);
     expect(node.find("css-label")).toEqual([]);
   });
 
@@ -683,7 +683,7 @@ describe("the simple mode", () => {
     head.fire("click");
     expect(fold?.className).toBe("row open");
     expect(head.getAttribute("aria-expanded")).toBe("true");
-    expect(lines(node).slice(-3)).toEqual(["font-size: 14px", "line-height: 1.5", "--ink: #111827"]);
+    expect(lines(node).slice(-3)).toEqual(["font-size: 14px;", "line-height: 1.5;", "--ink: #111827;"]);
     head.fire("click");
     expect(head.getAttribute("aria-expanded")).toBe("false");
     expect(lines(node)).not.toContain("line-height: 1.5");
@@ -695,7 +695,7 @@ describe("the simple mode", () => {
     heading(node).fire("click");
     view?.refresh();
     expect(heading(node).getAttribute("aria-expanded")).toBe("true");
-    expect(lines(node)).toContain("line-height: 1.5");
+    expect(lines(node)).toContain("line-height: 1.5;");
   });
 
   test("has no inherited heading where nothing is handed down", () => {
@@ -725,7 +725,7 @@ describe("the simple mode", () => {
     ]);
     crumbs[4]?.fire("click");
     expect(asked[1]).toEqual({ element: as(save), pseudo: "::before" });
-    expect(lines(node)).toEqual(["color: red", 'content: "+"']);
+    expect(lines(node)).toEqual(["color: red;", 'content: "+";']);
     expect(labels(node)).toEqual(["text", "other"]);
     expect(node.find("crumb")[4]?.getAttribute("aria-current")).toBe("true");
   });
@@ -763,7 +763,7 @@ describe("the simple mode", () => {
     expect(note(node)).toBe(NO_STYLES);
     expect(node.shown("row")).toHaveLength(1);
     heading(node).fire("click");
-    expect(lines(node)).toEqual(["font-size: 14px"]);
+    expect(lines(node)).toEqual(["font-size: 14px;"]);
     heading(node).fire("click");
     choose(node, "advanced");
     expect(note(node)).toBeNull();
@@ -793,7 +793,7 @@ describe("the filter in the simple mode", () => {
     const node = start();
     view?.show(as(save));
     typed(node, "margin");
-    expect(lines(node)).toEqual(["margin-top: 8px", "margin: 0"]);
+    expect(lines(node)).toEqual(["margin-top: 8px;", "margin: 0;"]);
     expect(node.shown("css-set").map((set) => set.getAttribute("aria-label"))).toEqual([
       "size and spacing",
     ]);
@@ -807,7 +807,7 @@ describe("the filter in the simple mode", () => {
     const node = start();
     view?.show(as(save));
     typed(node, "PX");
-    expect(lines(node)).toEqual(["margin-top: 8px", "padding: 4px 8px", "--ring: 2px"]);
+    expect(lines(node)).toEqual(["margin-top: 8px;", "padding: 4px 8px;", "--ring: 2px;"]);
     expect(labels(node)).toEqual(["size and spacing", "other"]);
   });
 
@@ -819,7 +819,7 @@ describe("the filter in the simple mode", () => {
     expect(note(node)).toBeNull();
     expect(node.shown("row")).toHaveLength(1);
     heading(node).fire("click");
-    expect(lines(node)).toEqual(["line-height: 1.5"]);
+    expect(lines(node)).toEqual(["line-height: 1.5;"]);
   });
 
   test("says so where nothing matches, and shows it all again once cleared", () => {
@@ -851,7 +851,7 @@ describe("the filter in the simple mode", () => {
     view?.show(as(save));
     typed(node, "padding");
     view?.refresh();
-    expect(lines(node)).toEqual(["padding: 4px 8px"]);
+    expect(lines(node)).toEqual(["padding: 4px 8px;"]);
   });
 });
 
@@ -870,7 +870,7 @@ describe("the simple mode keeping up", () => {
     observer().change(save);
     jest.advanceTimersByTime(SETTLE);
     expect(asked).toHaveLength(2);
-    expect(lines(node)).toEqual(["opacity: 0.5"]);
+    expect(lines(node)).toEqual(["opacity: 0.5;"]);
   });
 
   test("reads again when a knob moves, and after a switch to the other mode too", () => {

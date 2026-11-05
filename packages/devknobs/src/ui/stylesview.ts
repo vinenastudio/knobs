@@ -859,7 +859,7 @@ export function createStylesView(context: StylesContext, page: StylesPage = PAGE
     const row = el(off ? "s" : "div", "css-decl");
     named(row, declaration, variables);
     const value = valueNode(declaration);
-    row.append(value);
+    row.append(value, mark(";"));
     const comes = off ? null : resolvedValue(declaration.value, variables);
     if (comes !== null) row.append(el("span", "css-comes", ` → ${comes}`));
     if (place) editor?.editable(row, value, declaration, place, off);
