@@ -178,6 +178,9 @@ export const ICONS = {
     p("M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"),
   ],
   check: [p("M20 6 9 17l-5-5")],
+  "message-square": [
+    p("M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"),
+  ],
   "chevron-left": [p("m15 18-6-6 6-6")],
   "chevrons-left-right": [p("m9 7-5 5 5 5"), p("m15 7 5 5-5 5")],
   plus: [p("M5 12h14"), p("M12 5v14")],

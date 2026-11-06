@@ -10,6 +10,7 @@ import type { LivePrefs } from "./prefs";
 import { segments } from "./radio";
 import { focusOn, type View } from "./slide";
 import { createRefusal, type Tips } from "./tooltip";
+import { VERSION } from "../version";
 
 /**
  * The settings view, which slides in over the rows: whether the handle shows
@@ -119,6 +120,26 @@ export interface KeepRow {
   /** Ask for the keeper again, and show it. */
   sync(): void;
   destroy(): void;
+}
+
+/**
+ * Our feedback page for this copy of devknobs and the page it runs on. A copy
+ * run from source has no version to give.
+ */
+export function feedbackUrl(version: string, page: string): string {
+  const v = version === "source" ? "" : `&v=${encodeURIComponent(version)}`;
+  return `https://feedback.vinena.studio/?product=knobs${v}&page=${encodeURIComponent(page)}`;
+}
+
+/** The last row of the settings: a link that opens the feedback page in a new tab, and sends nothing itself. */
+export function feedbackRow(): HTMLElement {
+  const link = el("a", "main feedback");
+  link.setAttribute("target", "_blank");
+  link.setAttribute("rel", "noopener noreferrer");
+  const aim = (): void => link.setAttribute("href", feedbackUrl(VERSION, location.href));
+  if (typeof location !== "undefined") aim();
+  link.addEventListener("click", aim);
+  return rowBox({ main: link, glyph: icon("message-square"), title: "send feedback" }).box;
 }
 
 /**
@@ -302,6 +323,7 @@ export function createSettings(context: SettingsContext): Settings {
     );
     keyViews.set(binding, { set, back });
   }
+  keysView.append(feedbackRow());
 
   /** The shortcuts show in place of the rows. */
   let editingKeys = false;
