@@ -9,6 +9,7 @@ import { ChromeMark, GitHubMark, KnobsMark, NpmMark } from '../lib/brand-marks.t
 import { CANONICAL_ORIGIN, canonicalLink } from '../lib/canonical.ts';
 import { CopyInstallPrompt } from '../lib/copy-install-prompt.tsx';
 import { CraftedAtVinena } from '../lib/crafted-at-vinena.tsx';
+import { FeedbackLink } from '../lib/feedback-link.tsx';
 import { GitHubButton, onGitHub, REPO } from '../lib/github.tsx';
 import { ICON } from '../lib/icon.ts';
 import { type PanelTour, usePanel } from '../lib/panel.ts';
@@ -367,6 +368,7 @@ function Landing() {
         <a href={NOTICES} rel="noreferrer" target="_blank" {...props(styles.link)}>
           {m.link_notices()}
         </a>
+        <FeedbackLink style={styles.link} />
         <div {...props(styles.credit)}>
           <CraftedAtVinena style={styles.link} />
         </div>
