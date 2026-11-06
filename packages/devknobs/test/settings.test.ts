@@ -110,6 +110,10 @@ describe("the feedback link", () => {
     );
   });
 
+  test("drops the login details of the page", () => {
+    expect(feedbackUrl("source", "https://u:p@ex.com/a?b#c")).toEndWith("&page=https%3A%2F%2Fex.com%2Fa");
+  });
+
   test("drops from the first ? or # of an address it cannot parse", () => {
     expect(feedbackUrl("source", "not a url#a?b")).toEndWith("&page=not%20a%20url");
     expect(feedbackUrl("source", "/a/b?c")).toEndWith("&page=%2Fa%2Fb");
