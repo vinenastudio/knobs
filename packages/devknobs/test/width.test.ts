@@ -8,11 +8,13 @@ import type { FrameRefusal } from "../src/engine/native";
 import { FRESH_ATTRIBUTE, FRESH_RELOAD_KEY } from "../src/engine/fresh";
 import { patchedAs } from "../src/engine/identity";
 import { mockOf } from "../src/engine/mock";
+import { RING, UNDER } from "../src/engine/mockdraw";
 import { holeAt, holePath, MORPH_TIME, rounded, windowRect } from "../src/engine/morph";
 import { evenHole } from "../src/engine/morphrun";
 import { keepDrawing, SNAPSHOT_KEY } from "../src/engine/placeholder";
 import { DEFAULT_STATE, merge } from "../src/engine/store";
 import { type Mark, MARK_EVENT } from "../src/engine/touchmark";
+import * as turnModule from "../src/engine/turnrun";
 import {
   apply,
   fit,
@@ -1853,6 +1855,12 @@ describe("a phone's body", () => {
     return drawing;
   }
 
+  function pageBox(): FakeElement {
+    const found = everything().find((element) => String(Reflect.get(element, "className")).startsWith("page"));
+    if (!found) throw new Error("no page box");
+    return found;
+  }
+
   function glass(): FakeElement {
     const found = everything().find((element) =>
       String(Reflect.get(element, "className")).startsWith("glass"),
@@ -1872,7 +1880,6 @@ describe("a phone's body", () => {
     expect(mockDrawing().children.map((element) => element.tagName)).toContain("path");
     const left = Reflect.get(glass().style, "left");
     expect(left).toBe(`${(75 - 21) / 3}px`);
-    expect(Reflect.get(glass().style, "boxShadow")).toBe("");
     await Bun.sleep(0);
     const [image, ...rest] = mockDrawing().children;
     // The island goes flat black over the image's.
@@ -1882,9 +1889,79 @@ describe("a phone's body", () => {
     expect(image?.getAttribute("width")).toBe("490");
     expect(Reflect.get(glass().style, "left")).toBe(left);
     expect(Reflect.get(glass().style, "borderRadius")).toBe("62px 62px 62px 62px");
-    expect(Reflect.get(glass().style, "boxShadow")).toBe("0 0 0 2px #000");
+    expect(Reflect.get(pageBox().style, "clipPath")).toBe("inset(0 round 62px 62px 62px 62px)");
+    // Black from 2px past the screen's edge to 2 device pixels in, between the screen and the body.
+    const siblings = glass().parent?.children ?? [];
+    const ring = siblings[siblings.indexOf(glass()) + 1];
+    expect(ring && Reflect.get(ring, "className")).toBe("ring");
+    expect(siblings[siblings.indexOf(glass()) + 2]).toBe(mockDrawing());
+    expect(Reflect.get(ring?.style ?? {}, "left")).toBe(`${(75 - 21) / 3 - 2}px`);
+    expect(Reflect.get(ring?.style ?? {}, "borderRadius")).toBe("64px 64px 64px 64px");
+    expect(Reflect.get(ring?.style ?? {}, "boxShadow")).toBe(`inset 0 0 0 ${UNDER + RING / window.devicePixelRatio}px #000`);
     // A plain round clip, no superellipse.
     expect(Reflect.get(glass(), "className")).toBe("glass mocked");
+  });
+
+  test("ends a turn where the frame is drawn, on the same device pixel, at a part way ratio", () => {
+    define("Element", FakeElement);
+    define("getComputedStyle", () => ({ backgroundColor: "", colorScheme: "" }));
+    Reflect.set(window, "requestAnimationFrame", () => 0);
+    Reflect.set(window, "cancelAnimationFrame", () => {});
+    // An unscrolled letterbox, its drawing centered in it as the stage centers it.
+    const room = { width: 1500, height: 851 };
+    const create = document.createElement;
+    Reflect.set(document, "createElement", (tag: string) => {
+      const element = Object.assign(new FakeElement(tag.toUpperCase()), {
+        clientWidth: room.width,
+        clientHeight: room.height,
+        scrollLeft: 0,
+        scrollTop: 0,
+      });
+      const centered = (length: "width" | "height") =>
+        Math.max(0, (room[length] - Number.parseFloat(Reflect.get(element.style, length))) / 2);
+      element.getBoundingClientRect = () =>
+        Reflect.get(element, "className") === "drawing"
+          ? { left: centered("width"), top: centered("height"), width: 0, height: 0 }
+          : { left: 0, top: 0, width: room.width, height: room.height };
+      return element;
+    });
+    const phone = { device: "iphone-16-pro", dpr: "system", browser: "off", width: 402, height: 874 } as const;
+    try {
+      for (const ratio of [1.25, 2.5]) {
+        Reflect.set(window, "devicePixelRatio", ratio);
+        let reduce = true;
+        Reflect.set(window, "matchMedia", (query: string) => ({ matches: reduce, media: query }));
+        apply(merge(DEFAULT_STATE, phone));
+        reduce = false;
+        let target: { x: number; y: number } | null = null;
+        const turn = spyOn(turnModule, "turnDevice").mockImplementation((value, _angle, rect, _scene, draw) => {
+          target = rect;
+          draw(value);
+        });
+        try {
+          apply(merge(DEFAULT_STATE, { ...phone, orientation: "landscape", width: 874, height: 402 }));
+        } finally {
+          turn.mockRestore();
+        }
+        const unit = everything().find((element) => Reflect.get(element, "className") === "screen");
+        const drawing = everything().find((element) => Reflect.get(element, "className") === "drawing");
+        const scale = Number(/scale\(([\d.]+)\)/.exec(String(Reflect.get(unit?.style ?? {}, "transform")))?.[1]);
+        // Where the turned screen is drawn: the drawing, the scaled wrapper in it, the glass in that.
+        const drawn = (side: "left" | "top") =>
+          Number(Reflect.get(drawing?.getBoundingClientRect() ?? {}, side)) +
+          Number.parseFloat(Reflect.get(unit?.style ?? {}, side)) +
+          Number.parseFloat(Reflect.get(glass().style, side)) * scale;
+        const end: { x: number; y: number } = target ?? { x: Number.NaN, y: Number.NaN };
+        expect(end.x).toBeCloseTo(drawn("left"), 9);
+        expect(end.y).toBeCloseTo(drawn("top"), 9);
+        // On a whole device pixel.
+        expect(end.x * ratio).toBeCloseTo(Math.round(end.x * ratio), 9);
+        expect(end.y * ratio).toBeCloseTo(Math.round(end.y * ratio), 9);
+      }
+    } finally {
+      Reflect.set(window, "devicePixelRatio", 1);
+      Reflect.set(document, "createElement", create);
+    }
   });
 
   test("is the drawn mock when the image does not load, as with the folder deleted", async () => {
@@ -1896,7 +1973,30 @@ describe("a phone's body", () => {
     expect(tags).toEqual([...Array(5).fill("rect"), "path", "path", "rect"]);
     expect(Reflect.get(glass().style, "left")).toBe(`${19.7 + 2.7}px`);
     expect(Reflect.get(glass().style, "borderRadius")).toBe("55.8px 55.8px 55.8px 55.8px");
-    expect(Reflect.get(glass().style, "boxShadow")).toBe("");
+    expect(Reflect.get(pageBox().style, "clipPath")).toBe("inset(0 round 55.8px 55.8px 55.8px 55.8px)");
+  });
+
+  test("clips the page to the screen's corners, never the glass, so the touch dot goes over the island", async () => {
+    fakeImage(true);
+    define("Element", FakeElement);
+    define("getComputedStyle", () => ({ backgroundColor: "", colorScheme: "", transform: "none" }));
+    Reflect.set(window, "matchMedia", (query: string) => ({ matches: true, media: query }));
+    Reflect.set(window, "cancelAnimationFrame", () => {});
+    apply(merge(DEFAULT_STATE, { device: "iphone-18-pro-max", dpr: "system", browser: "auto" }));
+    await Bun.sleep(0);
+    // A clip on the glass makes it a stacking context, and the dot in it goes under the body.
+    expect(Reflect.get(glass().style, "clipPath")).toBeUndefined();
+    const dot = glass().descendants().find((element) => Reflect.get(element, "className") === "touchdot");
+    expect(dot).toBeDefined();
+    const siblings = glass().parent?.children ?? [];
+    expect(siblings.indexOf(mockDrawing())).toBeGreaterThan(siblings.indexOf(glass()));
+    // The page sits under the browser's bars, and its clip reaches out to the screen's edges.
+    const left = Number.parseFloat(String(Reflect.get(pageBox().style, "left")));
+    const top = Number.parseFloat(String(Reflect.get(pageBox().style, "top")));
+    const clip = String(Reflect.get(pageBox().style, "clipPath"));
+    expect(top).toBeGreaterThan(0);
+    expect(clip).toStartWith(`inset(${-top}px `);
+    expect(clip).toEndWith(` ${-left}px round 62px 62px 62px 62px)`);
   });
 
   test("is the drawn mock for a device without an image, and none with the mock off", () => {
@@ -1905,6 +2005,40 @@ describe("a phone's body", () => {
     expect(mockDrawing().children.map((element) => element.tagName)).toContain("path");
     apply(merge(DEFAULT_STATE, { device: "iphone-18-pro", browser: "off", mock: false }));
     expect(everything().some((element) => element.getAttribute("class") === "mock")).toBe(false);
+  });
+});
+
+describe("the device pixel ratio", () => {
+  type Query = { matches: boolean; media: string; onchange: (() => void) | null };
+  let queries: Query[] = [];
+
+  beforeEach(() => {
+    queries = [];
+    Reflect.set(window, "matchMedia", (media: string) => {
+      const query: Query = { matches: true, media, onchange: null };
+      queries.push(query);
+      return query;
+    });
+  });
+
+  test("draws the frame again when it changes with no resize, and stops watching once released", () => {
+    apply(merge(DEFAULT_STATE, PHONE_KNOBS));
+    const watched = () => queries.filter((query) => query.media.startsWith("(resolution:"));
+    expect(watched().map((query) => query.media)).toEqual(["(resolution: 1dppx)"]);
+    const first = watched()[0];
+    expect(first?.onchange).toBeFunction();
+    // Drawn again at the same ratio, the same watch stays.
+    first?.onchange?.();
+    expect(watched()).toHaveLength(1);
+    Reflect.set(window, "devicePixelRatio", 1.100000023841858);
+    first?.onchange?.();
+    expect(watched().map((query) => query.media)).toEqual([
+      "(resolution: 1dppx)",
+      "(resolution: 1.100000023841858dppx)",
+    ]);
+    expect(first?.onchange).toBeNull();
+    reset();
+    expect(watched()[1]?.onchange).toBeNull();
   });
 });
 

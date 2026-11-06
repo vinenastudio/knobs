@@ -60,14 +60,15 @@ function margin(size: number): number {
  * device pixel ratio's `zoom` on the frame keeps its css size too, and the
  * wrapper takes it back out of the drawing. A device's mock takes `mock` px
  * of the frame's on each side, drawn at the same scale, and the whole of it
- * is fitted and centered.
+ * is fitted and centered. With a mock, a fit is drawn a hair smaller so the
+ * screen is a whole number of the `ratio`'s device pixels tall.
  */
 export function fit(
   knobs: Pick<DevknobsState, "width" | "height" | "zoom">,
   size: { width: number; height: number },
-  options: { frameZoom?: number; aside?: number; side?: SideValue; mock?: Sides } = {},
+  options: { frameZoom?: number; aside?: number; side?: SideValue; mock?: Sides; ratio?: number } = {},
 ): Fit {
-  const { frameZoom = 1, aside = 0, side = "right", mock = BARE } = options;
+  const { frameZoom = 1, aside = 0, side = "right", mock = BARE, ratio = 0 } = options;
   const room = {
     width: size.width,
     height: Math.max(0, size.height - (hasStrip(knobs) ? STRIP : 0)),
@@ -90,7 +91,8 @@ export function fit(
     aside > 0 &&
     aside <= room.width / 2 &&
     (room.width + outer.width * whole) / 2 + x > room.width - aside;
-  const fitted = covered ? Math.min(whole, (room.width - aside - 2 * x) / outer.width) : whole;
+  const loose = covered ? Math.min(whole, (room.width - aside - 2 * x) / outer.width) : whole;
+  const fitted = mock === BARE ? loose : snapScale(loose, height, ratio);
   const scale = knobs.zoom === "fit" ? fitted : knobs.zoom;
   // The room under the panel stays in the box, so centering it centers the
   // frame beside the panel. A panel on the left has that room before the frame.
@@ -136,4 +138,26 @@ export function label(
   if (typeof knobs.height === "number") text += ` × ${page.height}`;
   if (typeof knobs.dpr === "number") text += ` · ${knobs.dpr}x`;
   return text;
+}
+
+/**
+ * `scale`, made at most a device pixel smaller so `length` css px drawn at it
+ * spans a whole number of device pixels at `ratio` device px per css px. A
+ * scale of 1 stays, so a frame drawn at its own size stays sharp.
+ */
+export function snapScale(scale: number, length: number, ratio: number): number {
+  if (!(ratio > 0) || !(scale > 0) || !(length > 0) || scale === 1) return scale;
+  const pixels = Math.floor(length * scale * ratio + 1e-6);
+  return pixels > 0 ? pixels / ratio / length : scale;
+}
+
+/**
+ * How far to move an edge at `at` css px, under half a device pixel, so it
+ * lands on a whole device pixel at `ratio`. A rounded screen's clip on an
+ * edge between device pixels draws that row part way, blended with what is
+ * behind it.
+ */
+export function snapShift(at: number, ratio: number): number {
+  if (!(ratio > 0)) return 0;
+  return Math.round(at * ratio) / ratio - at;
 }
