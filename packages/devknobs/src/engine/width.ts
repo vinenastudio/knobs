@@ -1030,9 +1030,13 @@ function screenFor(value: ViewportValue): Rect | null {
   // A box that grows past the room keeps its scroll, as far as it still goes.
   const scrolled = (scroll: number, length: number, room: number) =>
     Math.min(scroll, Math.max(0, length - room));
+  const left = view.left + at.x - scrolled(stage.scrollLeft, place.box.width, room.width);
+  const top = view.top + at.y - scrolled(stage.scrollTop, place.box.height, room.height);
+  // On a whole device pixel, as `resize` snaps it.
+  const ratio = mock ? window.devicePixelRatio : 0;
   return {
-    x: view.left - box.left + at.x - scrolled(stage.scrollLeft, place.box.width, room.width),
-    y: view.top - box.top + at.y - scrolled(stage.scrollTop, place.box.height, room.height),
+    x: left + snapShift(left, ratio) - box.left,
+    y: top + snapShift(top, ratio) - box.top,
     width: place.width * place.scale,
     height: place.height * place.scale,
   };

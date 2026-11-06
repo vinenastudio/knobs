@@ -8,11 +8,13 @@ import type { FrameRefusal } from "../src/engine/native";
 import { FRESH_ATTRIBUTE, FRESH_RELOAD_KEY } from "../src/engine/fresh";
 import { patchedAs } from "../src/engine/identity";
 import { mockOf } from "../src/engine/mock";
+import { RING, UNDER } from "../src/engine/mockdraw";
 import { holeAt, holePath, MORPH_TIME, rounded, windowRect } from "../src/engine/morph";
 import { evenHole } from "../src/engine/morphrun";
 import { keepDrawing, SNAPSHOT_KEY } from "../src/engine/placeholder";
 import { DEFAULT_STATE, merge } from "../src/engine/store";
 import { type Mark, MARK_EVENT } from "../src/engine/touchmark";
+import * as turnModule from "../src/engine/turnrun";
 import {
   apply,
   fit,
@@ -1895,9 +1897,71 @@ describe("a phone's body", () => {
     expect(siblings[siblings.indexOf(glass()) + 2]).toBe(mockDrawing());
     expect(Reflect.get(ring?.style ?? {}, "left")).toBe(`${(75 - 21) / 3 - 2}px`);
     expect(Reflect.get(ring?.style ?? {}, "borderRadius")).toBe("64px 64px 64px 64px");
-    expect(String(Reflect.get(ring?.style ?? {}, "boxShadow"))).toMatch(/^inset 0 0 0 [\d.]+px #000$/);
+    expect(Reflect.get(ring?.style ?? {}, "boxShadow")).toBe(`inset 0 0 0 ${UNDER + RING / window.devicePixelRatio}px #000`);
     // A plain round clip, no superellipse.
     expect(Reflect.get(glass(), "className")).toBe("glass mocked");
+  });
+
+  test("ends a turn where the frame is drawn, on the same device pixel, at a part way ratio", () => {
+    define("Element", FakeElement);
+    define("getComputedStyle", () => ({ backgroundColor: "", colorScheme: "" }));
+    Reflect.set(window, "requestAnimationFrame", () => 0);
+    Reflect.set(window, "cancelAnimationFrame", () => {});
+    // An unscrolled letterbox, its drawing centered in it as the stage centers it.
+    const room = { width: 1500, height: 851 };
+    const create = document.createElement;
+    Reflect.set(document, "createElement", (tag: string) => {
+      const element = Object.assign(new FakeElement(tag.toUpperCase()), {
+        clientWidth: room.width,
+        clientHeight: room.height,
+        scrollLeft: 0,
+        scrollTop: 0,
+      });
+      const centered = (length: "width" | "height") =>
+        Math.max(0, (room[length] - Number.parseFloat(Reflect.get(element.style, length))) / 2);
+      element.getBoundingClientRect = () =>
+        Reflect.get(element, "className") === "drawing"
+          ? { left: centered("width"), top: centered("height"), width: 0, height: 0 }
+          : { left: 0, top: 0, width: room.width, height: room.height };
+      return element;
+    });
+    const phone = { device: "iphone-16-pro", dpr: "system", browser: "off", width: 402, height: 874 } as const;
+    try {
+      for (const ratio of [1.25, 2.5]) {
+        Reflect.set(window, "devicePixelRatio", ratio);
+        let reduce = true;
+        Reflect.set(window, "matchMedia", (query: string) => ({ matches: reduce, media: query }));
+        apply(merge(DEFAULT_STATE, phone));
+        reduce = false;
+        let target: { x: number; y: number } | null = null;
+        const turn = spyOn(turnModule, "turnDevice").mockImplementation((value, _angle, rect, _scene, draw) => {
+          target = rect;
+          draw(value);
+        });
+        try {
+          apply(merge(DEFAULT_STATE, { ...phone, orientation: "landscape", width: 874, height: 402 }));
+        } finally {
+          turn.mockRestore();
+        }
+        const unit = everything().find((element) => Reflect.get(element, "className") === "screen");
+        const drawing = everything().find((element) => Reflect.get(element, "className") === "drawing");
+        const scale = Number(/scale\(([\d.]+)\)/.exec(String(Reflect.get(unit?.style ?? {}, "transform")))?.[1]);
+        // Where the turned screen is drawn: the drawing, the scaled wrapper in it, the glass in that.
+        const drawn = (side: "left" | "top") =>
+          Number(Reflect.get(drawing?.getBoundingClientRect() ?? {}, side)) +
+          Number.parseFloat(Reflect.get(unit?.style ?? {}, side)) +
+          Number.parseFloat(Reflect.get(glass().style, side)) * scale;
+        const end: { x: number; y: number } = target ?? { x: Number.NaN, y: Number.NaN };
+        expect(end.x).toBeCloseTo(drawn("left"), 9);
+        expect(end.y).toBeCloseTo(drawn("top"), 9);
+        // On a whole device pixel.
+        expect(end.x * ratio).toBeCloseTo(Math.round(end.x * ratio), 9);
+        expect(end.y * ratio).toBeCloseTo(Math.round(end.y * ratio), 9);
+      }
+    } finally {
+      Reflect.set(window, "devicePixelRatio", 1);
+      Reflect.set(document, "createElement", create);
+    }
   });
 
   test("is the drawn mock when the image does not load, as with the folder deleted", async () => {
