@@ -1,5 +1,9 @@
 # changelog
 
+## 0.6.2
+
+- no 1px light line at the top or bottom edge of a phone screen in the device frame, at any pixel ratio: the screen is drawn a whole number of device pixels tall and starts on a whole device pixel, and it is redrawn when the pixel ratio changes. devices without a body, and set zooms like 100%, look as before
+
 ## 0.6.1
 
 - the `keep edits after reload` switch is in the settings now, with a short hint under it, and no longer at the top of the Elements view. as before, it is not there in fresh mode or in the copy of devknobs inside its own frame, which keeps nothing itself; the page's keeper still keeps edits made in the frame
