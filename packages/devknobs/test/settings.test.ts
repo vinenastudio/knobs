@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Keeper } from "../src/edit/keep";
-import { KEEP_HINT, KEEP_LABEL, keepRow } from "../src/ui/settings";
+import { feedbackUrl, KEEP_HINT, KEEP_LABEL, keepRow } from "../src/ui/settings";
 import { fake, FakeNode } from "./styles-dom";
 
 describe("the keep edits row", () => {
@@ -74,5 +74,19 @@ describe("the keep edits row", () => {
     expect(turned).toEqual([true, false]);
     row.destroy();
     expect(listeners.size).toBe(0);
+  });
+});
+
+describe("the feedback link", () => {
+  test("names the product, the version and the page", () => {
+    expect(feedbackUrl("0.5.1", "https://example.com/a?b=c#d")).toBe(
+      "https://feedback.vinena.studio/?product=knobs&v=0.5.1&page=https%3A%2F%2Fexample.com%2Fa%3Fb%3Dc%23d",
+    );
+  });
+
+  test("leaves the version out for a copy run from source", () => {
+    expect(feedbackUrl("source", "https://example.com/")).toBe(
+      "https://feedback.vinena.studio/?product=knobs&page=https%3A%2F%2Fexample.com%2F",
+    );
   });
 });
