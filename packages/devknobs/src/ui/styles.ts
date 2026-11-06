@@ -1013,6 +1013,7 @@ input[type="checkbox"]:focus-visible { outline: 1px solid var(--faint); outline-
 /* An action's key, at the end of its row, as quiet as the footer shows a key. */
 .row-key { flex: none; align-self: center; font-size: 10px; line-height: 1.4; color: var(--faint); }
 .feedback { color: inherit; text-decoration: none; cursor: pointer; }
+.feedback:focus-visible { outline: 1px solid var(--faint); outline-offset: -1px; }
 .row-control { flex: none; align-self: center; margin-left: auto; }
 /* A row's small button inside its main, before what the main ends with,
    takes no height of its own, so the row is as tall as any. */

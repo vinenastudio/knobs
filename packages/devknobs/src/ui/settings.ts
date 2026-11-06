@@ -138,7 +138,7 @@ export function feedbackRow(): HTMLElement {
   link.setAttribute("rel", "noopener noreferrer");
   const aim = (): void => link.setAttribute("href", feedbackUrl(VERSION, location.href));
   if (typeof location !== "undefined") aim();
-  link.addEventListener("click", aim);
+  for (const type of ["click", "auxclick", "contextmenu"]) link.addEventListener(type, aim);
   return rowBox({ main: link, glyph: icon("message-square"), title: "send feedback" }).box;
 }
 

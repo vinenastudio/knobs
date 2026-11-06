@@ -6,7 +6,7 @@ order: 10
 
 ## the npm package
 
-devknobs runs in your page, in development, where you mount it. it has no analytics and no telemetry, and it sends nothing about you or your page anywhere.
+devknobs runs in your page, in development, where you mount it. it has no analytics and no telemetry, and it sends nothing about you or your page anywhere, but for the page address in send feedback (below).
 
 the only requests it makes for itself:
 
@@ -14,11 +14,11 @@ the only requests it makes for itself:
 - grab reads the page's own bundles and source maps, from the page's own origin only, to find where a component lives.
 - the picture of the page that the fold and the frame draw loads the fonts the page itself uses.
 - the width knob, a device and a pinned panel load your page a second time, in a frame.
-- send feedback only opens our feedback page in a new tab.
+- send feedback opens our feedback page (feedback.vinena.studio) in a new tab with the current page address attached, query included; that address reaches us only when you send the feedback.
 - the ESM build loads its later parts (grab, the frame's code, the storage and styles views) from beside its own script, when first used.
 - the locale knob reloads the page once it writes the stores below, so the page starts in the new language.
 
-none of these leave the page's origin or the host devknobs' script came from.
+none of these leave the page's origin or the host devknobs' script came from, but for send feedback.
 
 the [requests view](/docs/requests-and-storage#requests) only watches what the page asks for. it keeps the last 300 requests in memory: nothing is stored, nothing is sent, and a reload starts the log again. the [storage view](/docs/requests-and-storage#storage) reads through the page's own apis. what you copy (a grab, a request, a stored value) goes to your clipboard and nowhere else.
 
