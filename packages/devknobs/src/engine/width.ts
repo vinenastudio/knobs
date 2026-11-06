@@ -6,7 +6,7 @@ import { type BrowserLayer, createBrowser, readLook } from "./browserdraw";
 import { barsOf, layoutOf, viewportOf } from "./browserui";
 import { deviceOf, formId, formOf, hasTouch } from "./devices";
 import { columnEdge, type Docked, dockEdges, dockWidth, onDockWidth } from "./dock";
-import { type Fit, fit, hasStrip, label, origin } from "./fit";
+import { type Fit, fit, hasStrip, label, origin, snapShift } from "./fit";
 import { carried, fresh, FRESH_ATTRIBUTE, loads, ownReload } from "./fresh";
 import {
   FRAME_ATTRIBUTE,
@@ -22,11 +22,12 @@ import {
 } from "./frame";
 import { drawMat } from "./mat";
 import { putMat } from "./matcolors";
+import { baseMatchMedia } from "./matchmedia";
 import { landSplash, spreadMat } from "./matsplash";
 import { type FrameRefusal, handing, nativeEnabled, settles } from "./native";
 import { createNotice, explain } from "./notice";
 import type { Mock, Rect } from "./mock";
-import { corners, drawMock, UNDER } from "./mockdraw";
+import { corners, drawMock, RING, UNDER } from "./mockdraw";
 import { drawnAt, glideFrame, gliding, landGlide, placeKey } from "./frameglide";
 import {
   finishFold,
@@ -172,6 +173,12 @@ let touchDot: TouchDot | null = null;
 let turnCover: HTMLElement | null = null;
 /** The device's body drawn around the frame, while it has one. */
 let mockDrawing: SVGSVGElement | null = null;
+/** Black over the screen's edge under the body, while it has one. */
+let ring: HTMLElement | null = null;
+/** Matches the device pixel ratio the frame was last drawn at. */
+let density: MediaQueryList | null = null;
+/** The device pixel ratio `density` matches. */
+let densityRatio = 0;
 /** The device and the way it is held that the mock was last drawn for. */
 let mockKey = "";
 let frame: HTMLIFrameElement | null = null;
@@ -688,13 +695,19 @@ function showMock(mock: Mock | null, place: Fit): void {
     mockDrawing = mock ? drawMock(mock, place, href) : null;
     if (mockDrawing) screen.append(mockDrawing);
     glass.className = mock ? "glass mocked" : "glass";
+    ring?.remove();
+    ring = mock ? document.createElement("div") : null;
+    if (ring) {
+      ring.className = "ring";
+      glass.after(ring);
+    }
   }
   const zoom = place.zoom;
   glass.style.left = mock ? `${mock.inset.left * zoom}px` : "";
   glass.style.top = mock ? `${mock.inset.top * zoom}px` : "";
   const round = mock ? corners(mock.screenRadius).map((radius) => `${radius * zoom}px`) : [];
   glass.style.borderRadius = round.join(" ");
-  glass.style.boxShadow = href ? `0 0 0 ${UNDER * zoom}px #000` : "";
+  if (mock && ring) showRing(mock, place);
   if (mock && mockDrawing) {
     mockDrawing.style.width = `${mock.width * zoom}px`;
     mockDrawing.style.height = `${mock.height * zoom}px`;
@@ -702,14 +715,52 @@ function showMock(mock: Mock | null, place: Fit): void {
 }
 
 /**
+ * Black from `UNDER` past the screen's edge to `RING` device pixels in, in
+ * the wrapper's px. The screen's outermost device pixels, which its rounded
+ * clip draws part way, blended with what is behind, go black with the rim of
+ * the body, as on a real display's black border.
+ */
+function showRing(mock: Mock, place: Fit): void {
+  if (!ring) return;
+  const zoom = place.zoom;
+  const ratio = window.devicePixelRatio || 1;
+  const width = UNDER * zoom + RING / (ratio * place.transform);
+  ring.style.left = `${(mock.inset.left - UNDER) * zoom}px`;
+  ring.style.top = `${(mock.inset.top - UNDER) * zoom}px`;
+  ring.style.width = `${(place.width + 2 * UNDER) * zoom}px`;
+  ring.style.height = `${(place.height + 2 * UNDER) * zoom}px`;
+  ring.style.borderRadius = corners(mock.screenRadius, UNDER)
+    .map((radius) => `${radius * zoom}px`)
+    .join(" ");
+  ring.style.boxShadow = `inset 0 0 0 ${width}px #000`;
+}
+
+/**
+ * How far the screen reaches past the page on each side, as the negative
+ * insets of a clip on the page, in the wrapper's px. The radius alone on the
+ * glass leaves a layer of the page, such as a sticky bar, square, and a clip
+ * on the glass would make it a stacking context that the touch dot cannot
+ * leave to go over the island.
+ */
+function pageInset(page: Rect | null, place: Fit): string {
+  if (!page) return "0";
+  const zoom = place.zoom;
+  const sides = [page.y, place.width - page.x - page.width, place.height - page.y - page.height, page.x];
+  return sides.map((side) => `${-side * zoom}px`).join(" ");
+}
+
+/**
  * Put the frame where the phone's browser leaves the page in the screen, and
- * draw the browser around it, or fill the screen with the frame again.
+ * draw the browser around it, or fill the screen with the frame again. Under
+ * a mock, the page is clipped to the screen's corners, `radii` in the
+ * wrapper's px.
  */
 function showBrowser(
   bars: ReturnType<typeof barsOf>,
   page: Rect | null,
   place: Fit,
   follow: boolean,
+  radii: string,
 ): void {
   if (!glass || !pageBox || !browser) return;
   const zoom = place.zoom;
@@ -721,6 +772,7 @@ function showBrowser(
     box.className = page ? "page placed" : "page";
     box.style.left = page ? `${page.x * zoom}px` : "";
     box.style.top = page ? `${page.y * zoom}px` : "";
+    box.style.clipPath = radii ? `inset(${pageInset(page, place)} round ${radii})` : "";
   };
   glass.style.width = page ? `${place.width * zoom}px` : "";
   glass.style.height = page ? `${place.height * zoom}px` : "";
@@ -757,6 +809,25 @@ function bodyFor(value: ViewportValue): Mock | null {
 /** Is the open Duo's case held the other way up, as it is unfolded from its cover held across? For the session only. */
 let over = false;
 
+/**
+ * Watch for the device pixel ratio the frame is drawn at to change. A move to
+ * a screen of another density changes it with no resize.
+ */
+function watchDensity(): void {
+  const ratio = window.devicePixelRatio;
+  if (ratio === densityRatio || typeof window.matchMedia !== "function") return;
+  unwatchDensity();
+  density = baseMatchMedia(`(resolution: ${ratio}dppx)`);
+  density.onchange = resize;
+  densityRatio = ratio;
+}
+
+function unwatchDensity(): void {
+  if (density) density.onchange = null;
+  density = null;
+  densityRatio = 0;
+}
+
 function resize(): void {
   if (!frame || !letterbox || !stage || !drawing || !screen || !readout || !caption) return;
   // The window has its own page back: the frame stays as it was until it goes.
@@ -773,6 +844,7 @@ function resize(): void {
     aside,
     side: current.panel.side,
     mock: mock?.inset,
+    ratio: window.devicePixelRatio,
   });
   drawn = place;
   drawnAt(placeKey(origin(place, size), place.transform));
@@ -790,13 +862,20 @@ function resize(): void {
   // A fitted frame never scrolls, so no rounding can bring a scrollbar.
   stage.style.overflow = current.zoom === "fit" ? "hidden" : "";
   frame.style.zoom = place.zoom === 1 ? "" : String(place.zoom);
-  showBrowser(bars, page, place, auto);
+  const radii = mock ? corners(mock.screenRadius).map((radius) => `${radius * place.zoom}px`) : [];
+  showBrowser(bars, page, place, auto, radii.join(" "));
   touchDot?.fit(place, place.zoom);
   drawing.style.width = `${place.box.width}px`;
   drawing.style.height = `${place.box.height}px`;
+  // The screen's top left goes on a whole device pixel, so its rounded clip
+  // draws no part way row there.
+  const at = mock ? drawing.getBoundingClientRect() : null;
+  const ratio = window.devicePixelRatio;
+  const nudge = at ? { x: snapShift(at.left + place.left, ratio), y: snapShift(at.top + place.top, ratio) } : null;
   // The wrapper starts at the mock's corner, and the frame sits in it by as much.
-  screen.style.left = `${place.left - (mock?.inset.left ?? 0) * place.scale}px`;
-  screen.style.top = `${place.top - (mock?.inset.top ?? 0) * place.scale}px`;
+  screen.style.left = `${place.left - (mock?.inset.left ?? 0) * place.scale + (nudge?.x ?? 0)}px`;
+  screen.style.top = `${place.top - (mock?.inset.top ?? 0) * place.scale + (nudge?.y ?? 0)}px`;
+  watchDensity();
   showMock(mock, place);
   screen.style.transform = place.transform === 1 ? "" : `scale(${place.transform})`;
   // Natively, the page inside gets the scheme as its real preference. System
@@ -942,6 +1021,7 @@ function screenFor(value: ViewportValue): Rect | null {
     aside: asideOf(value.panel),
     side: value.panel.side,
     mock: mock?.inset,
+    ratio: window.devicePixelRatio,
   });
   const room = { width: stage.clientWidth, height: stage.clientHeight };
   const at = origin(place, room);
@@ -1316,6 +1396,7 @@ function release(follow: boolean): string {
   window.removeEventListener("message", onMessage);
   window.removeEventListener("resize", resize);
   window.removeEventListener("pagehide", keep);
+  unwatchDensity();
   frame?.removeEventListener("load", onLoad);
   readyPage = null;
   touchDot?.apply(false);
@@ -1352,6 +1433,7 @@ function teardown(): void {
   touchDot = null;
   turnCover = null;
   mockDrawing = null;
+  ring = null;
   mockKey = "";
   frame = null;
   hideCover();

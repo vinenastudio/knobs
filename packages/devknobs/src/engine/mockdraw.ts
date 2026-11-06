@@ -18,6 +18,9 @@ const BAND = 2.5;
  */
 export const UNDER = 2;
 
+/** How many device pixels of the screen's edge go black with the body's rim. */
+export const RING = 2;
+
 /** A device's body over the frame, drawn by `drawMock`, in the letterbox's shadow root. */
 export const MOCK_CSS = `
 /* Clips the frame to the screen's corners in a mock, in the body's color so
@@ -26,6 +29,12 @@ export const MOCK_CSS = `
   position: absolute;
   overflow: hidden;
   background: ${BODY};
+}
+/* Black over the screen's edge, under the body, never in the way of a pointer. */
+.ring {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
 }
 /* Over the frame, and never in the way of a pointer. */
 .mock {
