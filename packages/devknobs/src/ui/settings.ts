@@ -122,13 +122,23 @@ export interface KeepRow {
   destroy(): void;
 }
 
+/** The page's address without its query or fragment, which can hold tokens. */
+function pageAddress(page: string): string {
+  try {
+    const url = new URL(page);
+    return url.origin + url.pathname;
+  } catch {
+    return page.split(/[?#]/, 1)[0] ?? "";
+  }
+}
+
 /**
  * Our feedback page for this copy of devknobs and the page it runs on. A copy
  * run from source has no version to give.
  */
 export function feedbackUrl(version: string, page: string): string {
   const v = version === "source" ? "" : `&v=${encodeURIComponent(version)}`;
-  return `https://feedback.vinena.studio/?product=knobs${v}&page=${encodeURIComponent(page)}`;
+  return `https://feedback.vinena.studio/?product=knobs${v}&page=${encodeURIComponent(pageAddress(page))}`;
 }
 
 /** The last row of the settings: a link that opens the feedback page in a new tab, and sends nothing itself. */

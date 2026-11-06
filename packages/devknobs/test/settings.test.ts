@@ -79,9 +79,27 @@ describe("the keep edits row", () => {
 
 describe("the feedback link", () => {
   test("names the product, the version and the page", () => {
-    expect(feedbackUrl("0.5.1", "https://example.com/a?b=c#d")).toBe(
-      "https://feedback.vinena.studio/?product=knobs&v=0.5.1&page=https%3A%2F%2Fexample.com%2Fa%3Fb%3Dc%23d",
+    expect(feedbackUrl("0.5.1", "https://example.com/a")).toBe(
+      "https://feedback.vinena.studio/?product=knobs&v=0.5.1&page=https%3A%2F%2Fexample.com%2Fa",
     );
+  });
+
+  test("leaves the query and the fragment out of the page", () => {
+    const page = "https%3A%2F%2Fexample.com%2Fa";
+    expect(feedbackUrl("source", "https://example.com/a?token=x")).toEndWith(`&page=${page}`);
+    expect(feedbackUrl("source", "https://example.com/a#secret")).toEndWith(`&page=${page}`);
+    expect(feedbackUrl("source", "https://example.com/a?b=c#d")).toEndWith(`&page=${page}`);
+  });
+
+  test("keeps the port of a local page", () => {
+    expect(feedbackUrl("source", "http://localhost:5173/x?y=1")).toEndWith(
+      "&page=http%3A%2F%2Flocalhost%3A5173%2Fx",
+    );
+  });
+
+  test("drops from the first ? or # of an address it cannot parse", () => {
+    expect(feedbackUrl("source", "not a url#a?b")).toEndWith("&page=not%20a%20url");
+    expect(feedbackUrl("source", "/a/b?c")).toEndWith("&page=%2Fa%2Fb");
   });
 
   test("leaves the version out for a copy run from source", () => {

@@ -14,7 +14,7 @@ the only requests it makes for itself:
 - grab reads the page's own bundles and source maps, from the page's own origin only, to find where a component lives.
 - the picture of the page that the fold and the frame draw loads the fonts the page itself uses.
 - the width knob, a device and a pinned panel load your page a second time, in a frame.
-- send feedback opens our feedback page (feedback.vinena.studio) in a new tab with the current page address attached, query included; that address reaches us only when you send the feedback.
+- send feedback opens our feedback page (feedback.vinena.studio) in a new tab with the current page address attached, without its query or fragment; that address reaches us only when you send the feedback.
 - the ESM build loads its later parts (grab, the frame's code, the storage and styles views) from beside its own script, when first used.
 - the locale knob reloads the page once it writes the stores below, so the page starts in the new language.
 

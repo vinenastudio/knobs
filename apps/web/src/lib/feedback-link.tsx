@@ -5,7 +5,7 @@ import { m } from '../paraglide/messages.js';
 const FEEDBACK_URL = 'https://feedback.vinena.studio/?product=knobs';
 
 function withPage(event: MouseEvent<HTMLAnchorElement>) {
-  event.currentTarget.href = `${FEEDBACK_URL}&page=${encodeURIComponent(location.href)}`;
+  event.currentTarget.href = `${FEEDBACK_URL}&page=${encodeURIComponent(location.origin + location.pathname)}`;
 }
 
 export function FeedbackLink({ style }: { style: StyleXStyles }) {
