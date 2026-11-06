@@ -126,7 +126,11 @@ export interface KeepRow {
 function pageAddress(page: string): string {
   try {
     const url = new URL(page);
-    return url.origin + url.pathname;
+    url.search = "";
+    url.hash = "";
+    url.username = "";
+    url.password = "";
+    return url.href;
   } catch {
     return page.split(/[?#]/, 1)[0] ?? "";
   }

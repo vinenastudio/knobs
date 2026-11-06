@@ -97,6 +97,19 @@ describe("the feedback link", () => {
     );
   });
 
+  test("keeps pages that are not http or https whole but for the query and fragment", () => {
+    expect(feedbackUrl("source", "about:blank")).toEndWith("&page=about%3Ablank");
+    expect(feedbackUrl("source", "file:///Users/me/a.html?t=1#f")).toEndWith(
+      "&page=file%3A%2F%2F%2FUsers%2Fme%2Fa.html",
+    );
+    expect(feedbackUrl("source", "blob:https://ex.com/uuid-1?x#y")).toEndWith(
+      "&page=blob%3Ahttps%3A%2F%2Fex.com%2Fuuid-1",
+    );
+    expect(feedbackUrl("source", "chrome-extension://abcd/page.html")).toEndWith(
+      "&page=chrome-extension%3A%2F%2Fabcd%2Fpage.html",
+    );
+  });
+
   test("drops from the first ? or # of an address it cannot parse", () => {
     expect(feedbackUrl("source", "not a url#a?b")).toEndWith("&page=not%20a%20url");
     expect(feedbackUrl("source", "/a/b?c")).toEndWith("&page=%2Fa%2Fb");
