@@ -1,5 +1,9 @@
 # changelog
 
+## 0.6.3
+
+- a `send feedback` row at the end of the settings opens our feedback page in a new tab, with this knobs version and the page address filled in. the row sends nothing by itself and needs no new permission. the page address it fills in has no query or fragment, so no token in them reaches us
+
 ## 0.6.2
 
 - no 1px light line at the top or bottom edge of a phone screen in the device frame, at any pixel ratio: the screen is drawn a whole number of device pixels tall and starts on a whole device pixel, and it is redrawn when the pixel ratio changes. devices without a body, and set zooms like 100%, look as before
