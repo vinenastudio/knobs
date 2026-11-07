@@ -92,6 +92,8 @@ const FEATURED_ON = [
   { href: 'https://twelve.tools', name: 'Twelve Tools' },
   { href: 'https://findly.tools/knobs', name: 'Findly.tools' },
   { href: 'https://devhunt.org/tool/knobs', name: 'DevHunt' },
+  { href: 'https://launchigniter.com/product/knobs', name: 'LaunchIgniter' },
+  { href: 'https://fazier.com', name: 'Fazier' },
 ] as const;
 
 const DOCS = '/docs';
