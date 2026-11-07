@@ -88,7 +88,11 @@ function DevPage() {
 const WIDE = '@media (min-width: 640px)';
 
 // Boards that list knobs, one footer line. Followed links: some boards check for theirs.
-const FEATURED_ON = [{ href: 'https://twelve.tools', name: 'Twelve Tools' }] as const;
+const FEATURED_ON = [
+  { href: 'https://twelve.tools', name: 'Twelve Tools' },
+  { href: 'https://findly.tools/knobs', name: 'Findly.tools' },
+  { href: 'https://devhunt.org/tool/knobs', name: 'DevHunt' },
+] as const;
 
 const DOCS = '/docs';
 
