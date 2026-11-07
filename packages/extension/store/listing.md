@@ -6,41 +6,85 @@ code: a new permission or a new request the extension makes changes the answers 
 
 ## Store listing
 
-**Name**
+**Name** (the manifest's `name`, at most 75 characters)
 
 ```
-knobs
+knobs: Dark Mode, Responsive and Accessibility Tester for Developers
 ```
 
 **Summary** (the manifest's `description`, at most 132 characters)
 
 ```
-The knobs panel on any page, with text size, offline, media preferences, viewport and user agent set for real by Chrome.
+Test dark mode, mobile view, reduced motion, text size, locale, time zone, geolocation and user agent on any page from one panel.
 ```
 
 **Description**
 
 ```
-knobs puts a small panel on any page you open, so you can see how the page behaves under other settings without changing its code: text size, light and dark, contrast, reduced motion and transparency, offline, the viewport and phone sizes, the user agent, the locale, the time zone, the clock and more. It is the same panel as the @vinena/knobs npm package.
+knobs is a free, open source panel for web developers and designers. Open any page and test how it looks in dark mode, on a phone, with reduced motion, with larger text, in another language or in another time zone. You do not change your system settings or your code.
 
-Some knobs are set for real by Chrome instead of being imitated inside the page:
+WHAT YOU CAN TEST
 
-- Text size changes the browser's default font size, so rem and em units and em media queries follow with no rewrite of the page.
+Look and accessibility
+- Dark mode and light mode (prefers-color-scheme), per tab
+- Reduced motion (prefers-reduced-motion), animation speed and replay
+- Higher contrast (prefers-contrast) and reduced transparency
+- Text size and text spacing
+- Color blindness filters: protanopia, deuteranopia, tritanopia, achromatopsia, and blur
+
+Devices and responsive design
+- Any width or height, with touch, so your breakpoints really change
+- Phone, tablet and laptop sizes, with a device frame drawn around the page if you want one
+- A user agent switcher, so the server sees that browser. The Chromium presets (Chrome, Edge, Googlebot) also set the client hints; Safari, Firefox and a custom string send none
+
+Language, place and time
+- Any locale, with right-to-left (RTL) or left-to-right text direction
+- Pseudolocalization, to find text that does not fit
+- Geolocation from city presets or your own coordinates
+- Time zone and the page clock: a different zone, a time offset, or a stopped clock
+
+Network
+- Offline, to see how the page acts with no connection
+
+SET FOR REAL BY CHROME
+
+Some knobs are set by Chrome itself, not imitated in the page:
+- Text size changes the browser's default font size, so rem and em units and em media queries follow.
 - Offline really cuts the tab's network.
 - Color scheme, contrast, reduced motion and reduced transparency reach every media query of the tab.
-- A plain width or a phone with nothing drawn around it becomes the tab's own viewport, with touch, and nothing reloads.
-- The user agent you pick and its client hints go out on the tab's requests to its own host, so servers see that browser. A phone picked in the frame sends none, so no site signs you out, unless you turn on real phone mode, which sends it with the frame's page loads so sites serve their mobile site.
+- A width or a phone becomes the tab's own viewport, with touch, and nothing reloads. This is only when no device frame is drawn around the page: with a frame, the page shows inside it.
 
-Real or in-page: the real knobs use Chrome's debugger, so Chrome shows its "started debugging this browser" bar while one is set. A switch in the panel's settings turns that off, and then every knob except the user agent is imitated in the page, as the npm package does it, with no bar. The user agent is always set by a request rule, which shows no bar.
+For this, knobs uses Chrome's debugger, so Chrome shows its "started debugging this browser" bar while one of these knobs is set. If you do not want the bar, turn off "real browser settings" in the panel. Then every knob except the user agent is imitated inside the page. The user agent is always set by a request rule, which shows no bar.
 
-The panel also has the views a front end developer reaches for: grab (click an element to copy its html, the components that rendered it and where they live in the code, for a coding agent), inspect, a requests view laid out like the browser's network panel, storage, replay animations, and a phone or foldable drawn around the page.
+TOOLS FOR YOUR WORK
 
-What servers see: nothing changes until you set a knob. The user agent knob changes the User-Agent and client hint headers of that tab's requests to its own host, never those of a service worker or another tab. A device in the frame changes none, unless real phone mode is on: then the frame's own page loads in that tab carry the device's. While the panel's width frame is open, frames of the page's own host in that tab load without X-Frame-Options, and without a Content-Security-Policy whose frame-ancestors refuses the page, so the page can show inside the frame.
+- Grab: click an element to copy its html, the components that rendered it and their source files, ready to paste to a coding agent
+- Inspect an element
+- Requests, laid out like the network panel in Chrome DevTools
+- Storage
+- A key to open and close the panel: ⇧K
 
-Privacy: the extension sends nothing to the developer or any third party, and has no analytics. The panel's only requests go to the page you are on: its bundles and source maps for grab, its fonts, and a second load of the page in the frame. The device images ship in the extension. The extension keeps its settings in Chrome's storage on your computer, and the panel keeps its settings under devknobs keys in that page's own storage. Privacy policy: https://knobs.dev/docs/privacy
+HOW TO START
+
+1. Add knobs to Chrome.
+2. Open the page you are building, also on localhost.
+3. Click the knobs icon and set a knob. The page changes at once.
+
+WHAT SERVERS SEE
+
+Nothing changes until you set a knob. The user agent knob changes the User-Agent and client hint headers of that tab's requests to its own host, never those of a service worker or another tab. A device in the frame changes none, unless real phone mode is on: then the frame's own page loads in that tab carry the device's. While the panel's width frame is open, frames of the page's own host in that tab load without X-Frame-Options, and without a Content-Security-Policy whose frame-ancestors refuses the page, so the page can show inside the frame.
+
+PRIVACY
+
+The extension sends nothing to us or any third party, and has no analytics. The panel's requests go to the page you are on: its bundles and source maps for grab, and a second load of the page in the frame. To draw a picture of the page while a folding phone folds, it also fetches the font files the page has loaded, from the addresses the page uses, which can be on other hosts, such as a font service. The device images ship in the extension. Settings stay in Chrome's storage on your computer and in that page's own storage. Privacy policy: https://knobs.dev/docs/privacy
+
+ALSO AS AN NPM PACKAGE
+
+The same panel ships as the npm package @vinena/knobs. Add it to your own app in development, and the panel opens there for your whole team, with no extension.
 
 Docs: https://knobs.dev/docs/extension
-Source: https://github.com/vinenastudio/knobs
+Source (MIT license): https://github.com/vinenastudio/knobs
+Made by Vinena Studio.
 ```
 
 **Category**: Developer Tools
@@ -49,19 +93,23 @@ Source: https://github.com/vinenastudio/knobs
 
 **Graphics**, in this folder:
 
-| Asset                      | File                               |
-| -------------------------- | ---------------------------------- |
-| Store icon (128x128)       | `../static/icon-128.png`           |
-| Screenshot 1 (1280x800)    | `screenshot-1-panel.png`           |
-| Screenshot 2 (1280x800)    | `screenshot-2-phone.png`           |
-| Screenshot 3 (1280x800)    | `screenshot-3-request-headers.png` |
-| Screenshot 4 (1280x800)    | `screenshot-4-real-or-in-page.png` |
-| Small promo tile (440x280) | `promo-small-440x280.png`          |
+| Asset                         | File                                |
+| ----------------------------- | ----------------------------------- |
+| Store icon (128x128)          | `../static/icon-128.png`            |
+| Screenshot 1 (1280x800)       | `screenshot-1-dark-mode-v2.png`     |
+| Screenshot 2 (1280x800)       | `screenshot-2-phone-v2.png`         |
+| Screenshot 3 (1280x800)       | `screenshot-3-locale-v2.png`        |
+| Screenshot 4 (1280x800)       | `screenshot-4-accessibility-v2.png` |
+| Screenshot 5 (1280x800)       | `screenshot-5-grab-v2.png`          |
+| Small promo tile (440x280)    | `promo-small-440x280-v2.png`        |
+| Marquee promo tile (1400x560) | `promo-marquee-1400x560-v2.png`     |
 
-The screenshots are the extension's own build in Playwright's Chromium on https://knobs.dev:
-the panel with text size, reduced transparency and reduced motion set; an iPhone 18 Pro with
-Safari's bar; a demo request's Headers tab in the requests view; the settings with the "real
-browser settings" switch.
+`pnpm --filter @knobs/extension store-shots` makes all of them but the icon: the extension's
+release build in Playwright's Chromium, headless, on the demo shop in `demo/` (a small React
+app). The shots: the same page light and dark with reduced motion and a larger text; an iPhone
+17 with its browser bar and the mobile menu open; Arabic, right to left, in Tokyo's time zone and
+at Tokyo; more contrast, a larger text and deuteranopia; grab on a button, with what it copies
+for the agent.
 
 **Homepage URL**: https://knobs.dev
 
@@ -124,9 +172,10 @@ Every script is bundled in the package (`background.js`, `bridge.js`, `content.j
 **Data usage**
 
 What user data do you plan to collect: tick none. Nothing goes to the developer or any third
-party, and there are no analytics. The panel's only requests go to the page the user is on: its
-bundles and source maps for grab, its fonts, and a second load of the page in the frame. The
-device images ship in the package. The extension keeps what is listed under `storage` above, and
+party, and there are no analytics. The panel's requests go to the page the user is on: its
+bundles and source maps for grab, and a second load of the page in the frame. It also fetches
+the font files the page has loaded, from the addresses the page uses, which can be on other
+hosts, such as a font service. The device images ship in the package. The extension keeps what is listed under `storage` above, and
 the panel keeps its settings under `devknobs` keys in that page's own storage, on the user's
 computer only. While the debugger is attached, in any of its three cases, it notes the tab's
 frame loads in memory, including the full headers of up to 50 recent requests with cookies and

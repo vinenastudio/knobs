@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fernwood Coffee · Dashboard</title>
+    <link rel="icon" href="data:," />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f7f5f0;
+        --card: #ffffff;
+        --ink: #1f1c17;
+        --muted: #6b6457;
+        --line: #e7e2d8;
+        --brand: #b4532a;
+        --brand-ink: #ffffff;
+        --soft: #f3ede3;
+        --online: #2f9e5b;
+        --store: #d9473f;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #14130f;
+          --card: #1e1c18;
+          --ink: #f1ece2;
+          --muted: #a59d8e;
+          --line: #322e27;
+          --brand: #e58a5c;
+          --brand-ink: #1b120d;
+          --soft: #2a2620;
+          --online: #4cc47e;
+          --store: #f06b5f;
+        }
+      }
+      @media (prefers-contrast: more) {
+        :root {
+          --muted: var(--ink);
+          --line: var(--ink);
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family:
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          Helvetica,
+          Arial,
+          sans-serif;
+        line-height: 1.45;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        padding: 0.9rem 1.5rem;
+        border-bottom: 1px solid var(--line);
+        background: var(--card);
+      }
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        font-weight: 700;
+        font-size: 1.05rem;
+      }
+      .logo i {
+        width: 1.7rem;
+        height: 1.7rem;
+        border-radius: 0.5rem;
+        background: var(--brand);
+        display: grid;
+        place-items: center;
+        color: var(--brand-ink);
+        font-style: normal;
+        font-size: 0.9rem;
+      }
+      nav {
+        display: flex;
+        gap: 1.1rem;
+        font-size: 0.92rem;
+        color: var(--muted);
+      }
+      nav a {
+        color: inherit;
+        text-decoration: none;
+      }
+      nav a[aria-current] {
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .spacer {
+        flex: 1;
+      }
+      .avatar {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #e9b384, #b4532a);
+      }
+      .menu-button {
+        display: none;
+        width: 2.4rem;
+        height: 2.4rem;
+        border-radius: 0.6rem;
+        border: 1px solid var(--line);
+        background: var(--card);
+        color: var(--ink);
+        align-items: center;
+        justify-content: center;
+      }
+      .mobile-menu {
+        display: none;
+        border-bottom: 1px solid var(--line);
+        background: var(--card);
+        padding: 0.5rem 1rem 1rem;
+      }
+      .mobile-menu a {
+        display: block;
+        padding: 0.7rem 0.75rem;
+        border-radius: 0.6rem;
+        color: var(--ink);
+        text-decoration: none;
+        font-weight: 500;
+      }
+      .mobile-menu a[aria-current] {
+        background: var(--soft);
+      }
+      main {
+        max-width: 64rem;
+        margin: 0 auto;
+        padding: 1.5rem;
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(6, 1fr);
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 1rem;
+        padding: 1.1rem 1.25rem;
+      }
+      .greet {
+        grid-column: span 6;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+      }
+      .greet h1 {
+        margin: 0;
+        font-size: 1.5rem;
+        letter-spacing: -0.01em;
+      }
+      .greet p {
+        margin: 0.15rem 0 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+      .live {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      .live b {
+        width: 0.6rem;
+        height: 0.6rem;
+        border-radius: 50%;
+        background: var(--online);
+        animation: pulse 1.6s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          box-shadow: 0 0 0 0 color-mix(in srgb, var(--online) 60%, transparent);
+        }
+        50% {
+          box-shadow: 0 0 0 0.45rem color-mix(in srgb, var(--online) 0%, transparent);
+        }
+      }
+      .stat {
+        grid-column: span 2;
+      }
+      .stat small {
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+      .stat strong {
+        display: block;
+        font-size: 1.7rem;
+        letter-spacing: -0.02em;
+        margin-top: 0.15rem;
+      }
+      .stat em {
+        font-style: normal;
+        font-size: 0.82rem;
+        color: var(--online);
+      }
+      .bar {
+        margin-top: 0.7rem;
+        height: 0.4rem;
+        border-radius: 1rem;
+        background: var(--soft);
+        overflow: hidden;
+      }
+      .bar span {
+        display: block;
+        height: 100%;
+        width: 72%;
+        border-radius: inherit;
+        background: var(--brand);
+        animation: fill 2.4s ease-out infinite alternate;
+      }
+      @keyframes fill {
+        from {
+          width: 30%;
+        }
+        to {
+          width: 78%;
+        }
+      }
+      .chart {
+        grid-column: span 4;
+      }
+      .chart h2,
+      .side h2 {
+        margin: 0 0 0.5rem;
+        font-size: 1rem;
+      }
+      .chart svg {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+      .legend {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+      .legend span::before {
+        content: '';
+        display: inline-block;
+        width: 0.6rem;
+        height: 0.6rem;
+        border-radius: 50%;
+        margin-inline-end: 0.35rem;
+        background: currentColor;
+      }
+      .side {
+        grid-column: span 2;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      .product {
+        display: flex;
+        gap: 0.8rem;
+        align-items: center;
+      }
+      .product i {
+        width: 3rem;
+        height: 3rem;
+        flex: none;
+        border-radius: 0.75rem;
+        background: linear-gradient(160deg, #6b3f24, #2a1a10);
+      }
+      .product div {
+        flex: 1;
+        font-size: 0.9rem;
+      }
+      .product small {
+        display: block;
+        color: var(--muted);
+      }
+      .btn {
+        font: inherit;
+        font-weight: 600;
+        font-size: 0.92rem;
+        border: 0;
+        border-radius: 0.65rem;
+        padding: 0.65rem 1rem;
+        background: var(--brand);
+        color: var(--brand-ink);
+        cursor: pointer;
+      }
+      .map {
+        position: relative;
+        height: 7.5rem;
+        border-radius: 0.75rem;
+        overflow: hidden;
+        background:
+          linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 1.5rem 1.5rem,
+          linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 1.5rem 1.5rem,
+          var(--soft);
+      }
+      .map::after {
+        content: '';
+        position: absolute;
+        inset: 45% -10% auto -10%;
+        height: 0.8rem;
+        background: color-mix(in srgb, var(--brand) 25%, transparent);
+        transform: rotate(-12deg);
+      }
+      .pin {
+        position: absolute;
+        left: 50%;
+        top: 42%;
+        width: 1.6rem;
+        height: 1.6rem;
+        margin: -1.6rem 0 0 -0.8rem;
+        border-radius: 50% 50% 50% 0;
+        transform: rotate(-45deg);
+        background: var(--store);
+        z-index: 1;
+        box-shadow: 0 0.2rem 0.4rem rgb(0 0 0 / 0.25);
+      }
+      .pin::after {
+        content: '';
+        position: absolute;
+        inset: 0.45rem;
+        border-radius: 50%;
+        background: #fff;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation: none !important;
+        }
+      }
+      @media (max-width: 36rem) {
+        nav,
+        .avatar {
+          display: none;
+        }
+        .menu-button {
+          display: inline-flex;
+        }
+        .mobile-menu.open {
+          display: block;
+        }
+        main {
+          padding: 1rem;
+          grid-template-columns: 1fr;
+        }
+        .greet,
+        .stat,
+        .chart,
+        .side {
+          grid-column: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
