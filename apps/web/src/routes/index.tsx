@@ -87,6 +87,9 @@ function DevPage() {
 // that size, so these columns collapse the way they do on a real phone.
 const WIDE = '@media (min-width: 640px)';
 
+// Boards that list knobs, one footer line. Followed links: some boards check for theirs.
+const FEATURED_ON = [{ href: 'https://twelve.tools', name: 'Twelve Tools' }] as const;
+
 const DOCS = '/docs';
 
 const BLOG = '/blog';
@@ -118,6 +121,15 @@ const styles = create({
     flexBasis: '100%',
     justifyContent: 'center',
     marginTop: spacing.s4,
+  },
+  // A second centered line under the studio's, in the footer's muted words.
+  featured: {
+    color: colors.muted,
+    columnGap: '0.4em',
+    display: 'flex',
+    flexBasis: '100%',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
   },
   // The hero's two ways in, one row of equal height: the extension, then the installation prompt. On a
   // narrow screen the prompt goes under the extension.
@@ -371,6 +383,14 @@ function Landing() {
         <FeedbackLink style={styles.link} />
         <div {...props(styles.credit)}>
           <CraftedAtVinena style={styles.link} />
+        </div>
+        <div {...props(styles.featured)}>
+          {m.featured_on()}
+          {FEATURED_ON.map(({ href, name }) => (
+            <a href={href} key={href} {...props(styles.link)}>
+              {name}
+            </a>
+          ))}
         </div>
       </footer>
     </main>
