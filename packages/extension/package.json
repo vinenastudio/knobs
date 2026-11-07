@@ -8,6 +8,7 @@
     "build": "bun scripts/build.ts",
     "package": "bun scripts/package.ts",
     "smoke": "node scripts/smoke.ts",
+    "store-shots": "node scripts/store-shots.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
