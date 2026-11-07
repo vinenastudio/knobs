@@ -32,6 +32,18 @@ const GLIDE = 200;
 const FADE = 'opacity 125ms ease-out';
 const GLIDING = `transform ${GLIDE}ms ease-out, width ${GLIDE}ms ease-out, height ${GLIDE}ms ease-out, ${FADE}`;
 
+// The dim's color, as the demo's dialogs dim the page behind them.
+const SHADE = `color-mix(in srgb, ${palette.ink} 40%, transparent)`;
+const SHADE_DARK = `color-mix(in srgb, ${colors.track} 70%, transparent)`;
+
+/**
+ * The tour's own place in the top layer: a popover in the host's shadow root that shows the
+ * host's children through a slot. Its toggles stay in the shadow root, so a copy of devknobs
+ * that runs the panel in place of the page's own, such as the extension's, never hears them and
+ * never puts its panel back over the tour for them.
+ */
+const SHELL = `[popover]{display:block;position:fixed;inset:0;width:auto;height:auto;max-width:none;max-height:none;margin:0;padding:0;border:0;background:none;color:inherit;overflow:hidden;pointer-events:none}`;
+
 const pulse = keyframes({
   from: {
     boxShadow: `0 0 0 0 color-mix(in srgb, ${colors.accent} 45%, transparent)`,
@@ -72,8 +84,8 @@ const styles = create({
     boxShadow: {
       default: 'none',
       [FINE]: {
-        [DARK]: `0 0 0 200vmax color-mix(in srgb, ${colors.track} 70%, transparent)`,
-        default: `0 0 0 200vmax color-mix(in srgb, ${palette.ink} 40%, transparent)`,
+        [DARK]: `0 0 0 200vmax ${SHADE_DARK}`,
+        default: `0 0 0 200vmax ${SHADE}`,
       },
     },
     inset: -RING,
@@ -88,6 +100,18 @@ const styles = create({
   },
   dimOn: {
     opacity: 1,
+  },
+  // With no target to frame, the whole window dims behind the caption.
+  dimWhole: {
+    backgroundColor: {
+      default: 'transparent',
+      [FINE]: {
+        [DARK]: SHADE_DARK,
+        default: SHADE,
+      },
+    },
+    boxShadow: 'none',
+    inset: 0,
   },
   // Read by screen readers, never drawn.
   hidden: {
@@ -154,13 +178,28 @@ type Size = { height: number; width: number };
 
 const SIDES: ReadonlyArray<Side> = ['left', 'right', 'bottom', 'top'];
 
-/** A place for the caption: a side of the target, of the box around it (`out`), or the window's bottom. */
-type Seat = Side | `out-${Side}` | 'dock';
+/**
+ * A place for the caption: a side of the target, of the box around it (`out`), the window's
+ * bottom, or its middle.
+ */
+type Seat = Side | `out-${Side}` | 'dock' | 'middle';
 type Placed = { seat: Seat; x: number; y: number };
 
 function boxOf(node: Element): Box {
   const { bottom, left, right, top } = node.getBoundingClientRect();
   return { bottom, left, right, top };
+}
+
+/** The one box around them all, or null for none. */
+function union(boxes: ReadonlyArray<Box>): Box | null {
+  return boxes.length === 0
+    ? null
+    : {
+        bottom: Math.max(...boxes.map(({ bottom }) => bottom)),
+        left: Math.min(...boxes.map(({ left }) => left)),
+        right: Math.max(...boxes.map(({ right }) => right)),
+        top: Math.min(...boxes.map(({ top }) => top)),
+      };
 }
 
 /** The part of `a` inside `b`, or null where nothing of it is. */
@@ -223,7 +262,7 @@ function meets(a: Box, b: Box): boolean {
  * the box around the target such as the phone around its screen, it goes
  * outside that box first, level with the target, and never over `avoid`. With
  * no target, and with `docks` where there is no room outside, it sits at the
- * bottom of the window.
+ * bottom of the window, or in its middle with `middle`.
  */
 function place(
   around: Box | null,
@@ -231,8 +270,9 @@ function place(
   view: Size,
   was: Seat | null,
   outer: Box | null,
-  avoid: Box | null,
+  avoid: ReadonlyArray<Box>,
   docks: boolean,
+  middle: boolean,
 ): Placed {
   const dock: Placed = {
     seat: 'dock',
@@ -240,16 +280,23 @@ function place(
     y: Math.max(MARGIN, view.height - size.height - DOCK),
   };
   if (around === null) {
-    return dock;
+    return middle
+      ? {
+          seat: 'middle',
+          x: dock.x,
+          y: Math.max(MARGIN, Math.round((view.height - size.height) / 2)),
+        }
+      : dock;
   }
   const across = (around.left + around.right - size.width) / 2;
   const along = (around.top + around.bottom - size.height) / 2;
   const high = { x: view.width - MARGIN - size.width, y: view.height - MARGIN - size.height };
   const clear = (spot: Placed) =>
-    avoid === null ||
-    !meets(
-      { bottom: spot.y + size.height, left: spot.x, right: spot.x + size.width, top: spot.y },
-      avoid,
+    !avoid.some((box) =>
+      meets(
+        { bottom: spot.y + size.height, left: spot.x, right: spot.x + size.width, top: spot.y },
+        box,
+      ),
     );
   const seatAt = (seat: Seat): { fits: boolean; room: number; spot: Placed } => {
     if (seat === 'dock') {
@@ -294,6 +341,20 @@ function place(
   return best.spot;
 }
 
+/** The popover in the host's shadow root, made on the first call. Null where another root is there. */
+function shellOf(host: HTMLElement): HTMLElement | null {
+  if (host.shadowRoot !== null) {
+    return host.shadowRoot.querySelector<HTMLElement>('[popover]');
+  }
+  const style = document.createElement('style');
+  style.textContent = SHELL;
+  const shell = document.createElement('div');
+  shell.popover = 'manual';
+  shell.append(document.createElement('slot'));
+  host.attachShadow({ mode: 'open' }).append(style, shell);
+  return shell;
+}
+
 /** Is the node there and laid out? */
 function shown(node: Element | null | undefined): node is Element {
   return node !== null && node !== undefined && node.getClientRects().length > 0;
@@ -336,20 +397,26 @@ export function Layer({
   const box = useRef<HTMLDivElement>(null);
   const tip = useRef<HTMLDivElement>(null);
   const shade = useRef<HTMLSpanElement>(null);
-  const read = useEffectEvent(() => ({ aim: aim(), boxed }));
+  const whole = useRef<HTMLSpanElement>(null);
+  const read = useEffectEvent(() => ({ aim: aim(), boxed, dim }));
   // A new stop is looked up on the next frame, not at the next turn.
   const again = useRef(false);
 
   useEffect(() => {
     again.current = true;
-  }, [boxed, pulseKey]);
+  }, [boxed, dim, pulseKey]);
 
   useEffect(() => {
     const host = layer.current;
     const frame = box.current;
     const note = tip.current;
     const dimmer = shade.current;
-    if (host === null || frame === null || note === null || dimmer === null) {
+    const dimAll = whole.current;
+    if (host === null || frame === null || note === null || dimmer === null || dimAll === null) {
+      return;
+    }
+    const top = shellOf(host);
+    if (top === null) {
       return;
     }
     // In the browser's top layer, over the panel and whatever the page puts there, under the
@@ -358,7 +425,7 @@ export function Layer({
     let gone = false;
     void import('@vinena/knobs').then(({ holdInTopLayer, LAYER }) => {
       if (!gone) {
-        hold = holdInTopLayer(host, LAYER.guide);
+        hold = holdInTopLayer(top, LAYER.guide);
       }
     });
 
@@ -407,9 +474,12 @@ export function Layer({
       const spot = el === null ? null : (now.aim.spot?.() ?? null);
       const round = Math.round(spot?.radius ?? radius);
       const at = visible(now.aim, view, spot);
-      const outer = at === null || !shown(now.aim.beside) ? null : boxOf(now.aim.beside);
-      const avoid = at === null || !shown(now.aim.avoid) ? null : boxOf(now.aim.avoid);
+      const outer = at === null ? null : union((now.aim.beside ?? []).filter(shown).map(boxOf));
+      const avoid = at === null ? [] : (now.aim.avoid ?? []).filter(shown).map(boxOf);
       const bare = now.aim.bare === true;
+      // No target to frame while the window should dim, as with the handle hidden: the caption
+      // stands in the middle of the dimmed window.
+      const alone = at === null && now.dim;
       const key = [
         at?.left,
         at?.top,
@@ -419,10 +489,8 @@ export function Layer({
         outer?.top,
         outer?.right,
         outer?.bottom,
-        avoid?.left,
-        avoid?.top,
-        avoid?.right,
-        avoid?.bottom,
+        ...avoid.flatMap(({ bottom, left, right, top: up }) => [left, up, right, bottom]),
+        alone,
         bare,
         round,
         view.width,
@@ -466,7 +534,8 @@ export function Layer({
         dimmer.style.borderRadius = `${round + PAD + RING - 1}px`;
       }
       frame.style.opacity = framed ? '1' : '0';
-      const put = place(around, size, view, seat, outer, avoid, bare);
+      dimAll.style.opacity = alone ? '1' : '0';
+      const put = place(around, size, view, seat, outer, avoid, bare, alone);
       seat = put.seat;
       note.style.transition = moving;
       note.style.transform = `translate(${put.x}px, ${put.y}px)`;
@@ -484,6 +553,7 @@ export function Layer({
 
   return (
     <div {...props(styles.layer)} data-devknobs="tour" ref={layer}>
+      <span {...props(styles.dim, styles.dimWhole)} aria-hidden="true" ref={whole} />
       <div {...props(styles.box, strong && styles.boxStrong)} aria-hidden="true" ref={box}>
         <span {...props(styles.dim, dim && styles.dimOn)} ref={shade} />
         <span {...props(styles.pulse)} key={pulseKey} />

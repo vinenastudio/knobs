@@ -112,12 +112,15 @@ export type Spot = {
 };
 
 export type Aim = {
-  /** The panel, where the target is outside it: the caption never goes over it. */
-  readonly avoid?: Element | null;
+  /** What the caption never goes over, such as the panel and its handle where the target is outside them. */
+  readonly avoid?: ReadonlyArray<Element>;
   /** No frame here, only the caption beside the target, such as while grab draws its own box. */
   readonly bare?: boolean;
-  /** The box the caption goes outside of where there is room, such as the phone around its screen. */
-  readonly beside?: Element | null;
+  /**
+   * The boxes the caption goes outside of, as one, where there is room: the phone around its
+   * screen, or the panel and its handle around a control in the panel.
+   */
+  readonly beside?: ReadonlyArray<Element>;
   /** The box the target scrolls in, which it is cut to, such as an option's list. */
   readonly clip: Element | null;
   /** The control to frame, or null where there is none to show. */
@@ -280,13 +283,24 @@ function atScreen(): Element | null {
   return shown(glass) ? glass : (root?.querySelector(HOOKS.frame) ?? null);
 }
 
+/**
+ * The open panel's box and its handle's. A floating panel shows its handle while open too, on its
+ * outer side, past the panel's own box; a pinned one shows none.
+ */
+function panelParts(root: ShadowRoot | null | undefined): ReadonlyArray<Element> {
+  return [root?.querySelector(HOOKS.panelBox), root?.querySelector(HOOKS.handle)].filter(shown);
+}
+
 /** What a caption about the device keeps clear of: the phone it goes outside of, and the panel. */
 function around(screen: Element): Pick<Aim, 'avoid' | 'beside'> {
   const mock = frameRoot()?.querySelector(HOOKS.mock);
-  return {
-    avoid: shownOr(panelRoot()?.querySelector(HOOKS.panelBox)),
-    beside: shown(mock) ? mock : screen,
-  };
+  return { avoid: panelParts(panelRoot()), beside: [shown(mock) ? mock : screen] };
+}
+
+/** A caption about a control in the panel goes outside the panel and its handle. */
+function besidePanel(root: ShadowRoot): Pick<Aim, 'avoid' | 'beside'> {
+  const parts = panelParts(root);
+  return { avoid: parts, beside: parts };
 }
 
 function opacityOf(node: Element): number {
@@ -400,6 +414,13 @@ function find(stop: StopId, knobs: Knobs, watching: boolean): Aim {
   if (!state.panel.open || stop === 'open') {
     return { clip: null, el: shownOr(root.querySelector(HOOKS.handle)), say: 'open' };
   }
+  return { ...besidePanel(root), ...inPanel(stop, knobs, root) };
+}
+
+/** The control in the open panel for a stop. */
+function inPanel(stop: StopId, knobs: Knobs, root: ShadowRoot): Aim {
+  const state = knobs.getState();
+  const phone = knobs.PRESETS.device.find(({ id }) => id === state.device)?.kind === 'phone';
   if (stop === 'grab') {
     return { clip: null, el: shownOr(root.querySelector(HOOKS.grab)), say: 'grab' };
   }
@@ -437,7 +458,8 @@ export function aimAtPanel(knobs: Knobs): Aim {
     const root = panelRoot();
     const open = knobs.getState().panel.open;
     const el = root?.querySelector(open ? HOOKS.panelBox : HOOKS.handle);
-    return { clip: null, el: shown(el) ? el : null, say: null };
+    const near = open && root !== null && root !== undefined ? besidePanel(root) : {};
+    return { ...near, clip: null, el: shown(el) ? el : null, say: null };
   } catch {
     return { clip: null, el: null, say: null };
   }
@@ -472,7 +494,8 @@ export function aimAtSearch(): Aim {
     const root = panelRoot();
     const search = root?.querySelector(HOOKS.search);
     const el = shown(search) ? search : shownOr(root?.querySelector(HOOKS.panelBox));
-    return { clip: null, el, say: el === null ? null : 'explore' };
+    const near = root === null || root === undefined ? {} : besidePanel(root);
+    return { ...near, clip: null, el, say: el === null ? null : 'explore' };
   } catch {
     return { clip: null, el: null, say: null };
   }
