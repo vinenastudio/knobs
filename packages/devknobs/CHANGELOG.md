@@ -1,5 +1,9 @@
 # changelog
 
+## 0.6.4
+
+- the chrome extension has a clearer store name and description that say what it tests: dark mode, mobile view, reduced motion, text size, locale, time zone, geolocation and user agent. the toolbar and menus still show the short name `knobs`. no change to the panel or the npm package
+
 ## 0.6.3
 
 - a `send feedback` row at the end of the settings opens our feedback page in a new tab, with this knobs version and the page address filled in. the row sends nothing by itself and needs no new permission. the page address it fills in has no query or fragment, so no token in them reaches us
