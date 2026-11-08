@@ -59,6 +59,14 @@ const styles = create({
     height: 88,
     width: 88,
   },
+  code: {
+    backgroundColor: colors.card,
+    borderRadius: radius.base,
+    fontFamily: font.mono,
+    fontSize: '0.85em',
+    paddingBlock: '0.1em',
+    paddingInline: '0.3em',
+  },
   dot: {
     borderRadius: '50%',
     flexShrink: 0,
@@ -150,6 +158,7 @@ const styles = create({
   },
   storeClosed: { backgroundColor: SCENE.closed },
   storeOpen: { backgroundColor: SCENE.open },
+  story: { margin: 0 },
   strong: { fontWeight: font.weightMedium },
   tick: { stroke: colors.muted, strokeLinecap: 'round' },
   time: {
@@ -569,6 +578,9 @@ export function TimeCard() {
       <Chips>
         <Chip onClick={() => void askServer()}>{m.time_ask()}</Chip>
       </Chips>
+      <p {...props(styles.xs, styles.story)}>
+        {m.time_story()} <code {...props(styles.code)}>{'+2d'}</code> {m.time_story_end()}
+      </p>
     </Card>
   );
 }
