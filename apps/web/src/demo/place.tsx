@@ -60,7 +60,7 @@ const styles = create({
     width: 88,
   },
   code: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.raised,
     borderRadius: radius.base,
     fontFamily: font.mono,
     fontSize: '0.85em',
