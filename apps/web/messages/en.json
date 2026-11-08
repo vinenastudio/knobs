@@ -77,6 +77,8 @@
   "time_open": "Open, closes at {time}",
   "time_closed": "Closed, opens at {time}",
   "time_midnight": "{left} until midnight",
+  "time_story": "We built the clock at OpenPurpose. Each update went out two days after the last one, and a review had four hours. Type",
+  "time_story_end": "and see day two now.",
   "read_clock_rate": "clock speed",
   "knob_network": "network · connection · save data",
   "read_online": "navigator.onLine",
