@@ -108,7 +108,7 @@ const FEATURED_ON: ReadonlyArray<Badge> = [
     dark: {
       src: 'https://fazier.com/api/v1//public/badges/launch_badges.svg?badge_type=launched&theme=dark',
     },
-    href: 'https://fazier.com/launches/knobs.dev',
+    href: 'https://fazier.com/launches/knobs',
     name: 'Fazier',
     size: [103, 44],
     src: 'https://fazier.com/api/v1//public/badges/launch_badges.svg?badge_type=launched&theme=light',
