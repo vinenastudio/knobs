@@ -87,14 +87,44 @@ function DevPage() {
 // that size, so these columns collapse the way they do on a real phone.
 const WIDE = '@media (min-width: 640px)';
 
-// Boards that list knobs, one footer line. Followed links: some boards check for theirs.
-const FEATURED_ON = [
-  { href: 'https://twelve.tools', name: 'Twelve Tools' },
-  { href: 'https://findly.tools/knobs', name: 'Findly.tools' },
-  { href: 'https://devhunt.org/tool/knobs', name: 'DevHunt' },
-  { href: 'https://launchigniter.com/product/knobs', name: 'LaunchIgniter' },
-  { href: 'https://fazier.com', name: 'Fazier' },
-] as const;
+interface Badge {
+  dark?: { size?: readonly [number, number]; src: string };
+  href: string;
+  name: string;
+  size: readonly [number, number];
+  src: string;
+}
+
+/** Every badge is drawn this high, its width from its own shape. */
+const BADGE_HEIGHT = 36;
+
+const badgeWidth = ([width, height]: readonly [number, number]) =>
+  Math.round((width * BADGE_HEIGHT) / height);
+
+// Boards that list knobs, each by its own hosted badge (their checks look for their image and a
+// followed link to them), with its dark badge in dark where it has one. Sizes are the badge's own.
+const FEATURED_ON: ReadonlyArray<Badge> = [
+  {
+    href: 'https://tinylaunch.com',
+    name: 'Tiny Launch',
+    size: [619, 188],
+    src: 'https://tinylaunch.com/tinylaunch_badge_featured_on.svg',
+  },
+  {
+    dark: { src: 'https://twelve.tools/badge0-dark.svg' },
+    href: 'https://twelve.tools',
+    name: 'Twelve Tools',
+    size: [200, 54],
+    src: 'https://twelve.tools/badge0-light.svg',
+  },
+  {
+    dark: { src: 'https://www.uneed.best/EMBED3B.png' },
+    href: 'https://www.uneed.best/tool/knobs',
+    name: 'Uneed',
+    size: [582, 152],
+    src: 'https://www.uneed.best/EMBED3.png',
+  },
+];
 
 const DOCS = '/docs';
 
@@ -112,6 +142,25 @@ const NOTICES =
   'https://github.com/vinenastudio/knobs/blob/main/packages/devknobs/THIRD_PARTY_NOTICES.md';
 
 const styles = create({
+  badge: {
+    borderRadius: radius.row,
+    display: 'block',
+  },
+  badgeImage: {
+    display: 'block',
+    height: BADGE_HEIGHT,
+    width: 'auto',
+  },
+  badges: {
+    alignItems: 'center',
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: spacing.s3,
+    justifyContent: 'center',
+    listStyle: 'none',
+    margin: 0,
+    padding: 0,
+  },
   // The wordmark, and the way to the code at the end of its row.
   brand: {
     alignItems: 'center',
@@ -128,14 +177,15 @@ const styles = create({
     justifyContent: 'center',
     marginTop: spacing.s4,
   },
-  // A second centered line under the studio's, in the footer's muted words.
+  // Under the studio's line: the muted label over a centered row of badges, all one height, that
+  // wraps on a phone.
   featured: {
+    alignItems: 'center',
     color: colors.muted,
-    columnGap: '0.4em',
     display: 'flex',
     flexBasis: '100%',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
+    flexDirection: 'column',
+    gap: spacing.s4,
   },
   // The hero's two ways in, one row of equal height: the extension, then the installation prompt. On a
   // narrow screen the prompt goes under the extension.
@@ -392,11 +442,33 @@ function Landing() {
         </div>
         <div {...props(styles.featured)}>
           {m.featured_on()}
-          {FEATURED_ON.map(({ href, name }) => (
-            <a href={href} key={href} {...props(styles.link)}>
-              {name}
-            </a>
-          ))}
+          <ul {...props(styles.badges)}>
+            {FEATURED_ON.map(({ dark, href, name, size, src }) => (
+              <li key={href}>
+                <a href={href} {...props(styles.link, styles.badge)}>
+                  <picture>
+                    {dark ? (
+                      <source
+                        height={BADGE_HEIGHT}
+                        media="(prefers-color-scheme: dark)"
+                        srcSet={dark.src}
+                        width={badgeWidth(dark.size ?? size)}
+                      />
+                    ) : null}
+                    <img
+                      alt={m.featured_badge({ board: name })}
+                      decoding="async"
+                      height={BADGE_HEIGHT}
+                      loading="lazy"
+                      src={src}
+                      width={badgeWidth(size)}
+                      {...props(styles.badgeImage)}
+                    />
+                  </picture>
+                </a>
+              </li>
+            ))}
+          </ul>
         </div>
       </footer>
     </main>
