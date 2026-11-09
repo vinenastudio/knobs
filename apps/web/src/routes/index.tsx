@@ -105,33 +105,11 @@ const badgeWidth = ([width, height]: readonly [number, number]) =>
 // followed link to them), with its dark badge in dark where it has one. Sizes are the badge's own.
 const FEATURED_ON: ReadonlyArray<Badge> = [
   {
-    dark: {
-      src: 'https://fazier.com/api/v1//public/badges/launch_badges.svg?badge_type=launched&theme=dark',
-    },
-    href: 'https://fazier.com/launches/knobs',
-    name: 'Fazier',
-    size: [103, 44],
-    src: 'https://fazier.com/api/v1//public/badges/launch_badges.svg?badge_type=launched&theme=light',
-  },
-  {
-    href: 'https://tinylaunch.com',
-    name: 'Tiny Launch',
-    size: [619, 188],
-    src: 'https://tinylaunch.com/tinylaunch_badge_featured_on.svg',
-  },
-  {
     dark: { src: 'https://twelve.tools/badge0-dark.svg' },
     href: 'https://twelve.tools',
     name: 'Twelve Tools',
     size: [200, 54],
     src: 'https://twelve.tools/badge0-light.svg',
-  },
-  {
-    dark: { src: 'https://www.uneed.best/EMBED3B.png' },
-    href: 'https://www.uneed.best/tool/knobs',
-    name: 'Uneed',
-    size: [582, 152],
-    src: 'https://www.uneed.best/EMBED3.png',
   },
 ];
 
