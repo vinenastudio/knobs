@@ -93,23 +93,19 @@ Made by Vinena Studio.
 
 **Graphics**, in this folder:
 
-| Asset                         | File                                |
-| ----------------------------- | ----------------------------------- |
-| Store icon (128x128)          | `../static/icon-128.png`            |
-| Screenshot 1 (1280x800)       | `screenshot-1-dark-mode-v2.png`     |
-| Screenshot 2 (1280x800)       | `screenshot-2-phone-v2.png`         |
-| Screenshot 3 (1280x800)       | `screenshot-3-locale-v2.png`        |
-| Screenshot 4 (1280x800)       | `screenshot-4-accessibility-v2.png` |
-| Screenshot 5 (1280x800)       | `screenshot-5-grab-v2.png`          |
-| Small promo tile (440x280)    | `promo-small-440x280-v2.png`        |
-| Marquee promo tile (1400x560) | `promo-marquee-1400x560-v2.png`     |
+| Asset                         | File                         |
+| ----------------------------- | ---------------------------- |
+| Store icon (128x128)          | `../static/icon-128.png`     |
+| Screenshot 1 (1280x800)       | `screenshot-1-scheme.png`    |
+| Screenshot 2 (1280x800)       | `screenshot-2-text.png`      |
+| Screenshot 3 (1280x800)       | `screenshot-3-rtl.png`       |
+| Screenshot 4 (1280x800)       | `screenshot-4-vision.png`    |
+| Small promo tile (440x280)    | `promo-small-440x280.png`    |
+| Marquee promo tile (1400x560) | `promo-marquee-1400x560.png` |
 
-`pnpm --filter @knobs/extension store-shots` makes all of them but the icon: the extension's
-release build in Playwright's Chromium, headless, on the demo shop in `demo/` (a small React
-app). The shots: the same page light and dark with reduced motion and a larger text; an iPhone
-17 with its browser bar and the mobile menu open; Arabic, right to left, in Tokyo's time zone and
-at Tokyo; more contrast, a larger text and deuteranopia; grab on a button, with what it copies
-for the agent.
+`packages/extension/scripts/store-shots.ego.mjs` makes all of them but the icon, on our live
+sites in ego-browser with the knobs extension (see the extension's README, "Store"). The shots:
+dark mode, bigger text, right to left and color blindness, each on a phone with the panel open.
 
 **Homepage URL**: https://knobs.dev
 
