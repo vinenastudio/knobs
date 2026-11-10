@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "knobs: Dark Mode, Responsive and Accessibility Tester for Developers",
   "short_name": "knobs",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "description": "Test dark mode, mobile view, reduced motion, text size, locale, time zone, geolocation and user agent on any page from one panel.",
   "homepage_url": "https://knobs.dev",
   "minimum_chrome_version": "128",

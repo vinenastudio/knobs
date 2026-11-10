@@ -1,6 +1,6 @@
 # changelog
 
-## Unreleased
+## 0.6.6
 
 - grab's label leaves out component names a production build shortened, such as `xf`, and shows the element alone
 - text under Safari's bottom bars no longer shows doubled or cut on high-density phones. the picture of the page there, and in a foldable's fold, is laid out at the phone's pixel ratio, as the page is, so its lines sit where the page's do
