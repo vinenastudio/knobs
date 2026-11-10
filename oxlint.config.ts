@@ -21,6 +21,13 @@ export default defineConfig({
   ],
   overrides: [
     {
+      // Scripts ego-browser runs: node with ego's taskSpace, and page.evaluate bodies in the page.
+      env: { browser: true, node: true },
+      files: ['**/*.ego.mjs'],
+      globals: { taskSpace: 'readonly' },
+      rules: { 'no-console': 'off' },
+    },
+    {
       files: [
         '**/*.test.*',
         '**/*.stories.*',

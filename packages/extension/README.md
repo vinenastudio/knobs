@@ -48,7 +48,7 @@ Local builds reload themselves when you rebuild: the service worker checks `dist
 
 ## Store
 
-`pnpm --filter @knobs/extension package` builds `dist/` and zips it to `devknobs-<version>.zip` here (gitignored), the file the Chrome Web Store takes. The version is the manifest's, the devknobs release it bundles. `store/listing.md` holds what the store's dashboard asks for (text, permission justifications, privacy answers), and `store/` the screenshots and the promo tile. The icons are `static/icon-*.png`, from the logo master (see `AGENTS.md`, "Logo"); the 128 is the logo at 96px in 16px of clear space.
+`pnpm --filter @knobs/extension package` builds `dist/` and zips it to `devknobs-<version>.zip` here (gitignored), the file the Chrome Web Store takes. The version is the manifest's, the devknobs release it bundles. `store/listing.md` holds what the store's dashboard asks for (text, permission justifications, privacy answers), and `store/` the screenshots and the promo tile. To make the store images again, run `ego-browser nodejs -e "$(sed "s#__ROOT__#$PWD#" packages/extension/scripts/store-shots.ego.mjs)"` from the repo root, with ego lite open and the knobs extension installed in it. The icons are `static/icon-*.png`, from the logo master (see `AGENTS.md`, "Logo"); the 128 is the logo at 96px in 16px of clear space.
 
 ## Checks
 
