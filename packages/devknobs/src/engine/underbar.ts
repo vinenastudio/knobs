@@ -1,7 +1,7 @@
 import { el, type Look, place } from "./browserkit";
 import type { Bars } from "./browserui";
 import type { Rect } from "./mock";
-import { copyPage, drawing, layoutZoom, rootSize, svgUrl } from "./pageshot";
+import { copyPage, drawing, layoutZoom, rootSize, rootZoom, svgUrl } from "./pageshot";
 
 /**
  * The page under Safari's bottom bars. The frame ends where Safari's viewport
@@ -110,7 +110,7 @@ export function pictureOf(frame: HTMLIFrameElement): Picture | null {
   const root = doc.documentElement.getBoundingClientRect().height;
   const sized = rootSize(doc, view);
   const zoom = layoutZoom(view);
-  const zoomed = zoom === 1 ? "" : `;zoom:${zoom}`;
+  const zoomed = rootZoom(doc, view, zoom);
   copy.setAttribute("style", `${copy.getAttribute("style") ?? ""};${sized};height:${root}px !important${zoomed}`);
   const markup = new XMLSerializer().serializeToString(copy);
   return { src: svgUrl(drawing(markup, width, full, sized, zoom)), width, height: full };

@@ -8,6 +8,7 @@ import {
   drawMedia,
   forgetShots,
   layoutZoom,
+  rootZoom,
   marginPlace,
   paintPage,
   picturesKey,
@@ -365,7 +366,7 @@ describe("paintPage", () => {
   });
 
   /** Paint a page whose root computes `fontSize`, its copy's root styled `inline`: the drawing's markup, and the style its root got. */
-  async function drawn(fontSize: string, inline: string | null, ratio?: number): Promise<{ svg: string; style: string }> {
+  async function drawn(fontSize: string, inline: string | null, ratio?: number, zoom = "1"): Promise<{ svg: string; style: string }> {
     const rect = { left: 0, top: 0, width: 100, height: 200, right: 100, bottom: 200 };
     const html = {};
     const doc = { querySelectorAll: () => [], documentElement: html };
@@ -378,7 +379,7 @@ describe("paintPage", () => {
       devicePixelRatio: ratio,
       getComputedStyle: (node: unknown) => {
         asked.push(node);
-        return { fontSize };
+        return { fontSize, zoom };
       },
     };
     const frame = { contentDocument: doc, contentWindow: view, getBoundingClientRect: () => rect };
@@ -420,8 +421,8 @@ describe("paintPage", () => {
     } finally {
       for (const [index, name] of names.entries()) Reflect.set(globalThis, name, before[index]);
     }
-    // The size is the live page's root's, as it computes.
-    expect(asked).toEqual([html]);
+    // The size and zoom are the live page's root's, as they compute.
+    expect(asked).toEqual([html, html]);
     const url = sources[0] ?? "";
     return { svg: decodeURIComponent(url.slice(url.indexOf(",") + 1)), style: style ?? "" };
   }
@@ -445,7 +446,13 @@ describe("paintPage", () => {
   test("lays the copy out at the frame's pixel ratio, as the live page is, in a drawing of the same size", async () => {
     const { svg, style } = await drawn("16px", null, 3);
     expect(svg).toStartWith('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="200" viewBox="0 0 300 600" style="font-size:16px !important">');
-    expect(style).toBe(";font-size:16px !important;position:relative;left:0px;top:-30px;zoom:3");
+    expect(style).toBe(";font-size:16px !important;position:relative;left:0px;top:-30px;zoom:3 !important");
+  });
+
+  test("keeps a zoom the page sets on its own root, on top of the pixel ratio", async () => {
+    const { svg, style } = await drawn("16px", "zoom: 1.25", 3, "1.25");
+    expect(svg).toContain('viewBox="0 0 300 600"');
+    expect(style).toEndWith(";zoom:3.75 !important");
   });
 });
 
@@ -455,6 +462,20 @@ describe("layoutZoom", () => {
     expect(zoomOf(3)).toBe(3);
     expect(zoomOf(1.5)).toBe(1.5);
     for (const ratio of [undefined, 0, -2, Number.NaN, Number.POSITIVE_INFINITY]) expect(zoomOf(ratio)).toBe(1);
+  });
+});
+
+describe("rootZoom", () => {
+  const zoomFor = (own: unknown, ratio: number) =>
+    rootZoom({ documentElement: {} } as unknown as Document, { getComputedStyle: () => ({ zoom: own }) } as unknown as Window, ratio);
+
+  test("is nothing at a ratio of 1 on a page with no zoom of its own", () => {
+    expect(zoomFor("1", 1)).toBe("");
+  });
+
+  test("multiplies the ratio by the page's own zoom, and takes a bad one as 1", () => {
+    expect(zoomFor("1.25", 2)).toBe(";zoom:2.5 !important");
+    for (const own of [undefined, "", "normal", "0", "-1"]) expect(zoomFor(own, 3)).toBe(";zoom:3 !important");
   });
 });
 

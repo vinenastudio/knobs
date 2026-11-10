@@ -519,6 +519,17 @@ export function layoutZoom(view: Window): number {
 }
 
 /**
+ * The zoom for the root of a copy of the page in `doc`, laid out at `ratio`,
+ * as a style to add to it. A zoom the page sets on its own root comes on top of
+ * the ratio. Important, so a page rule with !important does not win over it.
+ */
+export function rootZoom(doc: Document, view: Window, ratio: number): string {
+  const own = Number(view.getComputedStyle(doc.documentElement).zoom);
+  const zoom = ratio * (Number.isFinite(own) && own > 0 ? own : 1);
+  return zoom === 1 ? "" : `;zoom:${zoom} !important`;
+}
+
+/**
  * A drawing of `markup`, a copy of the page, `width` by `height` css px, its
  * root sized by `sized`. Its copy laid out at `zoom` is as many times as
  * large, so the drawing views that much more of it in the same size.
@@ -578,7 +589,7 @@ export async function paintPage(
   const scrolled = `position:relative;left:${-scrollX}px;top:${-scrollY}px`;
   const sized = rootSize(doc, view);
   const zoom = layoutZoom(view);
-  const zoomed = zoom === 1 ? "" : `;zoom:${zoom}`;
+  const zoomed = rootZoom(doc, view, zoom);
   root.setAttribute("style", `${root.getAttribute("style") ?? ""};${sized};${scrolled}${zoomed}`);
   const markup = new XMLSerializer().serializeToString(root);
   const svg = drawing(markup, width, height, sized, zoom);
