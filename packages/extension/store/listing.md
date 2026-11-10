@@ -100,7 +100,6 @@ Made by Vinena Studio.
 | Screenshot 2 (1280x800)       | `screenshot-2-text.png`      |
 | Screenshot 3 (1280x800)       | `screenshot-3-rtl.png`       |
 | Screenshot 4 (1280x800)       | `screenshot-4-vision.png`    |
-| Screenshot 5 (1280x800)       | `screenshot-5-grab.png`      |
 | Small promo tile (440x280)    | `promo-small-440x280.png`    |
 | Marquee promo tile (1400x560) | `promo-marquee-1400x560.png` |
 

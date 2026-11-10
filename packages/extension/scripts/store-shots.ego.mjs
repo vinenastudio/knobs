@@ -69,21 +69,6 @@ const SHOTS = [
     },
     url: 'https://snug.so/',
   },
-  {
-    grab: true,
-    headline: 'Grab any element for your coding agent',
-    keep: ['device'],
-    name: 'grab',
-    state: {
-      device: 'iphone-18-pro',
-      mat: 'graphite',
-      mock: true,
-      panel: panel([]),
-      scheme: 'dark',
-      zoom: 0.68,
-    },
-    url: 'https://snug.so/',
-  },
 ];
 
 const TAGLINE = 'Dark mode, mobile view and accessibility tester';
@@ -161,6 +146,21 @@ async function load(url, state, width, height) {
   await page.waitForTimeout(1500);
   await ready();
   await page.waitForTimeout(3500);
+  // Wait until the page's text holds still (a ticking clock or counter would be caught mid-roll).
+  let last = '';
+  for (let tries = 0; tries < 12; tries++) {
+    const text = await page.evaluate(() => {
+      const frame = document
+        .querySelector('[data-devknobs="viewport"]')
+        ?.shadowRoot?.querySelector('iframe');
+      return (frame?.contentDocument ?? document).body.innerText;
+    });
+    if (text === last) {
+      break;
+    }
+    last = text;
+    await page.waitForTimeout(700);
+  }
 }
 
 // Hides what the store image should not show and lays the overlay (headline, logo) over the page.
@@ -263,27 +263,6 @@ try {
       return { left: best.left, top: best.top };
     });
 
-    if (shot.grab) {
-      // Focus the page, turn grab on and hover the target. Never click it: that copies to the clipboard.
-      await page.mouse.click(640, 790, { label: 'focus page for grab' });
-      await page.keyboard.press('Shift+G');
-      await page.waitForTimeout(500);
-      const point = await page.evaluate(() => {
-        const frame = document
-          .querySelector('[data-devknobs="viewport"]')
-          .shadowRoot.querySelector('iframe');
-        const fr = frame.getBoundingClientRect();
-        const k = fr.width / frame.clientWidth;
-        const target = [...frame.contentDocument.querySelectorAll('a, button')].find(
-          (e) => /Download for Mac/.test(e.textContent) && e.getBoundingClientRect().width > 200,
-        );
-        const r = target.getBoundingClientRect();
-        return { x: fr.left + (r.left + r.width / 2) * k, y: fr.top + (r.top + r.height / 2) * k };
-      });
-      await page.mouse.move(point.x, point.y, { label: 'hover element to grab' });
-      await page.waitForTimeout(1200);
-    }
-
     const column = Math.max(220, Math.round(edge.left - 112));
     await dress({
       html: `<div style="position:absolute;left:56px;top:${Math.max(56, Math.round(edge.top))}px;width:${column}px;font:500 40px/1.12 ${FAMILY};letter-spacing:-0.02em;color:${INK};text-wrap:balance">${shot.headline}</div>
@@ -293,9 +272,6 @@ try {
       onlyMat: false,
     });
     await save(`screenshot-${index + 1}-${shot.name}.png`, 1280, 800);
-    if (shot.grab) {
-      await page.keyboard.press('Escape');
-    }
   }
 
   for (const tile of TILES) {
