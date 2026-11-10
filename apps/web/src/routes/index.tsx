@@ -87,32 +87,6 @@ function DevPage() {
 // that size, so these columns collapse the way they do on a real phone.
 const WIDE = '@media (min-width: 640px)';
 
-interface Badge {
-  dark?: { size?: readonly [number, number]; src: string };
-  href: string;
-  name: string;
-  size: readonly [number, number];
-  src: string;
-}
-
-/** Every badge is drawn this high, its width from its own shape. */
-const BADGE_HEIGHT = 36;
-
-const badgeWidth = ([width, height]: readonly [number, number]) =>
-  Math.round((width * BADGE_HEIGHT) / height);
-
-// Boards that list knobs, each by its own hosted badge (their checks look for their image and a
-// followed link to them), with its dark badge in dark where it has one. Sizes are the badge's own.
-const FEATURED_ON: ReadonlyArray<Badge> = [
-  {
-    dark: { src: 'https://twelve.tools/badge0-dark.svg' },
-    href: 'https://twelve.tools',
-    name: 'Twelve Tools',
-    size: [200, 54],
-    src: 'https://twelve.tools/badge0-light.svg',
-  },
-];
-
 const DOCS = '/docs';
 
 const BLOG = '/blog';
@@ -129,25 +103,6 @@ const NOTICES =
   'https://github.com/vinenastudio/knobs/blob/main/packages/devknobs/THIRD_PARTY_NOTICES.md';
 
 const styles = create({
-  badge: {
-    borderRadius: radius.row,
-    display: 'block',
-  },
-  badgeImage: {
-    display: 'block',
-    height: BADGE_HEIGHT,
-    width: 'auto',
-  },
-  badges: {
-    alignItems: 'center',
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: spacing.s3,
-    justifyContent: 'center',
-    listStyle: 'none',
-    margin: 0,
-    padding: 0,
-  },
   // The wordmark, and the way to the code at the end of its row.
   brand: {
     alignItems: 'center',
@@ -163,16 +118,6 @@ const styles = create({
     flexBasis: '100%',
     justifyContent: 'center',
     marginTop: spacing.s4,
-  },
-  // Under the studio's line: the muted label over a centered row of badges, all one height, that
-  // wraps on a phone.
-  featured: {
-    alignItems: 'center',
-    color: colors.muted,
-    display: 'flex',
-    flexBasis: '100%',
-    flexDirection: 'column',
-    gap: spacing.s4,
   },
   // The hero's two ways in, one row of equal height: the extension, then the installation prompt. On a
   // narrow screen the prompt goes under the extension.
@@ -426,36 +371,6 @@ function Landing() {
         <FeedbackLink style={styles.link} />
         <div {...props(styles.credit)}>
           <CraftedAtVinena style={styles.link} />
-        </div>
-        <div {...props(styles.featured)}>
-          {m.featured_on()}
-          <ul {...props(styles.badges)}>
-            {FEATURED_ON.map(({ dark, href, name, size, src }) => (
-              <li key={href}>
-                <a href={href} {...props(styles.link, styles.badge)}>
-                  <picture>
-                    {dark ? (
-                      <source
-                        height={BADGE_HEIGHT}
-                        media="(prefers-color-scheme: dark)"
-                        srcSet={dark.src}
-                        width={badgeWidth(dark.size ?? size)}
-                      />
-                    ) : null}
-                    <img
-                      alt={m.featured_badge({ board: name })}
-                      decoding="async"
-                      height={BADGE_HEIGHT}
-                      loading="lazy"
-                      src={src}
-                      width={badgeWidth(size)}
-                      {...props(styles.badgeImage)}
-                    />
-                  </picture>
-                </a>
-              </li>
-            ))}
-          </ul>
         </div>
       </footer>
     </main>
