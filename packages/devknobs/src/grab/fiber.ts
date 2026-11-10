@@ -104,6 +104,11 @@ export function listKey(fiber: Fiber | null): string | null {
   return null;
 }
 
+/** A name a production build shortened, like `xf`: component names start uppercase. */
+export function isMinifiedName(name: string): boolean {
+  return name.length <= 2 && name[0] !== name[0]?.toUpperCase();
+}
+
 /** Names of the components above the fiber, nearest first, that `accept` lets through. */
 export function componentNames(
   fiber: Fiber | null,
@@ -114,7 +119,7 @@ export function componentNames(
   for (let current = fiber; current && names.length < max; current = current.return) {
     if (!isComposite(current)) continue;
     const name = displayName(current.type);
-    if (name && accept(name)) names.push(name);
+    if (name && !isMinifiedName(name) && accept(name)) names.push(name);
   }
   return names;
 }
