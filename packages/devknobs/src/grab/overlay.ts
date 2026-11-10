@@ -82,7 +82,7 @@ function colorRules(gamut: "srgb" | "p3"): string {
  * is blue. The label goes
  * by the page: light on a dark one, dark on a light one.
  */
-const CSS = `
+export const CSS = `
 .layer {
   all: initial;
   position: fixed;
@@ -115,8 +115,8 @@ ${colorRules("p3")}
   top: 0;
   left: 0;
   transform-origin: 0 0;
-  will-change: transform;
 }
+.glide { will-change: transform; }
 .fills > .part, .lines > .part {
   width: var(--unit);
   height: var(--unit);
@@ -372,7 +372,9 @@ function onPixels(shape: readonly number[], ratio: number): [number, number, num
  * the fill between them in three. The corners keep their size and only move.
  * The lines and the fills are one device pixel of one color, stretched by
  * whole ones: the browser puts a box on device pixels before it scales it, so
- * one px stretched leaves gaps where a px is not a whole number of them. No
+ * one px stretched leaves gaps where a px is not a whole number of them. A
+ * stretched piece must not be its own layer: the browser rounds the layer's
+ * size up, and the stretch makes that rounding grow with it. No
  * two pieces overlap, and every side is on a whole device pixel, so they meet
  * with no seam. The radius is not the shape's own, which is on its way: each
  * new one paints the corners again, so the box takes its element's at once.
