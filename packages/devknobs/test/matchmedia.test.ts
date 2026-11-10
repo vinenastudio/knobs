@@ -11,7 +11,7 @@ import { emulateMediaText } from "../src/engine/text";
 
 /** One condition, in a light window 1000px wide whose em is 16px. */
 function holds(condition: string): boolean {
-  if (condition === "not all") return false;
+  if (condition === "not all" || condition === "(not (min-width: 0px))") return false;
   const width = /^\(min-width:\s*([\d.]+)(px|em)\)$/.exec(condition);
   if (width) return Number(width[1]) * (width[2] === "em" ? 16 : 1) <= 1000;
   return condition === "(prefers-color-scheme: light)";

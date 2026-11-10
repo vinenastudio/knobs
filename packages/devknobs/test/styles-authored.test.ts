@@ -55,7 +55,7 @@ describe("a media query a knob rewrote", () => {
     apply({ ...SYSTEM_MEDIA, scheme: "dark" });
     // What the prefers knob made of the two queries, which is what the browser matches.
     expect(dark.media.mediaText).toBe("(min-width: 0px)");
-    expect(light.media.mediaText).toBe("not all");
+    expect(light.media.mediaText).toBe("(not (min-width: 0px))");
 
     const doc = page(["(min-width: 0px)"]);
     doc.styleSheets = sheets;
@@ -63,6 +63,6 @@ describe("a media query a knob rewrote", () => {
     const blocks = found.blocks.filter((block) => block.kind === "rule");
     expect(blocks.map((block) => block.context)).toEqual([[`@media ${DARK}`]]);
     expect(blocks[0]?.declarations[0]?.value).toBe("white");
-    expect(doc.mediaCalls.sort()).toEqual(["(min-width: 0px)", "not all"]);
+    expect(doc.mediaCalls.sort()).toEqual(["(min-width: 0px)", "(not (min-width: 0px))"]);
   });
 });

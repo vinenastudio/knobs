@@ -40,67 +40,120 @@ export function frameMedia(view: Window): [MediaFeature, string][] {
   return read;
 }
 
+/** Does a `color-scheme` let the browser pick light or dark, by the system's? */
+export function eitherScheme(value: string): boolean {
+  return /\blight\b/.test(value) && /\bdark\b/.test(value);
+}
+
+/** `value`, a scheme that lets the browser pick, as `scheme` alone, its `only` kept. */
+function fixed(value: string, scheme: string): string {
+  return /\bonly\b/.test(value) ? `${scheme} only` : scheme;
+}
+
+/** Visit each declaration block in `rules`, those nested too. */
+function eachStyle(rules: CSSRuleList, visit: (style: CSSStyleDeclaration) => void): void {
+  for (const rule of Array.from(rules)) {
+    const style = (rule as CSSStyleRule).style;
+    if (style) visit(style);
+    const children = (rule as CSSGroupingRule).cssRules;
+    if (children && children !== rules) eachStyle(children, visit);
+  }
+}
+
+/** The copy's rules, made to read what the frame reads. */
+export interface Frozen {
+  rules: string[];
+  /**
+   * A rule sets a scheme the rules alone do not tell, through a variable, or
+   * one that could not be parsed, so each element that picks light or dark
+   * by its computed scheme is pinned in the copy itself.
+   */
+  computed: boolean;
+}
+
 /**
- * Each of `rules`, the copy's rules one by one, with its media queries
- * reading `read`. A rule that has a query on one of the features is parsed
- * in a sheet of its own, made by `Sheet`, its queries rewritten, and written
- * out again; the rest stay as they are, so nothing else is lost. Each rule
- * stands alone, so their order, and the order of their layers, stays the
- * page's. Without a way to parse them, the rules stay as they are.
+ * The copy's rules, one by one, made to read `read`: each media query, and
+ * each `color-scheme` that lets the browser pick light or dark set to the
+ * frame's scheme, its priority kept. A rule that has either is parsed in a
+ * sheet of its own, made by `Sheet`, rewritten, and written out again; the
+ * rest stay as they are, so nothing else is lost. Each rule stands alone,
+ * so their order, and the order of their layers, stays the page's. The
+ * page's `@namespace` rules go in front of each, so a namespaced selector
+ * parses, and are left out of what is written. Without a way to parse them,
+ * the rules stay as they are.
  */
 export function freezeMedia(
   rules: string[],
   read: [MediaFeature, string][],
   Sheet: typeof CSSStyleSheet | undefined,
-): string[] {
-  if (read.length === 0 || typeof Sheet?.prototype?.replaceSync !== "function") return rules;
-  return rules.map((text) => {
-    if (!text.includes("@media") || !mentionsFeature(text)) return text;
+): Frozen {
+  const scheme = read.find(([feature]) => feature === "prefers-color-scheme")?.[1];
+  const schemed = (text: string) => scheme !== undefined && text.includes("color-scheme");
+  if (read.length === 0) return { rules, computed: false };
+  if (typeof Sheet?.prototype?.replaceSync !== "function") return { rules, computed: rules.some(schemed) };
+  const namespaces = rules.filter((text) => text.startsWith("@namespace")).join("\n");
+  let computed = false;
+  const frozen = rules.map((text) => {
+    if (!(text.includes("@media") && mentionsFeature(text)) && !schemed(text)) return text;
     try {
       const sheet = new Sheet();
-      sheet.replaceSync(text);
-      if (sheet.cssRules.length === 0) return text;
+      sheet.replaceSync(namespaces ? `${namespaces}\n${text}` : text);
+      const parsed = Array.from(sheet.cssRules).filter((rule) => !rule.cssText.startsWith("@namespace"));
+      if (parsed.length === 0) return text;
       walkRules(
         sheet.cssRules,
         (rule) => {
-          let media = rule.media.mediaText;
-          for (const [feature, value] of read) media = rewriteMediaText(media, feature, value);
-          if (media !== rule.media.mediaText) rule.media.mediaText = media;
+          let query = rule.media.mediaText;
+          for (const [feature, value] of read) query = rewriteMediaText(query, feature, value);
+          if (query !== rule.media.mediaText) rule.media.mediaText = query;
         },
         new Set(),
       );
-      return Array.from(sheet.cssRules, (rule) => rule.cssText).join("\n");
+      if (scheme) {
+        eachStyle(sheet.cssRules, (style) => {
+          const value = style.getPropertyValue("color-scheme");
+          if (value.includes("var(")) computed = true;
+          else if (eitherScheme(value)) {
+            style.setProperty("color-scheme", fixed(value, scheme), style.getPropertyPriority("color-scheme"));
+          }
+        });
+      }
+      return parsed.map((rule) => rule.cssText).join("\n");
     } catch {
+      if (schemed(text)) computed = true;
       return text;
     }
   });
-}
-
-/** Does a computed `color-scheme` let the browser pick light or dark, by the system's? */
-export function eitherScheme(value: string): boolean {
-  return /\blight\b/.test(value) && /\bdark\b/.test(value);
+  return { rules: frozen, computed };
 }
 
 /**
- * A way to tell which elements of the page in `doc` to pin to the frame's
- * scheme in its copy: each that lets the browser pick light or dark. One
- * that only takes its parent's is pinned too, as its own rule may set it
- * again in the copy, over the pin it would take. The root's comes from its
- * `color-scheme` meta too, which counts where its own is `normal`. Where
- * none of the page's rules or inline styles set a scheme, only the root is
- * looked at: the rest take its pin. Null where the root picks none then, so
- * most pages cost one look at the root.
+ * What to pin each element of the page in `doc` to in its copy, where it
+ * lets the browser pick light or dark, or null to leave it: the root, whose
+ * scheme comes from its `color-scheme` meta too where its own is `normal`,
+ * and each with a scheme in its inline style, which no rule rewritten
+ * reaches. Every element, where `computed` says the rules leave some
+ * unknown. Null where none would be pinned, so most pages cost one look at
+ * the root.
  */
-export function schemePins(doc: Document, view: Window, rules: string): ((node: Element) => boolean) | null {
+export function schemePins(
+  doc: Document,
+  view: Window,
+  scheme: string,
+  computed: boolean,
+): ((node: Element) => string | null) | null {
   const root = doc.documentElement;
   const schemeOf = (node: Element) => view.getComputedStyle(node).getPropertyValue("color-scheme");
   let top = schemeOf(root);
   if (top === "normal" || top === "") {
     top = doc.querySelector('meta[name="color-scheme"]')?.getAttribute("content") ?? top;
   }
-  const set = rules.includes("color-scheme") || doc.querySelector('[style*="color-scheme"]') !== null;
-  if (!set && !eitherScheme(top)) return null;
-  return (node) => (node === root ? eitherScheme(top) : set && eitherScheme(schemeOf(node)));
+  const inline = new Set(doc.querySelectorAll('[style*="color-scheme"]'));
+  if (!computed && inline.size === 0 && !eitherScheme(top)) return null;
+  return (node) => {
+    const value = node === root ? top : computed || inline.has(node) ? schemeOf(node) : "";
+    return eitherScheme(value) ? fixed(value, scheme) : null;
+  };
 }
 
 /** Pin `node` of a copy to `scheme`, over whatever the copy's rules say. */

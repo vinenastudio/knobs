@@ -430,26 +430,40 @@ export function copyPage(frame: HTMLIFrameElement, leave?: (node: Element) => bo
   if (!doc?.documentElement) return null;
   // Its styles inlined, as a drawing of it loads nothing of its own, and the
   // fonts it shows with them, those fetched by now.
+  const namespaces: string[] = [];
   const rules: string[] = [];
   const written = embedFonts(doc);
   for (const sheet of [...doc.styleSheets, ...(doc.adoptedStyleSheets ?? [])]) {
     try {
-      for (const rule of sheet.cssRules) rules.push(written(rule));
+      const own: string[] = [];
+      for (const rule of sheet.cssRules) {
+        const text = written(rule);
+        // A namespace holds only at the top of a sheet, before any other rule.
+        (text.startsWith("@namespace") ? namespaces : own).push(text);
+      }
+      // A sheet for some media only, as its `<link>` or `<style>` has it, is for those in the copy too.
+      const media = sheet.media?.mediaText ?? "";
+      if (own.length > 0 && media !== "" && media !== "all") rules.push(`@media ${media} {\n${own.join("\n")}\n}`);
+      else rules.push(...own);
     } catch {
       // A sheet from another origin keeps its rules to itself.
     }
   }
   // A drawing of it matches its media against the system, so they read what the frame reads.
-  const view = frame.contentWindow;
+  const view = doc.defaultView;
   const read = view ? frameMedia(view) : [];
-  const css = freezeMedia(rules, read, (view as (Window & typeof globalThis) | null)?.CSSStyleSheet).join("\n");
+  const frozen = freezeMedia([...namespaces, ...rules], read, view?.CSSStyleSheet);
   const scheme = read.find(([feature]) => feature === "prefers-color-scheme")?.[1];
-  const pinned = view && scheme ? schemePins(doc, view, css) : null;
+  const pinned = view && scheme ? schemePins(doc, view, scheme, frozen.computed) : null;
+  const pin = (node: Element, copy: Element) => {
+    const to = pinned?.(node);
+    if (to) pinScheme(copy, to);
+  };
   // Made in a document of its own, which loads nothing and runs nothing: a
   // copy in the frame's would fetch its pictures again and run their handlers.
   const inert = doc.implementation.createHTMLDocument("");
   const root = inert.importNode(doc.documentElement, true);
-  if (pinned && scheme && pinned(doc.documentElement)) pinScheme(root, scheme);
+  pin(doc.documentElement, root);
   if (leave || pinned) {
     // The copy has the page's elements in the same order until some are taken out.
     const live = doc.documentElement.getElementsByTagName("*");
@@ -459,14 +473,14 @@ export function copyPage(frame: HTMLIFrameElement, leave?: (node: Element) => bo
       const copy = copied[index];
       if (!node || !copy) continue;
       if (leave?.(node)) copy.setAttribute("data-devknobs", "");
-      if (pinned && scheme && pinned(node)) pinScheme(copy, scheme);
+      pin(node, copy);
     }
   }
   blankPictures(doc.documentElement, root);
   // And nothing devknobs put on the page: what its knobs write is in the rules.
   for (const node of root.querySelectorAll("script, link, style, noscript, [data-devknobs]")) node.remove();
   const style = inert.createElement("style");
-  style.textContent = css;
+  style.textContent = frozen.rules.join("\n");
   (root.querySelector("head") ?? root).append(style);
   return root;
 }

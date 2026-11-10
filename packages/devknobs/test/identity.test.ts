@@ -89,7 +89,7 @@ describe("patchWindow", () => {
     expect(view.navigator.maxTouchPoints).toBe(5);
     expect("ontouchstart" in view).toBe(true);
     expect(view.matchMedia("(pointer: coarse)").media).toBe("(min-width: 0px)");
-    expect(view.matchMedia("(hover: hover)").media).toBe("not all");
+    expect(view.matchMedia("(hover: hover)").media).toBe("(not (min-width: 0px))");
     expect(navigator.userAgent).toBe(own);
   });
 
