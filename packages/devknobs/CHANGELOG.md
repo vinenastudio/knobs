@@ -1,5 +1,11 @@
 # changelog
 
+## 0.6.5
+
+- in light mode on a computer set to dark, the page under Safari's bottom bar on an iPhone or iPad is light too. the picture of the page there, and in a foldable's fold, now uses the scheme and other settings the page reads, not the computer's. it keeps `@namespace` rules and a style sheet's own `media`
+- a media query with `not (...)` or `or` reads right while a knob sets its feature, such as `(not (prefers-color-scheme: dark))` with the scheme knob on light
+- the grab box's top and bottom lines end at its corners on a phone. before, they ran a little past the right corner on 3x devices
+
 ## 0.6.4
 
 - the chrome extension has a clearer store name and description that say what it tests: dark mode, mobile view, reduced motion, text size, locale, time zone, geolocation and user agent. the toolbar and menus still show the short name `knobs`. no change to the panel or the npm package
