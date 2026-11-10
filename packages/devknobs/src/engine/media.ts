@@ -153,7 +153,7 @@ export function mentionsFeature(text: string): boolean {
   return FEATURES.some((feature) => lower.includes(feature));
 }
 
-type MediaBearingRule = CSSRule & { media: MediaList };
+export type MediaBearingRule = CSSRule & { media: MediaList };
 
 /** A list the early script tracked, handed to the full one with what the page heard. */
 interface Handover {
@@ -221,7 +221,8 @@ export function authoredQuery(rule: MediaBearingRule): string {
   return originals.get(rule) ?? authoredMedia(rule) ?? rule.media.mediaText;
 }
 
-function walkRules(
+/** Visit each rule in `rules` with a media list, those nested and those of imported sheets too. */
+export function walkRules(
   rules: CSSRuleList,
   visit: (rule: MediaBearingRule) => void,
   seen: Set<CSSStyleSheet>,

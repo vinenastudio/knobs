@@ -1,6 +1,7 @@
 import { blurWidths } from "./fold";
 import { objectPlace } from "./objectfit";
 import { embedFonts, forgetFonts } from "./pagefonts";
+import { freezeMedia, frameMedia, pinScheme, schemePins } from "./shotmedia";
 
 /**
  * A rough picture of the page in the frame, for the copies of a foldable's
@@ -438,24 +439,34 @@ export function copyPage(frame: HTMLIFrameElement, leave?: (node: Element) => bo
       // A sheet from another origin keeps its rules to itself.
     }
   }
+  // A drawing of it matches its media against the system, so they read what the frame reads.
+  const view = frame.contentWindow;
+  const read = view ? frameMedia(view) : [];
+  const css = freezeMedia(rules, read, (view as (Window & typeof globalThis) | null)?.CSSStyleSheet).join("\n");
+  const scheme = read.find(([feature]) => feature === "prefers-color-scheme")?.[1];
+  const pinned = view && scheme ? schemePins(doc, view, css) : null;
   // Made in a document of its own, which loads nothing and runs nothing: a
   // copy in the frame's would fetch its pictures again and run their handlers.
   const inert = doc.implementation.createHTMLDocument("");
   const root = inert.importNode(doc.documentElement, true);
-  if (leave) {
+  if (pinned && scheme && pinned(doc.documentElement)) pinScheme(root, scheme);
+  if (leave || pinned) {
     // The copy has the page's elements in the same order until some are taken out.
     const live = doc.documentElement.getElementsByTagName("*");
     const copied = root.getElementsByTagName("*");
     for (let index = 0; index < live.length; index++) {
       const node = live[index];
-      if (node && leave(node)) copied[index]?.setAttribute("data-devknobs", "");
+      const copy = copied[index];
+      if (!node || !copy) continue;
+      if (leave?.(node)) copy.setAttribute("data-devknobs", "");
+      if (pinned && scheme && pinned(node)) pinScheme(copy, scheme);
     }
   }
   blankPictures(doc.documentElement, root);
   // And nothing devknobs put on the page: what its knobs write is in the rules.
   for (const node of root.querySelectorAll("script, link, style, noscript, [data-devknobs]")) node.remove();
   const style = inert.createElement("style");
-  style.textContent = rules.join("\n");
+  style.textContent = css;
   (root.querySelector("head") ?? root).append(style);
   return root;
 }
