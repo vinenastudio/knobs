@@ -4,8 +4,12 @@ import {
   blurMargin,
   blurPictures,
   copyPage,
+  drawing,
   drawMedia,
   forgetShots,
+  layoutZoom,
+  ownZoom,
+  rootZoom,
   marginPlace,
   paintPage,
   picturesKey,
@@ -16,6 +20,17 @@ import {
 } from "../src/engine/pageshot";
 import * as outlines from "../src/engine/outlines";
 import * as spacing from "../src/engine/spacing";
+
+/** Run `run` as in a browser that does, or does not, have `userAgentData`, as only Chromium does. */
+async function inBrowser<T>(chromium: boolean, run: () => T | Promise<T>): Promise<T> {
+  const before = Reflect.get(globalThis, "navigator");
+  Reflect.set(globalThis, "navigator", chromium ? { userAgentData: {} } : {});
+  try {
+    return await run();
+  } finally {
+    Reflect.set(globalThis, "navigator", before);
+  }
+}
 
 /** An element as far as a copy of the page reads one, which counts what it sets off. */
 class FakeNode {
@@ -363,7 +378,7 @@ describe("paintPage", () => {
   });
 
   /** Paint a page whose root computes `fontSize`, its copy's root styled `inline`: the drawing's markup, and the style its root got. */
-  async function drawn(fontSize: string, inline: string | null): Promise<{ svg: string; style: string }> {
+  async function drawn(fontSize: string, inline: string | null, ratio?: number, zoom = "1"): Promise<{ svg: string; style: string }> {
     const rect = { left: 0, top: 0, width: 100, height: 200, right: 100, bottom: 200 };
     const html = {};
     const doc = { querySelectorAll: () => [], documentElement: html };
@@ -373,9 +388,10 @@ describe("paintPage", () => {
       innerHeight: 200,
       scrollX: 0,
       scrollY: 30,
+      devicePixelRatio: ratio,
       getComputedStyle: (node: unknown) => {
         asked.push(node);
-        return { fontSize };
+        return { fontSize, zoom };
       },
     };
     const frame = { contentDocument: doc, contentWindow: view, getBoundingClientRect: () => rect };
@@ -407,18 +423,20 @@ describe("paintPage", () => {
       }
     });
     try {
-      await paintPage(
-        frame as unknown as HTMLIFrameElement,
-        glass as unknown as HTMLElement,
-        { width: 100, height: 200 },
-        "#fff",
-        { cloneNode: () => root } as unknown as Element,
+      await inBrowser(true, () =>
+        paintPage(
+          frame as unknown as HTMLIFrameElement,
+          glass as unknown as HTMLElement,
+          { width: 100, height: 200 },
+          "#fff",
+          { cloneNode: () => root } as unknown as Element,
+        ),
       );
     } finally {
       for (const [index, name] of names.entries()) Reflect.set(globalThis, name, before[index]);
     }
-    // The size is the live page's root's, as it computes.
-    expect(asked).toEqual([html]);
+    // The size and zoom are the live page's root's, as they compute.
+    expect(asked).toEqual([html, html, html]);
     const url = sources[0] ?? "";
     return { svg: decodeURIComponent(url.slice(url.indexOf(",") + 1)), style: style ?? "" };
   }
@@ -437,6 +455,79 @@ describe("paintPage", () => {
     const { svg, style } = await drawn("10px", null);
     expect(svg).toContain('height="200" style="font-size:10px !important">');
     expect(style).toBe(";font-size:10px !important;position:relative;left:0px;top:-30px");
+  });
+
+  test("lays the copy out at the frame's pixel ratio, as the live page is, in a drawing of the same size", async () => {
+    const { svg, style } = await drawn("16px", null, 3);
+    expect(svg).toStartWith('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="200" viewBox="0 0 300 600" style="font-size:16px !important">');
+    expect(style).toBe(";font-size:16px !important;position:relative;left:0px;top:-30px;zoom:3 !important");
+  });
+
+  test("keeps a zoom the page sets on its own root, on top of the pixel ratio", async () => {
+    const { svg, style } = await drawn("16px", "zoom: 1.25", 3, "1.25");
+    expect(svg).toContain('viewBox="0 0 300 600"');
+    expect(style).toEndWith(";zoom:3.75 !important");
+  });
+
+  test("scrolls the copy in its root's own zoom, so a zoomed page is not scrolled too far", async () => {
+    const { style } = await drawn("16px", "zoom: 1.25", 1, "1.25");
+    expect(style).toBe("zoom: 1.25;font-size:16px !important;position:relative;left:0px;top:-24px;zoom:1.25 !important");
+  });
+});
+
+describe("layoutZoom", () => {
+  const zoomOf = (ratio: unknown) => layoutZoom({ devicePixelRatio: ratio } as unknown as Window);
+
+  test("is the frame's pixel ratio in Chromium, or 1 where it has none", async () => {
+    await inBrowser(true, () => {
+      expect(zoomOf(3)).toBe(3);
+      expect(zoomOf(1.5)).toBe(1.5);
+      for (const ratio of [undefined, 0, -2, Number.NaN, Number.POSITIVE_INFINITY]) expect(zoomOf(ratio)).toBe(1);
+    });
+  });
+
+  test("is 1 in a browser with no userAgentData, which lays the page out in css px", async () => {
+    await inBrowser(false, () => expect(zoomOf(3)).toBe(1));
+  });
+});
+
+describe("ownZoom", () => {
+  test("is the zoom the page sets on its own root, or 1 for a bad one", () => {
+    const ownOf = (own: unknown) =>
+      ownZoom({ documentElement: {} } as unknown as Document, { getComputedStyle: () => ({ zoom: own }) } as unknown as Window);
+    expect(ownOf("0.5")).toBe(0.5);
+    for (const own of [undefined, "", "normal", "0", "-1"]) expect(ownOf(own)).toBe(1);
+  });
+});
+
+describe("rootZoom", () => {
+  const zoomFor = (own: unknown, ratio: number) =>
+    rootZoom({ documentElement: {} } as unknown as Document, { getComputedStyle: () => ({ zoom: own }) } as unknown as Window, ratio);
+
+  test("is nothing at a ratio of 1 on a page with no zoom of its own", () => {
+    expect(zoomFor("1", 1)).toBe("");
+  });
+
+  test("multiplies the ratio by the page's own zoom, and takes a bad one as 1", () => {
+    expect(zoomFor("1.25", 2)).toBe(";zoom:2.5 !important");
+    for (const own of [undefined, "", "normal", "0", "-1"]) expect(zoomFor(own, 3)).toBe(";zoom:3 !important");
+  });
+
+  test("is set where the ratio and the page's own zoom make 1, as the drawing still views the ratio", () => {
+    expect(zoomFor("0.5", 2)).toBe(";zoom:1 !important");
+  });
+});
+
+describe("drawing", () => {
+  test("views as much more of a copy laid out at a zoom, at the same size", () => {
+    expect(drawing("<p/>", 390, 844, "font-size:16px", 3)).toBe(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="390" height="844" viewBox="0 0 1170 2532" style="font-size:16px">' +
+        '<foreignObject width="100%" height="100%"><p/></foreignObject></svg>',
+    );
+  });
+
+  test("has no viewBox at a zoom of 1, or at none", () => {
+    for (const zoom of [1, 0, Number.NaN]) expect(drawing("<p/>", 390, 844, "", zoom)).not.toContain("viewBox");
   });
 });
 

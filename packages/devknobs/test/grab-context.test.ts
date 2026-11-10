@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Fiber } from "bippy";
 import { grabContext } from "../src/grab/context";
-import { componentNames, displayName, getFiber, isComposite, listKey } from "../src/grab/fiber";
+import { componentNames, displayName, getFiber, isComposite, isMinifiedName, listKey } from "../src/grab/fiber";
 
 interface FakeFiber {
   tag: number;
@@ -88,6 +88,19 @@ describe("fiber helpers", () => {
     expect(componentNames(asFiber(leaf), 5, () => true)).toEqual(["Row", "App"]);
     expect(componentNames(asFiber(leaf), 1, () => true)).toEqual(["Row"]);
     expect(componentNames(asFiber(leaf), 5, (name) => name !== "Row")).toEqual(["App"]);
+  });
+
+  test("leaves out names a production build shortened", () => {
+    expect(["xf", "a", "UI", "Nav", "ab3"].filter((name) => !isMinifiedName(name))).toEqual([
+      "UI",
+      "Nav",
+      "ab3",
+    ]);
+    function xf() {
+      return null;
+    }
+    const leaf = fiber("span", null, fiber(xf, null, fiber(App)));
+    expect(componentNames(asFiber(leaf), 5, () => true)).toEqual(["App"]);
   });
 });
 

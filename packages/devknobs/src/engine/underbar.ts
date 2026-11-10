@@ -1,7 +1,7 @@
 import { el, type Look, place } from "./browserkit";
 import type { Bars } from "./browserui";
 import type { Rect } from "./mock";
-import { copyPage, rootSize, svgUrl } from "./pageshot";
+import { copyPage, drawing, layoutZoom, ownZoom, rootSize, rootZoom, svgUrl } from "./pageshot";
 
 /**
  * The page under Safari's bottom bars. The frame ends where Safari's viewport
@@ -107,14 +107,14 @@ export function pictureOf(frame: HTMLIFrameElement): Picture | null {
   }
   const full = Math.max(doc.documentElement.scrollHeight, tall);
   // The root as tall as the frame's, so a body at 100% is too, as the picture's own viewport is not.
-  const root = doc.documentElement.getBoundingClientRect().height;
+  // Its box has the root's own zoom in it already, which its zoomed height would add again.
+  const root = doc.documentElement.getBoundingClientRect().height / ownZoom(doc, view);
   const sized = rootSize(doc, view);
-  copy.setAttribute("style", `${copy.getAttribute("style") ?? ""};${sized};height:${root}px !important`);
+  const zoom = layoutZoom(view);
+  const zoomed = rootZoom(doc, view, zoom);
+  copy.setAttribute("style", `${copy.getAttribute("style") ?? ""};${sized};height:${root}px !important${zoomed}`);
   const markup = new XMLSerializer().serializeToString(copy);
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${full}" style="${sized}">` +
-    `<foreignObject width="100%" height="100%">${markup}</foreignObject></svg>`;
-  return { src: svgUrl(svg), width, height: full };
+  return { src: svgUrl(drawing(markup, width, full, sized, zoom)), width, height: full };
 }
 
 export interface Underbar {

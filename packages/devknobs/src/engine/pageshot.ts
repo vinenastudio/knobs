@@ -508,6 +508,51 @@ export function rootSize(doc: Document, view: Window): string {
 }
 
 /**
+ * The zoom the page in `view` is laid out at: its pixel ratio, or 1 where it
+ * has none. The browser lays the live page out with its pixel ratio as a
+ * zoom, and a drawing of its copy at 1. Text lines round apart at the two,
+ * more the further down the page, so the copy is laid out at the page's.
+ * Only Chromium lays the page out so. Safari and Firefox lay it out in css
+ * px, as the drawing at 1 is, so it stays 1 there. The browser is told by
+ * the host's own `userAgentData`, as a device frame may change the page's.
+ * An insecure origin has none either, and keeps 1.
+ */
+export function layoutZoom(view: Window): number {
+  if (!("userAgentData" in navigator)) return 1;
+  const ratio = view.devicePixelRatio;
+  return Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+}
+
+/** The zoom the page in `doc` sets on its own root, or 1 where it sets a bad one. */
+export function ownZoom(doc: Document, view: Window): number {
+  const own = Number(view.getComputedStyle(doc.documentElement).zoom);
+  return Number.isFinite(own) && own > 0 ? own : 1;
+}
+
+/**
+ * The zoom for the root of a copy of the page in `doc`, laid out at `ratio`,
+ * as a style to add to it. A zoom the page sets on its own root comes on top of
+ * the ratio. Important, so a page rule with !important does not win over it.
+ */
+export function rootZoom(doc: Document, view: Window, ratio: number): string {
+  const own = ownZoom(doc, view);
+  return ratio === 1 && own === 1 ? "" : `;zoom:${ratio * own} !important`;
+}
+
+/**
+ * A drawing of `markup`, a copy of the page, `width` by `height` css px, its
+ * root sized by `sized`. Its copy laid out at `zoom` is as many times as
+ * large, so the drawing views that much more of it in the same size.
+ */
+export function drawing(markup: string, width: number, height: number, sized: string, zoom: number): string {
+  const view = Number.isFinite(zoom) && zoom > 0 && zoom !== 1 ? ` viewBox="0 0 ${width * zoom} ${height * zoom}"` : "";
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"${view} style="${sized}">` +
+    `<foreignObject width="100%" height="100%">${markup}</foreignObject></svg>`
+  );
+}
+
+/**
  * A picture of the page in `frame` as the browser draws it, from `copy`, laid
  * out and scrolled as the frame is now, on a canvas of the screen `glass`
  * shows it on, `size` css px, on `color`. Its pictures, videos and drawings
@@ -550,14 +595,15 @@ export async function paintPage(
     }
   }
   const root = copy.cloneNode(true) as Element;
-  // Scrolled as the frame is, what is pinned to the screen staying put.
-  const scrolled = `position:relative;left:${-scrollX}px;top:${-scrollY}px`;
+  // Scrolled as the frame is, what is pinned to the screen staying put. The root's own zoom scales these too.
+  const own = ownZoom(doc, view);
+  const scrolled = `position:relative;left:${-scrollX / own}px;top:${-scrollY / own}px`;
   const sized = rootSize(doc, view);
-  root.setAttribute("style", `${root.getAttribute("style") ?? ""};${sized};${scrolled}`);
+  const zoom = layoutZoom(view);
+  const zoomed = rootZoom(doc, view, zoom);
+  root.setAttribute("style", `${root.getAttribute("style") ?? ""};${sized};${scrolled}${zoomed}`);
   const markup = new XMLSerializer().serializeToString(root);
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" style="${sized}">` +
-    `<foreignObject width="100%" height="100%">${markup}</foreignObject></svg>`;
+  const svg = drawing(markup, width, height, sized, zoom);
   const image = new Image();
   // As data, not a blob: Chrome marks a drawing from a blob as foreign, and its canvas could not go to the GPU.
   try {
