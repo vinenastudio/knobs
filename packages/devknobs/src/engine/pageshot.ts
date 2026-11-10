@@ -1,7 +1,7 @@
 import { blurWidths } from "./fold";
 import { objectPlace } from "./objectfit";
 import { embedFonts, forgetFonts } from "./pagefonts";
-import { freezeMedia, frameMedia, pinScheme, schemePins } from "./shotmedia";
+import { freezeMedia, frameMedia, pinScheme, prefixedNamespace, schemePins } from "./shotmedia";
 
 /**
  * A rough picture of the page in the frame, for the copies of a foldable's
@@ -439,7 +439,8 @@ export function copyPage(frame: HTMLIFrameElement, leave?: (node: Element) => bo
       for (const rule of sheet.cssRules) {
         const text = written(rule);
         // A namespace holds only at the top of a sheet, before any other rule.
-        (text.startsWith("@namespace") ? namespaces : own).push(text);
+        if (!text.startsWith("@namespace")) own.push(text);
+        else if (prefixedNamespace(text)) namespaces.push(text);
       }
       // A sheet for some media only, as its `<link>` or `<style>` has it, is for those in the copy too.
       const media = sheet.media?.mediaText ?? "";

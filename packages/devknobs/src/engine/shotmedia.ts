@@ -40,6 +40,16 @@ export function frameMedia(view: Window): [MediaFeature, string][] {
   return read;
 }
 
+/**
+ * Is `text` a namespace rule with a prefix? Only those move to the top of
+ * the copy's one sheet: a default one, with no prefix, would hold for every
+ * sheet of the page there, not only its own, and an html element would stop
+ * matching a plain type selector. A default one is left out of the copy.
+ */
+export function prefixedNamespace(text: string): boolean {
+  return /^@namespace\s+(?!url\(|["'])\S/i.test(text);
+}
+
 /** Does a `color-scheme` let the browser pick light or dark, by the system's? */
 export function eitherScheme(value: string): boolean {
   return /\blight\b/.test(value) && /\bdark\b/.test(value);
@@ -78,7 +88,7 @@ export interface Frozen {
  * sheet of its own, made by `Sheet`, rewritten, and written out again; the
  * rest stay as they are, so nothing else is lost. Each rule stands alone,
  * so their order, and the order of their layers, stays the page's. The
- * page's `@namespace` rules go in front of each, so a namespaced selector
+ * page's prefixed `@namespace` rules go in front of each, so a namespaced selector
  * parses, and are left out of what is written. Without a way to parse them,
  * the rules stay as they are.
  */
@@ -91,7 +101,7 @@ export function freezeMedia(
   const schemed = (text: string) => scheme !== undefined && text.includes("color-scheme");
   if (read.length === 0) return { rules, computed: false };
   if (typeof Sheet?.prototype?.replaceSync !== "function") return { rules, computed: rules.some(schemed) };
-  const namespaces = rules.filter((text) => text.startsWith("@namespace")).join("\n");
+  const namespaces = rules.filter(prefixedNamespace).join("\n");
   let computed = false;
   const frozen = rules.map((text) => {
     if (!(text.includes("@media") && mentionsFeature(text)) && !schemed(text)) return text;

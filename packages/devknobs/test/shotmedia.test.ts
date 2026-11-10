@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { MediaFeature } from "../src/engine/media";
 import { copyPage, forgetShots } from "../src/engine/pageshot";
-import { eitherScheme, frameMedia, freezeMedia } from "../src/engine/shotmedia";
+import { eitherScheme, frameMedia, freezeMedia, prefixedNamespace } from "../src/engine/shotmedia";
 
 const TRUE_TOKEN = "(min-width: 0px)";
 const FALSE_TOKEN = "(not (min-width: 0px))";
@@ -244,6 +244,15 @@ describe("freezeMedia", () => {
   });
 });
 
+describe("prefixedNamespace", () => {
+  test("is a namespace with a prefix, not a default one", () => {
+    expect(prefixedNamespace('@namespace svg url("http://www.w3.org/2000/svg");')).toBe(true);
+    expect(prefixedNamespace('@namespace url("http://www.w3.org/1999/xhtml");')).toBe(false);
+    expect(prefixedNamespace('@namespace "http://www.w3.org/1999/xhtml";')).toBe(false);
+    expect(prefixedNamespace("p { margin: 0; }")).toBe(false);
+  });
+});
+
 describe("eitherScheme", () => {
   test("is a scheme the browser picks by the system's", () => {
     expect(eitherScheme("light dark")).toBe(true);
@@ -411,6 +420,15 @@ describe("copyPage, of a frame that reads another scheme than the system", () =>
     expect(either.getAttribute("style")).toBe(";color-scheme:light !important");
     const one = copied([["p { margin: 0; }"]], page("normal", [], [new El("meta", "normal", [], { name: "color-scheme", content: "only light" })]));
     expect(styled(one)).toEqual([]);
+  });
+
+  test("moves a prefixed namespace to the top, and leaves a default one out, so it holds for no other sheet", () => {
+    const prefixed = '@namespace svg url("http://www.w3.org/2000/svg");';
+    const copy = copied(
+      [["p { margin: 0; }"], ['@namespace url("http://www.w3.org/2000/svg");', prefixed, "rect { fill: red; }"]],
+      page("normal"),
+    );
+    expect(copy.querySelector("style")?.text).toBe(`${prefixed}\np { margin: 0; }\nrect { fill: red; }`);
   });
 
   test("sets no style anywhere on a root that is normal with no meta", () => {
