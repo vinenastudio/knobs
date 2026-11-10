@@ -105,8 +105,7 @@ Made by Vinena Studio.
 
 `packages/extension/scripts/store-shots.ego.mjs` makes all of them but the icon, on our live
 sites in ego-browser with the knobs extension (see the extension's README, "Store"). The shots:
-dark mode, bigger text, right to left, color blindness and grab, each on a phone with the panel
-open.
+dark mode, bigger text, right to left and color blindness, each on a phone with the panel open.
 
 **Homepage URL**: https://knobs.dev
 

@@ -4,7 +4,9 @@
 // It runs in ego's runtime (node plus taskSpace); the page.evaluate bodies run in the page.
 
 const ROOT = '__ROOT__';
-const FONT = '/Users/duzgundev/.claude/orchestrator/assets/review/SuisseIntl-Medium.woff2';
+// The headline font, Suisse Intl Medium (licensed, not in the repo): the run command puts its
+// path here. Without it the headlines use system-ui.
+const FONT = '__FONT__';
 const LOGO = `${ROOT}/apps/web/public/favicon.svg`;
 const OUT = `${ROOT}/packages/extension/store`;
 
