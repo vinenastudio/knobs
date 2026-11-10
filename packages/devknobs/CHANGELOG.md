@@ -1,5 +1,9 @@
 # changelog
 
+## Unreleased
+
+- text under Safari's bottom bars no longer shows doubled or cut on high-density phones. the picture of the page there, and in a foldable's fold, is laid out at the phone's pixel ratio, as the page is, so its lines sit where the page's do
+
 ## 0.6.5
 
 - in light mode on a computer set to dark, the page under Safari's bottom bar on an iPhone or iPad is light too. the picture of the page there, and in a foldable's fold, now uses the scheme and other settings the page reads, not the computer's. it keeps `@namespace` rules and a style sheet's own `media`

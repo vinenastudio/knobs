@@ -508,6 +508,30 @@ export function rootSize(doc: Document, view: Window): string {
 }
 
 /**
+ * The zoom the page in `view` is laid out at: its pixel ratio, or 1 where it
+ * has none. The browser lays the live page out with its pixel ratio as a
+ * zoom, and a drawing of its copy at 1. Text lines round apart at the two,
+ * more the further down the page, so the copy is laid out at the page's.
+ */
+export function layoutZoom(view: Window): number {
+  const ratio = view.devicePixelRatio;
+  return Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+}
+
+/**
+ * A drawing of `markup`, a copy of the page, `width` by `height` css px, its
+ * root sized by `sized`. Its copy laid out at `zoom` is as many times as
+ * large, so the drawing views that much more of it in the same size.
+ */
+export function drawing(markup: string, width: number, height: number, sized: string, zoom: number): string {
+  const view = Number.isFinite(zoom) && zoom > 0 && zoom !== 1 ? ` viewBox="0 0 ${width * zoom} ${height * zoom}"` : "";
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"${view} style="${sized}">` +
+    `<foreignObject width="100%" height="100%">${markup}</foreignObject></svg>`
+  );
+}
+
+/**
  * A picture of the page in `frame` as the browser draws it, from `copy`, laid
  * out and scrolled as the frame is now, on a canvas of the screen `glass`
  * shows it on, `size` css px, on `color`. Its pictures, videos and drawings
@@ -553,11 +577,11 @@ export async function paintPage(
   // Scrolled as the frame is, what is pinned to the screen staying put.
   const scrolled = `position:relative;left:${-scrollX}px;top:${-scrollY}px`;
   const sized = rootSize(doc, view);
-  root.setAttribute("style", `${root.getAttribute("style") ?? ""};${sized};${scrolled}`);
+  const zoom = layoutZoom(view);
+  const zoomed = zoom === 1 ? "" : `;zoom:${zoom}`;
+  root.setAttribute("style", `${root.getAttribute("style") ?? ""};${sized};${scrolled}${zoomed}`);
   const markup = new XMLSerializer().serializeToString(root);
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" style="${sized}">` +
-    `<foreignObject width="100%" height="100%">${markup}</foreignObject></svg>`;
+  const svg = drawing(markup, width, height, sized, zoom);
   const image = new Image();
   // As data, not a blob: Chrome marks a drawing from a blob as foreign, and its canvas could not go to the GPU.
   try {

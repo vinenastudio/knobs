@@ -4,8 +4,10 @@ import {
   blurMargin,
   blurPictures,
   copyPage,
+  drawing,
   drawMedia,
   forgetShots,
+  layoutZoom,
   marginPlace,
   paintPage,
   picturesKey,
@@ -363,7 +365,7 @@ describe("paintPage", () => {
   });
 
   /** Paint a page whose root computes `fontSize`, its copy's root styled `inline`: the drawing's markup, and the style its root got. */
-  async function drawn(fontSize: string, inline: string | null): Promise<{ svg: string; style: string }> {
+  async function drawn(fontSize: string, inline: string | null, ratio?: number): Promise<{ svg: string; style: string }> {
     const rect = { left: 0, top: 0, width: 100, height: 200, right: 100, bottom: 200 };
     const html = {};
     const doc = { querySelectorAll: () => [], documentElement: html };
@@ -373,6 +375,7 @@ describe("paintPage", () => {
       innerHeight: 200,
       scrollX: 0,
       scrollY: 30,
+      devicePixelRatio: ratio,
       getComputedStyle: (node: unknown) => {
         asked.push(node);
         return { fontSize };
@@ -437,6 +440,34 @@ describe("paintPage", () => {
     const { svg, style } = await drawn("10px", null);
     expect(svg).toContain('height="200" style="font-size:10px !important">');
     expect(style).toBe(";font-size:10px !important;position:relative;left:0px;top:-30px");
+  });
+
+  test("lays the copy out at the frame's pixel ratio, as the live page is, in a drawing of the same size", async () => {
+    const { svg, style } = await drawn("16px", null, 3);
+    expect(svg).toStartWith('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="200" viewBox="0 0 300 600" style="font-size:16px !important">');
+    expect(style).toBe(";font-size:16px !important;position:relative;left:0px;top:-30px;zoom:3");
+  });
+});
+
+describe("layoutZoom", () => {
+  test("is the frame's pixel ratio, or 1 where it has none", () => {
+    const zoomOf = (ratio: unknown) => layoutZoom({ devicePixelRatio: ratio } as unknown as Window);
+    expect(zoomOf(3)).toBe(3);
+    expect(zoomOf(1.5)).toBe(1.5);
+    for (const ratio of [undefined, 0, -2, Number.NaN, Number.POSITIVE_INFINITY]) expect(zoomOf(ratio)).toBe(1);
+  });
+});
+
+describe("drawing", () => {
+  test("views as much more of a copy laid out at a zoom, at the same size", () => {
+    expect(drawing("<p/>", 390, 844, "font-size:16px", 3)).toBe(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="390" height="844" viewBox="0 0 1170 2532" style="font-size:16px">' +
+        '<foreignObject width="100%" height="100%"><p/></foreignObject></svg>',
+    );
+  });
+
+  test("has no viewBox at a zoom of 1, or at none", () => {
+    for (const zoom of [1, 0, Number.NaN]) expect(drawing("<p/>", 390, 844, "", zoom)).not.toContain("viewBox");
   });
 });
 
