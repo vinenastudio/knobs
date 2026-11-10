@@ -173,7 +173,7 @@ class FakeMediaQueryList extends EventTarget {
   }
 
   get matches(): boolean {
-    return this.media !== "print" && this.media !== "not all";
+    return !["print", "not all", "(not (min-width: 0px))"].includes(this.media);
   }
 }
 

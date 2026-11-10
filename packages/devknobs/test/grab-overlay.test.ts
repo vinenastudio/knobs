@@ -3,6 +3,7 @@ import {
   type BoxParts,
   boxParts,
   boxRadius,
+  CSS,
   labelPlace,
   LERP,
   parseRadius,
@@ -234,5 +235,16 @@ describe("boxParts", () => {
     const parts = boxParts([10, 10, 0, 0, 2], 2, 1);
     expect(parts.corner).toEqual({ width: 1, height: 1, radius: 1 });
     expect(parts.pieces["bottom right"]).toBe("translate(1px, 1px)");
+  });
+});
+
+describe("CSS", () => {
+  test("gives a part no layer of its own", () => {
+    const rules = [...CSS.matchAll(/([^{}]+)\{([^}]*)\}/g)];
+    const part = rules.filter(([, selector]) => /\.part\b/.test(selector ?? ""));
+    expect(part.length).toBeGreaterThan(0);
+    for (const [, , body] of part) expect(body).not.toContain("will-change");
+    const glide = rules.find(([, selector]) => selector?.trim() === ".glide");
+    expect(glide?.[2]).toContain("will-change: transform");
   });
 });

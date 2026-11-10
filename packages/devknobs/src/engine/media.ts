@@ -31,13 +31,13 @@ export const SYSTEM_MEDIA: MediaValue = {
 };
 
 /**
- * `all` is a media type, so it is only valid on its own: `screen and all` fails
- * to parse and the CSSOM turns the whole query into `not all`. A zero min-width
- * is always true and is valid in every position.
+ * A condition that always holds, and one that never does, valid in every
+ * position of a query. `all` is a media type, so it is only valid on its own:
+ * `screen and all` fails to parse and the CSSOM turns the whole query into
+ * `not all`. A zero min-width always holds.
  */
 const TRUE_TOKEN = "(min-width: 0px)";
-const TRUE_QUERY = "all";
-const FALSE_QUERY = "not all";
+const FALSE_TOKEN = "(not (min-width: 0px))";
 
 const FEATURE_OF: Record<Exclude<keyof MediaValue, "touch">, MediaFeature> = {
   scheme: "prefers-color-scheme",
@@ -105,28 +105,14 @@ export function splitQueryList(text: string): string[] {
 }
 
 /**
- * A query is `and`-shaped in practice, so one false condition sinks the whole
- * query. A leading `not` flips that verdict.
+ * Each mention of `feature` in `query` made a condition that holds or one
+ * that does not, as the value does. The browser works out the rest, `not`,
+ * `and` and `or` as the page wrote them.
  */
-function collapse(query: string, found: boolean, matched: boolean, rewritten: string): string {
-  if (!found) return query;
-  const negated = /^not\s/i.test(query);
-  if (negated ? matched : !matched) return FALSE_QUERY;
-  return negated ? TRUE_QUERY : rewritten;
-}
-
 function rewriteQuery(query: string, feature: MediaFeature, value: string): string {
-  let found = false;
-  let matched = true;
-  const rewritten = query.replace(
-    featurePattern(feature),
-    (_whole: string, queryValue: string | undefined) => {
-      found = true;
-      if (!featureMatches(queryValue, value)) matched = false;
-      return TRUE_TOKEN;
-    },
+  return query.replace(featurePattern(feature), (_whole: string, queryValue: string | undefined) =>
+    featureMatches(queryValue, value) ? TRUE_TOKEN : FALSE_TOKEN,
   );
-  return collapse(query, found, matched, rewritten);
 }
 
 /**
@@ -153,7 +139,7 @@ export function mentionsFeature(text: string): boolean {
   return FEATURES.some((feature) => lower.includes(feature));
 }
 
-type MediaBearingRule = CSSRule & { media: MediaList };
+export type MediaBearingRule = CSSRule & { media: MediaList };
 
 /** A list the early script tracked, handed to the full one with what the page heard. */
 interface Handover {
@@ -221,7 +207,8 @@ export function authoredQuery(rule: MediaBearingRule): string {
   return originals.get(rule) ?? authoredMedia(rule) ?? rule.media.mediaText;
 }
 
-function walkRules(
+/** Visit each rule in `rules` with a media list, those nested and those of imported sheets too. */
+export function walkRules(
   rules: CSSRuleList,
   visit: (rule: MediaBearingRule) => void,
   seen: Set<CSSStyleSheet>,

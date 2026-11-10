@@ -15,6 +15,7 @@ const MOTION = "prefers-reduced-motion";
 const CONTRAST = "prefers-contrast";
 const TRANSPARENCY = "prefers-reduced-transparency";
 const TRUE_TOKEN = "(min-width: 0px)";
+const FALSE_TOKEN = "(not (min-width: 0px))";
 
 describe("splitQueryList", () => {
   test("splits on top level commas only", () => {
@@ -51,8 +52,8 @@ describe("rewriteMediaText", () => {
   });
 
   test("turns a failing feature into a false query", () => {
-    expect(rewriteMediaText(`(${SCHEME}: dark)`, SCHEME, "light")).toBe("not all");
-    expect(rewriteMediaText(`(${SCHEME}: light)`, SCHEME, "dark")).toBe("not all");
+    expect(rewriteMediaText(`(${SCHEME}: dark)`, SCHEME, "light")).toBe(FALSE_TOKEN);
+    expect(rewriteMediaText(`(${SCHEME}: light)`, SCHEME, "dark")).toBe(FALSE_TOKEN);
   });
 
   test("keeps the rest of the query intact", () => {
@@ -62,7 +63,9 @@ describe("rewriteMediaText", () => {
     expect(rewriteMediaText(`(min-width: 600px) and (${SCHEME}: dark)`, SCHEME, "dark")).toBe(
       `(min-width: 600px) and ${TRUE_TOKEN}`,
     );
-    expect(rewriteMediaText(`screen and (${SCHEME}: dark)`, SCHEME, "light")).toBe("not all");
+    expect(rewriteMediaText(`screen and (${SCHEME}: dark)`, SCHEME, "light")).toBe(
+      `screen and ${FALSE_TOKEN}`,
+    );
   });
 
   test("handles missing whitespace and odd casing", () => {
@@ -71,41 +74,59 @@ describe("rewriteMediaText", () => {
   });
 
   test("rewrites each query of a list on its own", () => {
-    expect(rewriteMediaText(`(${SCHEME}: dark), print`, SCHEME, "light")).toBe("not all, print");
+    expect(rewriteMediaText(`(${SCHEME}: dark), print`, SCHEME, "light")).toBe(
+      `${FALSE_TOKEN}, print`,
+    );
     expect(rewriteMediaText(`(${SCHEME}: dark), print`, SCHEME, "dark")).toBe(
       `${TRUE_TOKEN}, print`,
     );
   });
 
-  test("flips negated queries", () => {
-    expect(rewriteMediaText(`not all and (${SCHEME}: dark)`, SCHEME, "dark")).toBe("not all");
-    expect(rewriteMediaText(`not all and (${SCHEME}: dark)`, SCHEME, "light")).toBe("all");
+  test("leaves a negated query for the browser to flip", () => {
+    expect(rewriteMediaText(`not all and (${SCHEME}: dark)`, SCHEME, "dark")).toBe(
+      `not all and ${TRUE_TOKEN}`,
+    );
+    expect(rewriteMediaText(`not all and (${SCHEME}: dark)`, SCHEME, "light")).toBe(
+      `not all and ${FALSE_TOKEN}`,
+    );
+    expect(rewriteMediaText(`(not (${SCHEME}: dark))`, SCHEME, "light")).toBe(
+      `(not ${FALSE_TOKEN})`,
+    );
+  });
+
+  test("leaves `or` for the browser, each side as the value has it", () => {
+    expect(rewriteMediaText(`(${SCHEME}: dark) or (hover)`, SCHEME, "light")).toBe(
+      `${FALSE_TOKEN} or (hover)`,
+    );
+    expect(rewriteMediaText(`(${SCHEME}: light) or (${SCHEME}: dark)`, SCHEME, "light")).toBe(
+      `${TRUE_TOKEN} or ${FALSE_TOKEN}`,
+    );
   });
 
   test("handles reduced motion", () => {
     expect(rewriteMediaText(`(${MOTION}: reduce)`, MOTION, "reduce")).toBe(TRUE_TOKEN);
-    expect(rewriteMediaText(`(${MOTION}: no-preference)`, MOTION, "reduce")).toBe("not all");
+    expect(rewriteMediaText(`(${MOTION}: no-preference)`, MOTION, "reduce")).toBe(FALSE_TOKEN);
     expect(rewriteMediaText(`(${MOTION})`, MOTION, "reduce")).toBe(TRUE_TOKEN);
   });
 
   test("handles contrast", () => {
     expect(rewriteMediaText(`(${CONTRAST}: more)`, CONTRAST, "more")).toBe(TRUE_TOKEN);
-    expect(rewriteMediaText(`(${CONTRAST}: less)`, CONTRAST, "more")).toBe("not all");
-    expect(rewriteMediaText(`(${CONTRAST}: custom)`, CONTRAST, "more")).toBe("not all");
-    expect(rewriteMediaText(`(${CONTRAST}: no-preference)`, CONTRAST, "more")).toBe("not all");
+    expect(rewriteMediaText(`(${CONTRAST}: less)`, CONTRAST, "more")).toBe(FALSE_TOKEN);
+    expect(rewriteMediaText(`(${CONTRAST}: custom)`, CONTRAST, "more")).toBe(FALSE_TOKEN);
+    expect(rewriteMediaText(`(${CONTRAST}: no-preference)`, CONTRAST, "more")).toBe(FALSE_TOKEN);
   });
 
   test("handles reduced transparency", () => {
     expect(rewriteMediaText(`(${TRANSPARENCY}: reduce)`, TRANSPARENCY, "reduce")).toBe(TRUE_TOKEN);
     expect(rewriteMediaText(`(${TRANSPARENCY}: no-preference)`, TRANSPARENCY, "reduce")).toBe(
-      "not all",
+      FALSE_TOKEN,
     );
     expect(rewriteMediaText(`(${TRANSPARENCY})`, TRANSPARENCY, "reduce")).toBe(TRUE_TOKEN);
   });
 
   test("rewrites every occurrence in one query", () => {
     expect(rewriteMediaText(`(${SCHEME}: dark) and (${SCHEME}: light)`, SCHEME, "dark")).toBe(
-      "not all",
+      `${TRUE_TOKEN} and ${FALSE_TOKEN}`,
     );
   });
 });
@@ -126,7 +147,7 @@ describe("rewriteAll", () => {
       `${TRUE_TOKEN} and (${MOTION}: reduce)`,
     );
     expect(rewriteAll(text, { ...SYSTEM_MEDIA, scheme: "light", motion: "reduce" })).toBe(
-      "not all",
+      `${FALSE_TOKEN} and ${TRUE_TOKEN}`,
     );
   });
 });
@@ -136,26 +157,28 @@ describe("touch", () => {
 
   test("a coarse pointer that cannot hover", () => {
     expect(rewriteAll("(pointer: coarse)", TOUCH)).toBe(TRUE_TOKEN);
-    expect(rewriteAll("(pointer: fine)", TOUCH)).toBe("not all");
+    expect(rewriteAll("(pointer: fine)", TOUCH)).toBe(FALSE_TOKEN);
     expect(rewriteAll("(hover: none)", TOUCH)).toBe(TRUE_TOKEN);
-    expect(rewriteAll("(hover: hover)", TOUCH)).toBe("not all");
+    expect(rewriteAll("(hover: hover)", TOUCH)).toBe(FALSE_TOKEN);
   });
 
   test("any pointer and any hover read the same", () => {
     expect(rewriteAll("(any-pointer: coarse) and (any-hover: none)", TOUCH)).toBe(
       `${TRUE_TOKEN} and ${TRUE_TOKEN}`,
     );
-    expect(rewriteAll("(any-hover: hover), (any-pointer: fine)", TOUCH)).toBe("not all, not all");
+    expect(rewriteAll("(any-hover: hover), (any-pointer: fine)", TOUCH)).toBe(
+      `${FALSE_TOKEN}, ${FALSE_TOKEN}`,
+    );
   });
 
   test("hover alone is false, a pointer alone is true", () => {
-    expect(rewriteAll("(hover)", TOUCH)).toBe("not all");
-    expect(rewriteAll("(any-hover)", TOUCH)).toBe("not all");
+    expect(rewriteAll("(hover)", TOUCH)).toBe(FALSE_TOKEN);
+    expect(rewriteAll("(any-hover)", TOUCH)).toBe(FALSE_TOKEN);
     expect(rewriteAll("(pointer)", TOUCH)).toBe(TRUE_TOKEN);
   });
 
-  test("flips a negated hover query and keeps the rest", () => {
-    expect(rewriteAll("not all and (hover: hover)", TOUCH)).toBe("all");
+  test("leaves a negated hover query for the browser to flip, and keeps the rest", () => {
+    expect(rewriteAll("not all and (hover: hover)", TOUCH)).toBe(`not all and ${FALSE_TOKEN}`);
     expect(rewriteAll("screen and (hover: none) and (min-width: 600px)", TOUCH)).toBe(
       `screen and ${TRUE_TOKEN} and (min-width: 600px)`,
     );
