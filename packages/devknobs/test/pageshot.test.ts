@@ -8,6 +8,7 @@ import {
   drawMedia,
   forgetShots,
   layoutZoom,
+  ownZoom,
   rootZoom,
   marginPlace,
   paintPage,
@@ -19,6 +20,17 @@ import {
 } from "../src/engine/pageshot";
 import * as outlines from "../src/engine/outlines";
 import * as spacing from "../src/engine/spacing";
+
+/** Run `run` as in a browser that does, or does not, have `userAgentData`, as only Chromium does. */
+async function inBrowser<T>(chromium: boolean, run: () => T | Promise<T>): Promise<T> {
+  const before = Reflect.get(globalThis, "navigator");
+  Reflect.set(globalThis, "navigator", chromium ? { userAgentData: {} } : {});
+  try {
+    return await run();
+  } finally {
+    Reflect.set(globalThis, "navigator", before);
+  }
+}
 
 /** An element as far as a copy of the page reads one, which counts what it sets off. */
 class FakeNode {
@@ -411,18 +423,20 @@ describe("paintPage", () => {
       }
     });
     try {
-      await paintPage(
-        frame as unknown as HTMLIFrameElement,
-        glass as unknown as HTMLElement,
-        { width: 100, height: 200 },
-        "#fff",
-        { cloneNode: () => root } as unknown as Element,
+      await inBrowser(true, () =>
+        paintPage(
+          frame as unknown as HTMLIFrameElement,
+          glass as unknown as HTMLElement,
+          { width: 100, height: 200 },
+          "#fff",
+          { cloneNode: () => root } as unknown as Element,
+        ),
       );
     } finally {
       for (const [index, name] of names.entries()) Reflect.set(globalThis, name, before[index]);
     }
     // The size and zoom are the live page's root's, as they compute.
-    expect(asked).toEqual([html, html]);
+    expect(asked).toEqual([html, html, html]);
     const url = sources[0] ?? "";
     return { svg: decodeURIComponent(url.slice(url.indexOf(",") + 1)), style: style ?? "" };
   }
@@ -454,14 +468,35 @@ describe("paintPage", () => {
     expect(svg).toContain('viewBox="0 0 300 600"');
     expect(style).toEndWith(";zoom:3.75 !important");
   });
+
+  test("scrolls the copy in its root's own zoom, so a zoomed page is not scrolled too far", async () => {
+    const { style } = await drawn("16px", "zoom: 1.25", 1, "1.25");
+    expect(style).toBe("zoom: 1.25;font-size:16px !important;position:relative;left:0px;top:-24px;zoom:1.25 !important");
+  });
 });
 
 describe("layoutZoom", () => {
-  test("is the frame's pixel ratio, or 1 where it has none", () => {
-    const zoomOf = (ratio: unknown) => layoutZoom({ devicePixelRatio: ratio } as unknown as Window);
-    expect(zoomOf(3)).toBe(3);
-    expect(zoomOf(1.5)).toBe(1.5);
-    for (const ratio of [undefined, 0, -2, Number.NaN, Number.POSITIVE_INFINITY]) expect(zoomOf(ratio)).toBe(1);
+  const zoomOf = (ratio: unknown) => layoutZoom({ devicePixelRatio: ratio } as unknown as Window);
+
+  test("is the frame's pixel ratio in Chromium, or 1 where it has none", async () => {
+    await inBrowser(true, () => {
+      expect(zoomOf(3)).toBe(3);
+      expect(zoomOf(1.5)).toBe(1.5);
+      for (const ratio of [undefined, 0, -2, Number.NaN, Number.POSITIVE_INFINITY]) expect(zoomOf(ratio)).toBe(1);
+    });
+  });
+
+  test("is 1 in a browser with no userAgentData, which lays the page out in css px", async () => {
+    await inBrowser(false, () => expect(zoomOf(3)).toBe(1));
+  });
+});
+
+describe("ownZoom", () => {
+  test("is the zoom the page sets on its own root, or 1 for a bad one", () => {
+    const ownOf = (own: unknown) =>
+      ownZoom({ documentElement: {} } as unknown as Document, { getComputedStyle: () => ({ zoom: own }) } as unknown as Window);
+    expect(ownOf("0.5")).toBe(0.5);
+    for (const own of [undefined, "", "normal", "0", "-1"]) expect(ownOf(own)).toBe(1);
   });
 });
 
@@ -476,6 +511,10 @@ describe("rootZoom", () => {
   test("multiplies the ratio by the page's own zoom, and takes a bad one as 1", () => {
     expect(zoomFor("1.25", 2)).toBe(";zoom:2.5 !important");
     for (const own of [undefined, "", "normal", "0", "-1"]) expect(zoomFor(own, 3)).toBe(";zoom:3 !important");
+  });
+
+  test("is set where the ratio and the page's own zoom make 1, as the drawing still views the ratio", () => {
+    expect(zoomFor("0.5", 2)).toBe(";zoom:1 !important");
   });
 });
 

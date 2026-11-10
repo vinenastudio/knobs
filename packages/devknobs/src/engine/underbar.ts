@@ -1,7 +1,7 @@
 import { el, type Look, place } from "./browserkit";
 import type { Bars } from "./browserui";
 import type { Rect } from "./mock";
-import { copyPage, drawing, layoutZoom, rootSize, rootZoom, svgUrl } from "./pageshot";
+import { copyPage, drawing, layoutZoom, ownZoom, rootSize, rootZoom, svgUrl } from "./pageshot";
 
 /**
  * The page under Safari's bottom bars. The frame ends where Safari's viewport
@@ -107,7 +107,8 @@ export function pictureOf(frame: HTMLIFrameElement): Picture | null {
   }
   const full = Math.max(doc.documentElement.scrollHeight, tall);
   // The root as tall as the frame's, so a body at 100% is too, as the picture's own viewport is not.
-  const root = doc.documentElement.getBoundingClientRect().height;
+  // Its box has the root's own zoom in it already, which its zoomed height would add again.
+  const root = doc.documentElement.getBoundingClientRect().height / ownZoom(doc, view);
   const sized = rootSize(doc, view);
   const zoom = layoutZoom(view);
   const zoomed = rootZoom(doc, view, zoom);

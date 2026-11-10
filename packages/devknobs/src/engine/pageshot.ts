@@ -512,10 +512,21 @@ export function rootSize(doc: Document, view: Window): string {
  * has none. The browser lays the live page out with its pixel ratio as a
  * zoom, and a drawing of its copy at 1. Text lines round apart at the two,
  * more the further down the page, so the copy is laid out at the page's.
+ * Only Chromium lays the page out so. Safari and Firefox lay it out in css
+ * px, as the drawing at 1 is, so it stays 1 there. The browser is told by
+ * the host's own `userAgentData`, as a device frame may change the page's.
+ * An insecure origin has none either, and keeps 1.
  */
 export function layoutZoom(view: Window): number {
+  if (!("userAgentData" in navigator)) return 1;
   const ratio = view.devicePixelRatio;
   return Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+}
+
+/** The zoom the page in `doc` sets on its own root, or 1 where it sets a bad one. */
+export function ownZoom(doc: Document, view: Window): number {
+  const own = Number(view.getComputedStyle(doc.documentElement).zoom);
+  return Number.isFinite(own) && own > 0 ? own : 1;
 }
 
 /**
@@ -524,9 +535,8 @@ export function layoutZoom(view: Window): number {
  * the ratio. Important, so a page rule with !important does not win over it.
  */
 export function rootZoom(doc: Document, view: Window, ratio: number): string {
-  const own = Number(view.getComputedStyle(doc.documentElement).zoom);
-  const zoom = ratio * (Number.isFinite(own) && own > 0 ? own : 1);
-  return zoom === 1 ? "" : `;zoom:${zoom} !important`;
+  const own = ownZoom(doc, view);
+  return ratio === 1 && own === 1 ? "" : `;zoom:${ratio * own} !important`;
 }
 
 /**
@@ -585,8 +595,9 @@ export async function paintPage(
     }
   }
   const root = copy.cloneNode(true) as Element;
-  // Scrolled as the frame is, what is pinned to the screen staying put.
-  const scrolled = `position:relative;left:${-scrollX}px;top:${-scrollY}px`;
+  // Scrolled as the frame is, what is pinned to the screen staying put. The root's own zoom scales these too.
+  const own = ownZoom(doc, view);
+  const scrolled = `position:relative;left:${-scrollX / own}px;top:${-scrollY / own}px`;
   const sized = rootSize(doc, view);
   const zoom = layoutZoom(view);
   const zoomed = rootZoom(doc, view, zoom);
