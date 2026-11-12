@@ -127,7 +127,7 @@ const styles = create({
  * With `label`, the box shows the label in place of code too long to show,
  * the whole box one copy button that says "Copied" for a moment, and shows the code only where the clipboard
  * refuses it. `html` draws the code highlighted (the repo's own markup, never
- * a visitor's); the copy button still copies `code`.
+ * a visitor's); the copy button still copies `code`. `onCopied` hears each copy the clipboard took.
  */
 export function CodeBox({
   code,
@@ -135,6 +135,7 @@ export function CodeBox({
   html,
   label,
   name,
+  onCopied,
   style,
   wrap = false,
 }: {
@@ -143,6 +144,7 @@ export function CodeBox({
   html?: string | undefined;
   label?: string;
   name: string;
+  onCopied?: (() => void) | undefined;
   style?: StyleXStyles;
   wrap?: boolean;
 }) {
@@ -172,7 +174,10 @@ export function CodeBox({
     Promise.resolve()
       .then(() => navigator.clipboard.writeText(code))
       .then(
-        () => setCopied(true),
+        () => {
+          setCopied(true);
+          onCopied?.();
+        },
         () => setRefused((count) => count + 1),
       );
   };

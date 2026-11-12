@@ -6,6 +6,7 @@ import type { MouseEvent } from 'react';
 import { KnobsMark } from '../lib/brand-marks.tsx';
 import { CodeBox } from '../lib/code-box.tsx';
 import { CopyInstallPrompt } from '../lib/copy-install-prompt.tsx';
+import { CraftedFoot } from '../lib/crafted-at-vinena.tsx';
 import { GitHubButton } from '../lib/github.tsx';
 import { ICON } from '../lib/icon.ts';
 import { asElement, usePanel } from '../lib/panel.ts';
@@ -299,6 +300,7 @@ export function DocsLayout() {
         </details>
         <Outlet />
       </div>
+      <CraftedFoot placement="docs" />
     </div>
   );
 }
