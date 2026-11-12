@@ -118,9 +118,14 @@ const styles = create({
     marginTop: spacing.s4,
   },
   // The hero's two ways in, one row of equal height: the extension, then the installation prompt. On a
-  // narrow screen the prompt goes under the extension.
+  // narrow screen the prompt goes under the extension. Below the breakpoint the star link comes under
+  // the prompt's button after a copy, in the flow: the two keep their own height there (the same
+  // one, from the same padding and line), so the link does not stretch the extension's button.
   cta: {
-    alignItems: 'stretch',
+    alignItems: {
+      default: 'flex-start',
+      [WIDE]: 'stretch',
+    },
     display: 'flex',
     flexWrap: 'wrap',
     gap: spacing.s2,

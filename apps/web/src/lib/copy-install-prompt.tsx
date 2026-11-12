@@ -16,17 +16,22 @@ const appear = keyframes({
 });
 
 const styles = create({
-  // The button's own size, and the box the star link is placed against.
+  // The button's own size. On a narrow screen the star link goes under the button, in the flow;
+  // from the breakpoint this is the box the link is placed against.
   box: {
     display: 'flex',
+    flexDirection: {
+      default: 'column',
+      [WIDE]: 'row',
+    },
     position: 'relative',
     width: 'fit-content',
   },
   button: {
     flexGrow: 1,
   },
-  // Out of the flow, so nothing around the button moves when it comes: beside the button where
-  // there is room, under it on a narrow screen.
+  // Under the button on a narrow screen, where what follows moves down for it. Beside the button
+  // from the breakpoint, out of the flow, so nothing moves there.
   star: {
     animationDuration: '200ms',
     animationFillMode: 'backwards',
@@ -37,22 +42,25 @@ const styles = create({
     animationTimingFunction: 'ease-out',
     display: 'flex',
     insetBlockStart: {
-      default: '100%',
+      default: null,
       [WIDE]: '50%',
     },
     insetInlineStart: {
-      default: 0,
+      default: null,
       [WIDE]: '100%',
     },
     marginBlockStart: {
-      default: 2,
+      default: spacing.s2,
       [WIDE]: 0,
     },
     marginInlineStart: {
       default: 0,
       [WIDE]: spacing.s3,
     },
-    position: 'absolute',
+    position: {
+      default: 'static',
+      [WIDE]: 'absolute',
+    },
     transform: {
       default: null,
       [WIDE]: 'translateY(-50%)',
