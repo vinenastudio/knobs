@@ -179,7 +179,7 @@ Web app (`apps/web`): `pnpm --filter @knobs/web dev` (:3000 standalone, or portl
 - **Deploy** (`deploy.yml`, push to main): builds devknobs, then wrangler-action builds and deploys `apps/web` to Cloudflare Workers. Then it notifies IndexNow and Search Console of changed sitemap URLs through vinenastudio/deploy-indexing; the IndexNow key file `apps/web/public/78542e187dcb354c241595d0ddb65792.txt` must stay.
 - **Release** (`release.yml`, push of a `knobs@*` tag): checks the tag matches the version, then tests, typechecks, builds and publishes `@vinena/knobs` to npm through trusted publishing. See the release line under devknobs.
 - **Previews** (`preview.yml`): every PR builds devknobs and the site, uploads a Workers preview version and comments the URL. Previews build without the analytics client id, so preview traffic stays out of the numbers.
-- Required repo config lives in README's "Going to production" checklist. CI must be green before merge.
+- Required repo config lives in CONTRIBUTING.md's "Going to production" checklist. CI must be green before merge.
 
 ## Rules
 
