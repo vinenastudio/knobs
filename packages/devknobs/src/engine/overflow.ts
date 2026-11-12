@@ -129,7 +129,7 @@ function log(offenders: Offender[], excess: number): void {
     if (excess > 0 && !loggedUnfound) {
       loggedUnfound = true;
       console.warn(
-        `devknobs: the page scrolls ${excess}px past the ${width}px viewport, ` +
+        `knobs: the page scrolls ${excess}px past the ${width}px viewport, ` +
           "but no element box sticks out. a pseudo-element or a margin, maybe",
       );
     }
@@ -143,7 +143,7 @@ function log(offenders: Offender[], excess: number): void {
 /** What the console says about `count` boxes sticking out of a viewport `width` wide. */
 export function warning(count: number, width: number, excess: number): string {
   const boxes = count === 1 ? "1 element sticks" : `${count} elements stick`;
-  return `devknobs: ${boxes} out of the ${width}px viewport, the page scrolls ${excess}px sideways`;
+  return `knobs: ${boxes} out of the ${width}px viewport, the page scrolls ${excess}px sideways`;
 }
 
 function draw(offenders: Offender[]): void {

@@ -82,7 +82,7 @@ function fits(path: string, shape: KnobShape, value: unknown): boolean {
  * The whole patch is checked before any of it is applied.
  */
 export function checkPatch(patch: unknown): asserts patch is DevknobsStatePatch {
-  if (!isRecord(patch)) throw new TypeError("devknobs: setState takes an object");
+  if (!isRecord(patch)) throw new TypeError("knobs: setState takes an object");
   const shapes = new Map<string, KnobShape>(describe().map((knob) => [knob.key, knob.value]));
   for (const [key, value] of Object.entries(patch)) {
     const shape = shapes.get(key);
@@ -107,12 +107,12 @@ export function checkPatch(patch: unknown): asserts patch is DevknobsStatePatch 
 /** Check a value at a path `describe()` leaves out, which only the state's own fields have. */
 function unlisted(path: string, value: unknown): void {
   const takes = UNLISTED.get(path);
-  if (!takes) throw new TypeError(`devknobs: unknown knob ${path}`);
+  if (!takes) throw new TypeError(`knobs: unknown knob ${path}`);
   if (!takes(value)) throw bad(path, value);
 }
 
 function bad(path: string, value: unknown): TypeError {
-  return new TypeError(`devknobs: bad value for ${path}: ${shown(value)}`);
+  return new TypeError(`knobs: bad value for ${path}: ${shown(value)}`);
 }
 
 /** A value as it reads in an error: json where json says what it is, else its own text. */

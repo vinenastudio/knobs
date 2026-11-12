@@ -166,7 +166,7 @@ describe("the line of edits kept after a reload", () => {
     expect(keptLine(4, 1)).toBe("4 edits kept from before the reload, 1 could not be found");
     expect(missedLine({ edit: { kind: "text", target: { selector: "h1" }, property: "text", before: "a", after: "b" }, reason: "not found on the page" })).toBe("text on h1: not found on the page");
     expect(missedLine({ edit: { kind: "css-value", target: { selector: "a`b" }, property: "padding", before: "1px", after: "2px" }, reason: "x" })).toBe('padding on "a`b": x');
-    expect(missedLine({ edit: "junk", reason: "not an edit devknobs reads" })).toBe("not an edit devknobs reads");
+    expect(missedLine({ edit: "junk", reason: "not an edit knobs reads" })).toBe("not an edit knobs reads");
   });
 
   test("shows in the section with no change in force, and goes with the switch", () => {

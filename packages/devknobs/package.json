@@ -1,6 +1,6 @@
 {
   "name": "@vinena/knobs",
-  "version": "0.6.6",
+  "version": "0.7.0",
   "private": false,
   "license": "MIT",
   "author": "Mert Düzgün",
@@ -18,6 +18,9 @@
   "type": "module",
   "types": "./dist/index.d.ts",
   "main": "./dist/index.js",
+  "bin": {
+    "knobs": "./dist/cli.js"
+  },
   "files": [
     "dist",
     "skills",
@@ -38,7 +41,7 @@
     "./bezels/*": "./dist/bezels/*"
   },
   "scripts": {
-    "build": "bun scripts/bezelurls.ts && bun -e 'require(\"fs\").rmSync(\"dist.tmp\",{recursive:true,force:true})' && bun build src/index.ts --outdir dist.tmp --format esm --splitting --define DEVKNOBS_TUNE=false --define DEVKNOBS_VERSION=\\\"${DEVKNOBS_VERSION:-$npm_package_version}\\\" && bun build src/react.tsx --outdir dist.tmp --format esm --splitting --external react --banner '\"use client\";' --define DEVKNOBS_TUNE=false --define DEVKNOBS_VERSION=\\\"${DEVKNOBS_VERSION:-$npm_package_version}\\\" && bun build src/global.ts --outfile dist.tmp/index.global.js --format iife --minify --define 'import.meta.url=\"\"' --define DEVKNOBS_TUNE=false --define DEVKNOBS_VERSION=\\\"${DEVKNOBS_VERSION:-$npm_package_version}\\\" && bun build src/early.ts --outfile dist.tmp/early.global.js --format iife --minify --define DEVKNOBS_TUNE=false && tsc --emitDeclarationOnly --project tsconfig.build.json --outDir dist.tmp && rm -f dist.tmp/engine/foldtune.d.ts && if [ -d assets/bezels ]; then cp -R assets/bezels dist.tmp/bezels; fi && bun scripts/useclient.ts && bun scripts/tunefree.ts && bun -e 'const fs=require(\"fs\");fs.rmSync(\"dist\",{recursive:true,force:true});fs.renameSync(\"dist.tmp\",\"dist\")'",
+    "build": "bun scripts/bezelurls.ts && bun -e 'require(\"fs\").rmSync(\"dist.tmp\",{recursive:true,force:true})' && bun build src/index.ts --outdir dist.tmp --format esm --splitting --define DEVKNOBS_TUNE=false --define DEVKNOBS_VERSION=\\\"${DEVKNOBS_VERSION:-$npm_package_version}\\\" && bun build src/react.tsx --outdir dist.tmp --format esm --splitting --external react --banner '\"use client\";' --define DEVKNOBS_TUNE=false --define DEVKNOBS_VERSION=\\\"${DEVKNOBS_VERSION:-$npm_package_version}\\\" && bun build src/global.ts --outfile dist.tmp/index.global.js --format iife --minify --define 'import.meta.url=\"\"' --define DEVKNOBS_TUNE=false --define DEVKNOBS_VERSION=\\\"${DEVKNOBS_VERSION:-$npm_package_version}\\\" && bun build src/early.ts --outfile dist.tmp/early.global.js --format iife --minify --define DEVKNOBS_TUNE=false && bun build src/cli.ts --outfile dist.tmp/cli.js --target node --format esm && tsc --emitDeclarationOnly --project tsconfig.build.json --outDir dist.tmp && rm -f dist.tmp/engine/foldtune.d.ts && if [ -d assets/bezels ]; then cp -R assets/bezels dist.tmp/bezels; fi && bun scripts/useclient.ts && bun scripts/tunefree.ts && bun -e 'const fs=require(\"fs\");fs.rmSync(\"dist\",{recursive:true,force:true});fs.renameSync(\"dist.tmp\",\"dist\")'",
     "link": "bun scripts/link.ts link",
     "unlink": "bun scripts/link.ts unlink",
     "test": "bun test",

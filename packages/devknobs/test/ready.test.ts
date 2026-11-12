@@ -100,7 +100,7 @@ describe("whenSettled", () => {
     );
     clock.step();
     clock.expire();
-    await expect(waiting).rejects.toThrow("devknobs: not settled after 10 seconds");
+    await expect(waiting).rejects.toThrow("knobs: not settled after 10 seconds");
     expect(clock.pending()).toBe(0);
   });
 
@@ -164,7 +164,7 @@ describe("whenSettled", () => {
       () => "state",
       () => false,
     );
-    await expect(waiting).rejects.toThrow("devknobs: not mounted");
+    await expect(waiting).rejects.toThrow("knobs: not mounted");
     expect(clock.pending()).toBe(0);
   });
 
@@ -181,7 +181,7 @@ describe("whenSettled", () => {
     expect(await outcome(waiting)).toBe("pending");
     mounted = false;
     clock.step();
-    await expect(waiting).rejects.toThrow("devknobs: not mounted");
+    await expect(waiting).rejects.toThrow("knobs: not mounted");
     expect(clock.pending()).toBe(0);
   });
 
@@ -196,6 +196,6 @@ describe("whenSettled", () => {
     );
     mounted = false;
     clock.expire();
-    await expect(waiting).rejects.toThrow("devknobs: not mounted");
+    await expect(waiting).rejects.toThrow("knobs: not mounted");
   });
 });

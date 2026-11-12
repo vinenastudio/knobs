@@ -224,7 +224,7 @@ function knobs(): { [K in Exclude<keyof DevknobsState, Skipped>]: Spec } {
     overflow: spec("Mark the boxes that stick out of the viewport sideways.", flag),
     outlines: spec("Outline every element.", flag),
     panel: spec(
-      "The devknobs panel. Close it and hide its handle to keep it out of screenshots. reset() leaves it as it is, open or closed, docked or not.",
+      "The knobs panel. Close it and hide its handle to keep it out of screenshots. reset() leaves it as it is, open or closed, docked or not.",
       {
         type: "object",
         fields: {

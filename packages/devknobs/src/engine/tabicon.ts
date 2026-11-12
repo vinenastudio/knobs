@@ -123,7 +123,7 @@ export function createTabIcon(env: TabIconEnv): TabIcon {
       if (!on || link.getAttribute("href") !== current) return;
       const url = source ? env.render(source, iconSize(link)) : null;
       if (!url) {
-        if (!told) console.debug(`devknobs: the tab icon ${href} could not be read, so it shows no dev ribbon`);
+        if (!told) console.debug(`knobs: the tab icon ${href} could not be read, so it shows no dev ribbon`);
         told = true;
         return;
       }

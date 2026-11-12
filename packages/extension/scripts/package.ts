@@ -14,8 +14,8 @@ const packageVersion = await versionOf(join(devknobs, 'package.json'));
 const manifestVersion = await versionOf(join(root, 'static/manifest.json'));
 if (packageVersion !== manifestVersion) {
   throw new Error(
-    `static/manifest.json is version ${manifestVersion} but devknobs is ${packageVersion}: ` +
-      'set the manifest to the version of the devknobs it ships',
+    `static/manifest.json is version ${manifestVersion} but knobs is ${packageVersion}: ` +
+      'set the manifest to the version of the knobs it ships',
   );
 }
 

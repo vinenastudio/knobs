@@ -25,7 +25,7 @@ tag, `mount()` and `<DevKnobs />`. Inside the width knob's frame the frame's own
 copy has it too. If `window.devknobs` is undefined, knobs is not on this
 page. The script tag build keeps the api after `unmount()`, so the api alone
 does not prove a mount. `ready()` does: it rejects at once with
-`devknobs: not mounted` when nothing is mounted.
+`knobs: not mounted` when nothing is mounted.
 
 Then note the panel as the user left it. Keep the result in your notes, as a
 later evaluate or a reload loses page variables:
@@ -68,8 +68,8 @@ as `grabColor` and the panel's place. Do not compare the two key for key.
 
 1. Call `setState(patch)`. It is sync and returns the new state.
    A wrong key or value throws a TypeError, and then nothing changes:
-   `devknobs: unknown knob <key>[.<field>]` or
-   `devknobs: bad value for <key>[.<field>]: <value>`. Fix the patch from
+   `knobs: unknown knob <key>[.<field>]` or
+   `knobs: bad value for <key>[.<field>]: <value>`. Fix the patch from
    `describe()`. Combinations are not checked: `orientation` is dropped
    without a numeric width and height, and `posture` without a device that
    folds. Compare `getState()` with what you set.
@@ -87,7 +87,7 @@ as `grabColor` and the panel's place. Do not compare the two key for key.
 
 `ready()` resolves with the state once the device frame has caught up, the
 pseudo text is in and the panel has finished its slide. After 10 seconds it rejects with the error
-`devknobs: not settled after 10 seconds`. A rejection is not success: check the
+`knobs: not settled after 10 seconds`. A rejection is not success: check the
 page before you trust it.
 
 To leave a device, call `reset()` or set

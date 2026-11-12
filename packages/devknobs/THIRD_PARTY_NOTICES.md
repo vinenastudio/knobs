@@ -118,9 +118,9 @@ SOFTWARE.
 
 ## Simple Icons
 
-https://github.com/simple-icons/simple-icons. `src/ui/icons.ts` copies the path and the color of five of its icons from simple-icons 16.6.0, which the requests view shows for what a page loads: JavaScript, CSS, HTML5, WebAssembly and JSON. Simple Icons is under CC0 1.0 Universal, https://creativecommons.org/publicdomain/zero/1.0/, which asks for no notice. its JavaScript icon is the community's JS logo, https://github.com/voodootikigod/logo.js, under the MIT license below.
+https://github.com/simple-icons/simple-icons. `src/ui/icons.ts` copies the path and the color of six of its icons from simple-icons 16.6.0, which the requests view shows for what a page loads: JavaScript, CSS, HTML5, WebAssembly and JSON, and GitHub, which the settings show for the link to the repo. Simple Icons is under CC0 1.0 Universal, https://creativecommons.org/publicdomain/zero/1.0/, which asks for no notice. its JavaScript icon is the community's JS logo, https://github.com/voodootikigod/logo.js, under the MIT license below.
 
-the marks are trademarks of their owners. their use here names the kind of file a request is for, and implies no trademark license and no endorsement.
+the marks are trademarks of their owners. their use here names the kind of file a request is for, or the place a link goes, and implies no trademark license and no endorsement.
 
 ```
 The MIT License (MIT)

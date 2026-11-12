@@ -3,7 +3,7 @@ import type { GrabControl } from "../grab/control";
 import { PREFER_HINT, type PreferValue } from "../host";
 import { BINDING_WORDS, type LiveKeys, recordStep } from "./bindings";
 import { button, el, lay, mark, rowBox, rowButton, rowsLabel } from "./dom";
-import { BINDING_ICONS, icon, type IconName } from "./icons";
+import { BINDING_ICONS, brand, icon, type IconName, vinenaMark } from "./icons";
 import { type Binding, comboLabel, comboSpoken, type Keys } from "./keys";
 import { viewHead } from "./pane";
 import type { LivePrefs } from "./prefs";
@@ -74,6 +74,8 @@ export interface SettingsContext {
   prefer: { value(): PreferValue } | null;
   /** The user picked who runs the panel. */
   setPrefer(value: PreferValue): void;
+  /** A host, such as the extension, runs this copy, and not the page. */
+  host: boolean;
   /** Whether the search is open. */
   searching(): boolean;
   leaveSearch(): void;
@@ -145,7 +147,7 @@ export function feedbackUrl(version: string, page: string): string {
   return `https://feedback.vinena.studio/?product=knobs${v}&page=${encodeURIComponent(pageAddress(page))}`;
 }
 
-/** The last row of the settings: a link that opens the feedback page in a new tab, and sends nothing itself. */
+/** A row of the settings: a link that opens the feedback page in a new tab, and sends nothing itself. */
 export function feedbackRow(): HTMLElement {
   const link = el("a", "main feedback");
   link.setAttribute("target", "_blank");
@@ -154,6 +156,35 @@ export function feedbackRow(): HTMLElement {
   if (typeof location !== "undefined") aim();
   for (const type of ["click", "auxclick", "contextmenu"]) link.addEventListener(type, aim);
   return rowBox({ main: link, glyph: icon("message-square"), title: "send feedback" }).box;
+}
+
+/** A link of the settings to a fixed address: it opens in a new tab, which gets no hold of the page and no referrer. */
+function outLink(className: string, href: string): HTMLElement {
+  const link = el("a", className);
+  link.setAttribute("href", href);
+  link.setAttribute("target", "_blank");
+  link.setAttribute("rel", "noopener noreferrer");
+  return link;
+}
+
+/** The repo of devknobs. */
+export const REPO_URL = "https://github.com/vinenastudio/knobs";
+
+/** The row after send feedback: a link that opens the repo in a new tab. */
+export function githubRow(): HTMLElement {
+  return rowBox({ main: outLink("main feedback", REPO_URL), glyph: brand("github"), title: "github" }).box;
+}
+
+/** The studio's site, as knobs.dev links to it, with the copy the link is in: the extension's or a page's. */
+export function vinenaUrl(host: boolean): string {
+  return `https://vinena.studio/?utm_source=knobs.dev&utm_medium=referral&utm_campaign=${host ? "extension" : "panel"}`;
+}
+
+/** The last line of the settings: the studio's credit, its words and its wordmark one link. */
+export function creditRow(host: boolean): HTMLElement {
+  const link = outLink("credit", vinenaUrl(host));
+  link.append(el("span", "", "crafted at"), vinenaMark());
+  return link;
 }
 
 /**
@@ -337,7 +368,7 @@ export function createSettings(context: SettingsContext): Settings {
     );
     keyViews.set(binding, { set, back });
   }
-  keysView.append(feedbackRow());
+  keysView.append(feedbackRow(), githubRow(), creditRow(context.host));
 
   /** The shortcuts show in place of the rows. */
   let editingKeys = false;

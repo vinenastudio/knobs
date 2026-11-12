@@ -34,6 +34,7 @@ describe("icons", () => {
       ["html5", "#E34F26", true],
       ["webassembly", "#654FF0", true],
       ["json", "currentColor", true],
+      ["github", "currentColor", true],
     ]);
   });
 });
