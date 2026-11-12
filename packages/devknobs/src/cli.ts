@@ -52,6 +52,11 @@ export const MESSAGES = {
 /** An import of devknobs, static or dynamic, as a file that mounts it has. */
 const MOUNTS = /(?:\bfrom\s*|\bimport\s*\(\s*)(["'])@vinena\/knobs(?:\/react)?\1/;
 
+/** A module's text with its block comments and its whole-line `//` comments taken out. */
+function uncommented(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\/|^[ \t]*\/\/.*$/gm, "");
+}
+
 /** The relative imports of a module, the path in group 2. */
 const RELATIVE_IMPORTS = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(["'])(\.\.?\/[^"']+)\1/g;
 
@@ -178,14 +183,15 @@ export function withPanel(layout: string): string | null {
     ? `${layout.slice(0, lineStart)}${indent}${indent.includes("\t") ? "\t" : "  "}${COMPONENT_RENDER}${eol}${layout.slice(lineStart)}`
     : `${layout.slice(0, close)}${COMPONENT_RENDER}${layout.slice(close)}`;
   const imports = [
-    ...rendered.matchAll(/^import\s+["'][^"']+["'];?[ \t]*(?=\r?$)|^import\b[^;]*?\bfrom\s*["'][^"']+["'];?[ \t]*(?=\r?$)/gm),
+    ...rendered.matchAll(/^import\s+["'][^"']+["'];?[ \t]*(?:\/\/[^\r\n]*|\/\*.*?\*\/[ \t]*)?(?=\r?$)|^import\b[^;]*?\bfrom\s*["'][^"']+["'];?[ \t]*(?:\/\/[^\r\n]*|\/\*.*?\*\/[ \t]*)?(?=\r?$)/gm),
   ];
   const last = imports.at(-1);
   if (last) {
     const end = last.index + last[0].length;
     return `${rendered.slice(0, end)}${eol}${COMPONENT_IMPORT}${rendered.slice(end)}`;
   }
-  const directive = /^\s*(["'])use \w+\1;?[ \t]*\r?\n/.exec(rendered);
+  const directive = /^(?:\s*(?:\/\/[^\n]*|\/\*[\s\S]*?\*\/))*\s*(["'])use \w+\1;?[ \t]*(?:\/\/[^\r\n]*)?\r?\n/.exec(rendered);
+  if (!directive && /^\s*["']use \w+["']/m.test(rendered)) return null;
   const at = directive ? directive[0].length : 0;
   return `${rendered.slice(0, at)}${COMPONENT_IMPORT}${eol}${rendered.slice(at)}`;
 }
@@ -215,8 +221,9 @@ function inside(dir: string, path: string): boolean {
  * imports does. `look` gives a file's text, null where it has none.
  */
 function mountsKnobs(path: string, source: string, look: (path: string) => string | null): boolean {
-  if (MOUNTS.test(source)) return true;
-  for (const [, , spec = ""] of source.matchAll(RELATIVE_IMPORTS)) {
+  const live = uncommented(source);
+  if (MOUNTS.test(live)) return true;
+  for (const [, , spec = ""] of live.matchAll(RELATIVE_IMPORTS)) {
     const base = join(dirname(path), spec);
     const candidates = [
       base,
@@ -226,7 +233,7 @@ function mountsKnobs(path: string, source: string, look: (path: string) => strin
     for (const candidate of candidates) {
       const text = look(candidate);
       if (text === null) continue;
-      if (MOUNTS.test(text)) return true;
+      if (MOUNTS.test(uncommented(text))) return true;
       break;
     }
   }
@@ -249,10 +256,28 @@ export interface Plan {
   code: 0 | 1;
 }
 
-/** What `init` does in a folder: its edits and its report. Reads only. */
+/** A file of the project that could not be read, by its path from the project's folder. */
+export class ReadFailed extends Error {
+  readonly path: string;
+  readonly code: string;
+
+  constructor(path: string, code: string) {
+    super(`${path} ${code}`);
+    this.path = path;
+    this.code = code;
+  }
+}
+
+/** What `init` does in a folder: its edits and its report. Reads only, and throws ReadFailed. */
 export function plan(dir: string): Plan {
   const files = (path: string): boolean => existsSync(join(dir, path));
-  const read = (path: string): string => readFileSync(join(dir, path), "utf8");
+  const read = (path: string): string => {
+    try {
+      return readFileSync(join(dir, path), "utf8");
+    } catch (error) {
+      throw new ReadFailed(path, errorCode(error));
+    }
+  };
   const look = (path: string): string | null => {
     try {
       return inside(dir, path) && statSync(join(dir, path)).isFile() ? read(path) : null;
@@ -317,7 +342,7 @@ export function plan(dir: string): Plan {
     else {
       const source = read(found.entry);
       const eol = eolOf(source);
-      if (MOUNTS.test(source)) lines.push(MESSAGES.unchanged(found.entry));
+      if (MOUNTS.test(uncommented(source))) lines.push(MESSAGES.unchanged(found.entry));
       else edit(found.entry, "change", `${source}${source === "" || source.endsWith("\n") ? "" : eol}${MOUNT_LINE}${eol}`);
     }
   } else if (found.kind === "plain") byHand(MESSAGES.plain, false);
@@ -349,11 +374,16 @@ export function apply(planned: Plan): string | null {
           // The error line below is still the one to print.
         }
       }
-      const code: unknown = error instanceof Error ? Reflect.get(error, "code") : undefined;
-      return MESSAGES.writeFailed(path, typeof code === "string" ? code : String(error));
+      return MESSAGES.writeFailed(path, errorCode(error));
     }
   }
   return null;
+}
+
+/** An fs error's code, such as EACCES, or the error as text where it has none. */
+function errorCode(error: unknown): string {
+  const code: unknown = error instanceof Error ? Reflect.get(error, "code") : undefined;
+  return typeof code === "string" ? code : String(error);
 }
 
 /** Run the command with these arguments in a folder, and give its exit code. */
@@ -364,7 +394,14 @@ export function run(args: readonly string[], dir: string, print: (line: string) 
     return 1;
   }
   const dry = flags.includes("--dry-run");
-  const planned = plan(dir);
+  let planned: Plan;
+  try {
+    planned = plan(dir);
+  } catch (error) {
+    if (!(error instanceof ReadFailed)) throw error;
+    print(MESSAGES.writeFailed(error.path, error.code));
+    return 1;
+  }
   if (dry) print(MESSAGES.dryRun);
   else {
     const failed = apply(planned);

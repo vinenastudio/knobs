@@ -306,6 +306,22 @@ describe("the layout edit", () => {
     );
   });
 
+  test("keeps a directive first with comments before it or after it, and an import with a comment after it counts", () => {
+    expect(withPanel('"use client"; // hooks below\nimport { useEffect } from "react"; // effect\nexport default () => <body></body>;\n')).toBe(
+      '"use client"; // hooks below\nimport { useEffect } from "react"; // effect\nimport { DevPanel } from "./dev-knobs";\nexport default () => <body><DevPanel /></body>;\n',
+    );
+    expect(withPanel('// root layout\n"use client";\nexport default () => <body></body>;\n')).toBe(
+      '// root layout\n"use client";\nimport { DevPanel } from "./dev-knobs";\nexport default () => <body><DevPanel /></body>;\n',
+    );
+    expect(withPanel('import "./globals.css"; /* styles */\nexport default () => <body></body>;\n')).toBe(
+      'import "./globals.css"; /* styles */\nimport { DevPanel } from "./dev-knobs";\nexport default () => <body><DevPanel /></body>;\n',
+    );
+  });
+
+  test("is null with a directive it cannot keep first", () => {
+    expect(withPanel('"use client"; /* hooks below */\nexport default () => <body></body>;\n')).toBeNull();
+  });
+
   test("is null with more than one `</body>`", () => {
     expect(withPanel("export default () => <body></body>;\n// never put scripts after </body>\n")).toBeNull();
   });
@@ -368,6 +384,17 @@ describe("what init leaves alone", () => {
     expect(readFileSync(join(dir, "src/main.ts"), "utf8")).toBe(`${main}${MOUNT_LINE}\n`);
   });
 
+  test("a commented-out import of the package does not count as mounted", () => {
+    const main = "// import('@vinena/knobs') later\nstart();\n";
+    const vite = project({ "package.json": pkg({ vite: "7" }), "index.html": '<script type="module" src="/src/main.ts"></script>', "src/main.ts": main });
+    expect(init(vite).lines).toContain("changed src/main.ts");
+    expect(readFileSync(join(vite, "src/main.ts"), "utf8")).toBe(`${main}${MOUNT_LINE}\n`);
+    const layout = '// TODO: import { DevKnobs } from "@vinena/knobs/react"\n/* import("@vinena/knobs") */\nexport default ({children}) => <html><body>{children}</body></html>;\n';
+    const next = project({ "package.json": pkg({ next: "16" }), "app/layout.tsx": layout });
+    expect(init(next).lines.slice(0, 3)).toEqual(["npm i -D @vinena/knobs", "created app/dev-knobs.tsx", "changed app/layout.tsx"]);
+    expect(readFileSync(join(next, "app/layout.tsx"), "utf8")).toContain("<DevPanel />");
+  });
+
   test("an import of the package in either quote kind counts as mounted", () => {
     for (const main of ["import { mount } from '@vinena/knobs';\nmount();\n", "import ('@vinena/knobs').then((m) => m.mount());\n"]) {
       const dir = project({ "package.json": pkg({ vite: "7" }), "index.html": '<script type="module" src="/src/main.ts"></script>', "src/main.ts": main });
@@ -425,6 +452,14 @@ describe("what init leaves alone", () => {
     } finally {
       chmodSync(join(shut, "app"), 0o755);
     }
+  });
+
+  test("a file it cannot read prints the path and the code, and writes nothing", () => {
+    const dir = project({ "package.json": pkg({ next: "16" }) });
+    mkdirSync(join(dir, "app/layout.tsx"), { recursive: true });
+    const before = snapshot(dir);
+    expect(init(dir)).toEqual({ code: 1, lines: ["error: app/layout.tsx EISDIR"] });
+    expect(snapshot(dir)).toEqual(before);
   });
 
   test("a script in an html comment is not the entry, and the first one that exists is", () => {
