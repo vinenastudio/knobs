@@ -439,6 +439,32 @@ describe("what init leaves alone", () => {
     }
   });
 
+  test("a regex after an arrow and a self-closing JSX tag before a template do not hide a commented mount", () => {
+    for (const main of [
+      'const isQuote = (c: string) => /[`\'"]/.test(c);\n// import("@vinena/knobs").then(({ mount }) => mount());\nconst t = `x`;\n',
+      'const A = () => <p><Logo size={24} />{`${a}/${b}`}</p>;\n// import("@vinena/knobs").then(({ mount }) => mount());\nconst t = `x`;\n',
+    ]) {
+      const dir = project({ "package.json": pkg({ vite: "7" }), "index.html": '<script type="module" src="/src/main.tsx"></script>', "src/main.tsx": main });
+      expect(init(dir).lines).toContain("changed src/main.tsx");
+      expect(readFileSync(join(dir, "src/main.tsx"), "utf8")).toContain(MOUNT_LINE);
+    }
+  });
+
+  test("a division or a regex holding `/*` before a commented mount is not mounted", () => {
+    for (const main of ['const x = a / b / c; // import("@vinena/knobs")\n', 'const x = /\\/\\*/; // import("@vinena/knobs")\n']) {
+      const dir = project({ "package.json": pkg({ vite: "7" }), "index.html": '<script type="module" src="/src/main.ts"></script>', "src/main.ts": main });
+      expect(init(dir).lines).toContain("changed src/main.ts");
+    }
+  });
+
+  test("an import line inside a template after a self-closing JSX tag is not the last import", () => {
+    const layout =
+      'import "./globals.css";\nexport const Badge = () => <span><Logo size={24} />{`v${major}/${minor}`}</span>;\nconst snippet = `\nimport { x } from "y";\n`;\nexport default ({ children }) => <html><body>{children}</body></html>;\n';
+    expect(withPanel(layout)).toBe(
+      'import "./globals.css";\nimport { DevPanel } from "./dev-knobs";\nexport const Badge = () => <span><Logo size={24} />{`v${major}/${minor}`}</span>;\nconst snippet = `\nimport { x } from "y";\n`;\nexport default ({ children }) => <html><body>{children}<DevPanel /></body></html>;\n',
+    );
+  });
+
   test("an import of the package in either quote kind counts as mounted", () => {
     for (const main of ["import { mount } from '@vinena/knobs';\nmount();\n", "import ('@vinena/knobs').then((m) => m.mount());\n"]) {
       const dir = project({ "package.json": pkg({ vite: "7" }), "index.html": '<script type="module" src="/src/main.ts"></script>', "src/main.ts": main });

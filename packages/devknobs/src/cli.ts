@@ -62,6 +62,7 @@ function scan(text: string): { code: string; bare: string } {
   const holes: number[] = [];
   let inTemplate = false;
   let last = "";
+  let lastAt = -1;
   let plainUntil = -1;
   let i = 0;
   while (i < text.length) {
@@ -95,7 +96,7 @@ function scan(text: string): { code: string; bare: string } {
       const end = close < 0 ? text.length : close + 2;
       cuts.push({ start: i, end, comment: true });
       i = end;
-    } else if (c === "/" && i > plainUntil && (last === "" || "(,=:[!&|?{};".includes(last))) {
+    } else if (c === "/" && i > plainUntil && (last === "" || "(,=:[!&|?{;".includes(last) || (last === ">" && text[lastAt - 1] === "=") || /(?:^|[^\w$.])(?:return|typeof|case|do|else|in|of|new|delete|void|throw|yield|await|instanceof)$/.test(text.slice(Math.max(0, lastAt - 10), lastAt + 1)))) {
       let j = i + 1;
       let inClass = false;
       while (j < text.length && text[j] !== "\n" && (inClass || text[j] !== "/")) {
@@ -134,7 +135,10 @@ function scan(text: string): { code: string; bare: string } {
         }
         holes[top] = open - 1;
       }
-      if (!/\s/.test(c)) last = c;
+      if (!/\s/.test(c)) {
+        last = c;
+        lastAt = i;
+      }
       i += 1;
     }
   }
