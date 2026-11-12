@@ -21,7 +21,7 @@ this repo keeps only the web half. Agent rules and workflow live in [AGENTS.md](
 | ----------- | ---------------------------------------------------------------------- |
 | Monorepo    | pnpm workspaces + Turborepo, Node 24, TypeScript 7                     |
 | Web         | TanStack Start (React 19 + Compiler) → Cloudflare Workers              |
-| Styling     | StyleX tokens (the devknobs panel's) + Base UI components + Storybook  |
+| Styling     | StyleX tokens (the knobs panel's) + Base UI components + Storybook     |
 | i18n        | Paraglide v2 (en only)                                                 |
 | Analytics   | Self-hosted OpenPanel, page views only, `/api/op` reverse proxy        |
 | Logging     | evlog wide events to an Axiom drain                                    |
@@ -30,7 +30,7 @@ this repo keeps only the web half. Agent rules and workflow live in [AGENTS.md](
 
 ## Develop
 
-Prereqs: Node 24 (`nvm use`), pnpm 11 (corepack), bun 1.3 (devknobs builds and tests with it).
+Prereqs: Node 24 (`nvm use`), pnpm 11 (corepack), bun 1.3 (knobs builds and tests with it).
 
 ```sh
 pnpm install
@@ -51,25 +51,25 @@ Local URLs come from [portless](https://portless.sh): stable named HTTPS domains
 | Command             | What it does                                                       |
 | ------------------- | ------------------------------------------------------------------ |
 | `pnpm dev`          | Web + storybook, in mprocs panes                                   |
-| `pnpm test`         | Story tests in real Chromium + devknobs' `bun test`                |
+| `pnpm test`         | Story tests in real Chromium + knobs' `bun test`                   |
 | `pnpm lint`         | oxlint, type-aware                                                 |
 | `pnpm format:check` | oxfmt, the CI check                                                |
 | `pnpm typecheck`    | `tsc --noEmit` per package                                         |
-| `pnpm build`        | turbo build (devknobs' `dist`, then the Workers bundle)            |
+| `pnpm build`        | turbo build (knobs' `dist`, then the Workers bundle)               |
 | `pnpm storybook`    | Component workshop (standalone, :6006)                             |
 | `pnpm bad-day`      | Nuke node_modules + all caches, reinstall (`DRY_RUN=1` to preview) |
 | `pnpm skills:check` | Warn when dep majors drift from verified agent skills              |
 
-**Fonts.** None ship. The site uses the devknobs panel's system font stack.
+**Fonts.** None ship. The site uses the knobs panel's system font stack.
 
 **Env.** Every var is optional: the site runs with no `.env` at all, just without analytics.
 
 **Deploy.** `pnpm --filter @knobs/web deploy` builds and ships to Cloudflare Workers; a push to
 main does the same from CI.
 
-## devknobs
+## knobs
 
-`pnpm dev` runs the site against devknobs' source, so an edit in `packages/devknobs/src` reloads
+`pnpm dev` runs the site against knobs' source, so an edit in `packages/devknobs/src` reloads
 the page. To release a new version: in a PR, bump `version` in `packages/devknobs/package.json`
 and add the `CHANGELOG.md` entry. After the merge, tag it:
 

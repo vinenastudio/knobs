@@ -16,9 +16,9 @@ the page, such as playwright's `page.evaluate` or the chrome devtools mcp's
   does not take, and then changes nothing. `setState(getState())`
   takes the whole state back.
 - `ready()` resolves with the state once the frame has caught up with the
-  knobs, the frame's own devknobs is up and the panel has finished its slide.
-  a page devknobs reloads for the locale knob never settles it, so ask again on
-  the new page. it rejects at once when devknobs is not mounted, and past 10
+  knobs, the frame's own knobs is up and the panel has finished its slide.
+  a page knobs reloads for the locale knob never settles it, so ask again on
+  the new page. it rejects at once when knobs is not mounted, and past 10
   seconds, so a timeout never passes for success.
 - [`grab()`](/docs/grab) takes an element, an array or a NodeList of them, and skips entries
   that are not elements, such as a `querySelector` that found nothing.
@@ -58,7 +58,7 @@ the page, such as playwright's `page.evaluate` or the chrome devtools mcp's
   it resolves to `{ applied, skipped }`: the edits made, as `edits()` gives
   them, and each one not made as `{ edit, reason }` (`not found on the page`,
   `its rule is not on the page`, `the page has another value now`, `the page
-did not take it`, `not an edit devknobs reads`). anything but a list
+did not take it`, `not an edit knobs reads`). anything but a list
   throws a `TypeError`. so an agent can read `edits()`, save the list, and
   make the same edits again on a fresh load, to compare or to screenshot
   them before they are in the code. an html or attribute edit that could run
@@ -86,7 +86,7 @@ window.devknobs.setState({ scheme: 'dark', panel: { open: false, handle: false }
 await window.devknobs.ready();
 ```
 
-every way in puts the api on `window.devknobs` while devknobs is mounted: the
+every way in puts the api on `window.devknobs` while knobs is mounted: the
 script tag, `mount()` and `<DevKnobs />`. so does the copy inside the width
 knob's frame, so `grab` works there too. the script tag build keeps the api
 after `unmount()`, so it can mount again: `ready()` tells whether it is mounted.

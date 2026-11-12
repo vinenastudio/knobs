@@ -33,7 +33,7 @@ listed, and never kept, so a reload starts with it off.
 while it is on:
 
 - the element under the pointer gets a box and a label with its tag and its
-  component, and the cursor is a crosshair. devknobs' own panel and frame are
+  component, and the cursor is a crosshair. knobs' own panel and frame are
   passed over, open shadow roots are reached into, and so are the children a
   hit test passes over: those that take no pointer events, or sit under a clear
   layer or a pseudo element stretched over a card.
@@ -87,8 +87,8 @@ both by Aiden Bai and MIT, see
 
 ## migrating from react-grab
 
-devknobs covers it: the same grab, the same line format, the same
-clipboard type. remove the `react-grab` script or package, and mount devknobs.
+knobs covers it: the same grab, the same line format, the same
+clipboard type. remove the `react-grab` script or package, and mount knobs.
 pass `grabKey: "meta+c"` (`"ctrl+c"` off a Mac) to keep react-grab's key.
 
 ## inspect
@@ -194,7 +194,7 @@ click away, and the filter keeps the declarations that have its text in
 their name or value. the view reads the styles again when the element or an
 ancestor changes, when a stylesheet in the head does, when the window is
 resized and when a knob moves. with the width knob's frame up, inspect picks
-in the frame and the styles show in the panel. what a knob of devknobs
+in the frame and the styles show in the panel. what a knob of knobs
 writes on `<html>`, the root size of the text size knob and the
 `color-scheme` of the scheme knob, is left out.
 
@@ -211,7 +211,7 @@ text inside its line, other text in quotes, `<!-- comments -->`,
 `#shadow-root (open)` for an open shadow root, and `::marker`, `::before`
 and `::after` where they have content. an open element ends on a line of its
 own, `</tag>`. long values and texts are cut short with `…`. past 500
-children a line says `Show all nodes (N more)`. devknobs' own nodes, its
+children a line says `Show all nodes (N more)`. knobs' own nodes, its
 panel, boxes, frame and styles, are never in it.
 
 the pointer on a line boxes its element on the page, margin and padding as
@@ -253,13 +253,13 @@ the page at once, into the same changes as the style edits:
   the editor drags its height, and `expand` makes it as tall as the panel
   (`shrink` makes it as it was); both are kept for the next time. `⇧↩`
   (`Shift Enter` off a Mac), its `apply` button, or a click elsewhere puts the
-  new html in the element's place and selects it; esc leaves it. html with no element in it, or with devknobs' own
+  new html in the element's place and selects it; esc leaves it. html with no element in it, or with knobs' own
   `data-devknobs` attributes, is refused: applying it with `⇧↩` or the
   button turns the field red and keeps it open, while a click elsewhere
   closes it without the edit. undo puts the very element back, unless the
   page moved the new nodes since
 - `h` hides the selected element and all in it, and shows it again:
-  `visibility: hidden` through an attribute of devknobs', so the page's own
+  `visibility: hidden` through an attribute of knobs', so the page's own
   `style` stays as it is. its line goes faint
 - Delete or Backspace deletes the selected node, and the line after it is
   selected. undo puts it back where it stood
@@ -281,7 +281,7 @@ the page at once, into the same changes as the style edits:
 
 a field closed as it was opened makes no edit, and one whose edit is refused
 stays open, red, until it is fixed, left with esc or the focus leaves it,
-and no key or button of the tree acts while it is open. `<html>`, `<head>`, `<body>` and an element that holds devknobs'
+and no key or button of the tree acts while it is open. `<html>`, `<head>`, `<body>` and an element that holds knobs'
 own nodes are not edited as html, hidden, deleted or moved, and a text straight in
 a shadow root or the document is not edited.
 
@@ -312,7 +312,7 @@ modes, and each edit goes on the page at once:
 - typing a property's name, or a value, opens a list of suggestions under
   the field, filtered by what was typed, those that start with it first.
   names are every property the browser knows, asked of the browser, and the
-  custom properties the page sets. values are the keywords devknobs
+  custom properties the page sets. values are the keywords knobs
   suggests that the browser takes for the property (`CSS.supports`), named colors where it takes a color,
   `var(--x)` for each custom property, and `inherit`, `initial`, `unset`,
   `revert` and `revert-layer`. an empty field shows the whole list as it
@@ -335,7 +335,7 @@ modes, and each edit goes on the page at once:
   leaves none, and a selector the browser does not take turns red and stays
   open. a click or tab elsewhere adds the rule where the selector was
   changed, and none where it was left as it opened. the rule goes in a
-  stylesheet of devknobs' own in the element's document, the width knob's
+  stylesheet of knobs' own in the element's document, the width knob's
   frame's too, and its `+ add property` opens at once, unless it was added
   by a click elsewhere or the filter hides it. it is listed with the element's rules, from `new rule`, also while it
   does not match the element (its selector quiet, its lines struck through),
@@ -383,7 +383,7 @@ change: their kinds, selectors, rules and values before and after, as plain
 json, no node of the page, though they hold the page's text, attribute
 values and element markup as edited (up to 64K characters each). as the
 page loads again, once it loaded and nothing on it changed for 300
-milliseconds (3 seconds at most, so a framework has drawn it), devknobs
+milliseconds (3 seconds at most, so a framework has drawn it), knobs
 makes them again in order. each is made
 only where its element is found by its selector, its rule by its selector,
 what it sits in and its stylesheet, and the page still has the value it had
@@ -423,7 +423,7 @@ page. the switch is on for a page while it keeps edits, in every tab. a
 page keeps its first 200 edits, up to 256 KB of json; past that the changes
 say `only the first 200 edits are kept after a reload`. edits are kept for 20
 pages at most: the page kept longest ago is forgotten first. forced states
-are no edits and are never kept. edits made in devknobs' frame, for a
+are no edits and are never kept. edits made in knobs' frame, for a
 pinned panel or a device, are kept while the frame shows the same page (its
 origin and path), and made again in the frame after a reload; html and
 attribute edits made there wait for `apply` too, as the page's own do. with the npm package they are in the page's `localStorage`, one item
@@ -441,14 +441,14 @@ pointer were on it, it had the focus or it were pressed, and the styles show
 the rules of that state as applying, and those with `:not()` of it as not.
 several can be on at once. forcing is no edit: it is not in the changes, and
 it ends when another element is shown, the view closes, reset in the footer
-is pressed or devknobs unmounts. `:hover` and `:active` reach the element's
+is pressed or knobs unmounts. `:hover` and `:active` reach the element's
 ancestors too, and a focus makes them match `:focus-within`, as with the
 real state.
 
-a page's script cannot set those states, so devknobs emulates them: the
+a page's script cannot set those states, so knobs emulates them: the
 element and its ancestors carry `data-devknobs-force`, and each rule of the
 page with a forced state in its selector is copied into a stylesheet of
-devknobs' own, the state written `:is(:hover, [data-devknobs-force~="hover"])`,
+knobs' own, the state written `:is(:hover, [data-devknobs-force~="hover"])`,
 as heavy as before, in the same `@media`, `@supports`, `@container`,
 `@layer` and `@scope`. the copies are made again as the stylesheets change.
 where that falls short:
