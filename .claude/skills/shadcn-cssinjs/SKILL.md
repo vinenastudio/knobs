@@ -1,6 +1,8 @@
 ---
 name: shadcn-cssinjs
 description: How to add components from the shadcn-cssinjs registry (StyleX + Base UI, copy-paste-own) to packages/ui — fetch mechanics, the CLI bug workaround, and this repo's adaptation checklist. Use when adding or updating any packages/ui component.
+metadata:
+  internal: true
 ---
 
 # shadcn-cssinjs Registry Skill
