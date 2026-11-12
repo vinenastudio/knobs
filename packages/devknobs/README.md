@@ -33,6 +33,12 @@ or by hand:
 npm i -D @vinena/knobs
 ```
 
+or add it with one command. it adds knobs to a next or vite project, in development only:
+
+```
+npx @vinena/knobs init
+```
+
 ## usage
 
 all of it is for dev only, so gate it yourself:

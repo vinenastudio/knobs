@@ -97,10 +97,10 @@ on any page it runs on.
 
 the package ships an agent skill that walks an agent through the loop: learn
 the knobs, set a condition, wait, check the page, grab what is broken, fix it,
-reset. it is at `node_modules/@vinena/knobs/skills/devknobs/SKILL.md`
+reset. it is at `node_modules/@vinena/knobs/skills/knobs/SKILL.md`
 ([on GitHub](https://github.com/vinenastudio/knobs/blob/main/packages/devknobs/skills/knobs/SKILL.md)). copy it into
 the project's skills to install it, for claude code:
 
 ```sh
-mkdir -p .claude/skills && cp -R node_modules/@vinena/knobs/skills/devknobs .claude/skills/
+mkdir -p .claude/skills && cp -R node_modules/@vinena/knobs/skills/knobs .claude/skills/
 ```

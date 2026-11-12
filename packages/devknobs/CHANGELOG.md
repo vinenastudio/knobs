@@ -1,5 +1,13 @@
 # changelog
 
+## 0.7.0
+
+- `npx @vinena/knobs init` adds knobs to a Next (App Router and Pages Router) or Vite project. it adds the package and the mount line, in development only, and prints the steps. when it is not sure, it changes nothing and prints the step to do by hand
+- `npx @vinena/knobs init --dry-run` shows the change and writes nothing
+- the settings have a github row that links to the repo, and the crafted at Vinena link
+- the panel, the console and the error messages say knobs, not devknobs
+- the skill is at `skills/knobs`, not `skills/devknobs`
+
 ## 0.6.6
 
 - grab's label leaves out component names a production build shortened, such as `xf`, and shows the element alone

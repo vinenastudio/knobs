@@ -16,6 +16,12 @@ want it on any site with no install? use the [chrome extension](/docs/extension)
 npm i -D @vinena/knobs
 ```
 
+or add it with one command. it adds knobs to a next or vite project, in development only:
+
+```sh
+npx @vinena/knobs init
+```
+
 or let your agent do it: the copy installation prompt button at the top of this page gives claude code, codex or cursor the steps to install it and mount it in development only.
 
 ## mount it
