@@ -131,12 +131,16 @@ describe("the links after send feedback", () => {
     }
   });
 
-  test("neither link carries the page's address", () => {
+  test("each link's address is a fixed one, whatever page the panel is on, with no listener to change it", () => {
     Object.defineProperty(globalThis, "location", { configurable: true, value: { href: "https://example.com/secret?token=x" } });
     try {
-      for (const node of [githubRow(), creditRow(false), creditRow(true)]) {
+      for (const [node, href] of [
+        [githubRow(), "https://github.com/vinenastudio/knobs"],
+        [creditRow(false), "https://vinena.studio/?utm_source=knobs.dev&utm_medium=referral&utm_campaign=panel"],
+        [creditRow(true), "https://vinena.studio/?utm_source=knobs.dev&utm_medium=referral&utm_campaign=extension"],
+      ] as const) {
         const a = fake(node).tag === "a" ? fake(node) : link(node);
-        expect(a?.getAttribute("href")).not.toContain("example.com");
+        expect(a?.getAttribute("href")).toBe(href);
         expect(a?.listeners.size).toBe(0);
       }
     } finally {

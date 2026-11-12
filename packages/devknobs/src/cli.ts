@@ -5,14 +5,14 @@
  * writes files only: no network, and the package manager is never run, its
  * command is printed instead.
  */
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 export type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
 
-/** Every string the command prints. All but the six marked are the README's own words. */
+/** Every string the command prints. All but the eight marked are the README's own words. */
 export const MESSAGES = {
   install: {
     npm: "npm i -D @vinena/knobs",
@@ -43,10 +43,22 @@ export const MESSAGES = {
   dryRun: "dry run",
   // MERT WRITES
   usage: "usage: knobs init [--dry-run]",
+  // MERT WRITES
+  packageJson: "error: package.json",
+  // MERT WRITES
+  writeFailed: (path: string, code: string) => `error: ${path} ${code}`,
 } as const;
 
-/** What a file that already mounts devknobs has in it. */
-const MARK = "@vinena/knobs";
+/** An import of devknobs, static or dynamic, as a file that mounts it has. */
+const MOUNTS = /(?:\bfrom\s*|\bimport\s*\(\s*)(["'])@vinena\/knobs(?:\/react)?\1/;
+
+/** The relative imports of a module, the path in group 2. */
+const RELATIVE_IMPORTS = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(["'])(\.\.?\/[^"']+)\1/g;
+
+/** The end of line a text uses: CRLF where it has one, else LF. */
+function eolOf(text: string): string {
+  return text.includes("\r\n") ? "\r\n" : "\n";
+}
 
 /** The line a client entry gets, as the installation prompt has it. */
 export const MOUNT_LINE = 'if (import.meta.env.DEV) import("@vinena/knobs").then(({ mount }) => mount());';
@@ -100,12 +112,17 @@ function firstOf(files: (path: string) => boolean, stems: readonly string[]): st
   return null;
 }
 
-/** The `src` of the first module script of a page, as a path from the page's folder. */
-export function moduleEntry(html: string): string | null {
-  for (const tag of html.match(/<script\b[^>]*>/gi) ?? []) {
+/**
+ * The `src` of the first module script of a page that `files` has, as a path
+ * from the page's folder. Scripts in html comments do not count.
+ */
+export function moduleEntry(html: string, files: (path: string) => boolean = () => true): string | null {
+  for (const tag of html.replace(/<!--[\s\S]*?-->/g, "").match(/<script\b[^>]*>/gi) ?? []) {
     if (!/\btype\s*=\s*["']module["']/i.test(tag)) continue;
     const src = /\bsrc\s*=\s*["']([^"']+)["']/i.exec(tag)?.[1];
-    if (src && !/^([a-z]+:)?\/\//i.test(src)) return src.replace(/^\.?\//, "");
+    if (!src || /^([a-z]+:)?\/\//i.test(src)) continue;
+    const path = src.replace(/^\.?\//, "");
+    if (files(path)) return path;
   }
   return null;
 }
@@ -136,8 +153,8 @@ export function framework(
     return app ? { kind: "next-pages", app } : { kind: "unknown" };
   }
   if (has("vite") && files("index.html")) {
-    const entry = moduleEntry(read("index.html"));
-    if (entry && files(entry)) return { kind: "entry", entry, make: false };
+    const entry = moduleEntry(read("index.html"), files);
+    if (entry) return { kind: "entry", entry, make: false };
   }
   if (has("@sveltejs/kit")) {
     const entry = ["src/hooks.client.ts", "src/hooks.client.js"].find(files);
@@ -147,26 +164,73 @@ export function framework(
   return entry ? { kind: "entry", entry, make: false } : { kind: "unknown" };
 }
 
-/** A layout with the component imported and rendered before `</body>`, or null where it has no `</body>`. */
+/**
+ * A layout with the component imported and rendered before `</body>`, in the
+ * layout's own end of line, or null where it has no `</body>` or more than one.
+ */
 export function withPanel(layout: string): string | null {
-  const close = layout.lastIndexOf("</body>");
-  if (close < 0) return null;
+  const close = layout.indexOf("</body>");
+  if (close < 0 || close !== layout.lastIndexOf("</body>")) return null;
+  const eol = eolOf(layout);
   const lineStart = layout.lastIndexOf("\n", close) + 1;
   const indent = layout.slice(lineStart, close);
   const rendered = /^[ \t]*$/.test(indent)
-    ? `${layout.slice(0, lineStart)}${indent}${indent.includes("\t") ? "\t" : "  "}${COMPONENT_RENDER}\n${layout.slice(lineStart)}`
+    ? `${layout.slice(0, lineStart)}${indent}${indent.includes("\t") ? "\t" : "  "}${COMPONENT_RENDER}${eol}${layout.slice(lineStart)}`
     : `${layout.slice(0, close)}${COMPONENT_RENDER}${layout.slice(close)}`;
   const imports = [
-    ...rendered.matchAll(/^import\s+["'][^"']+["'];?[ \t]*$|^import\b[^;]*?\bfrom\s*["'][^"']+["'];?[ \t]*$/gm),
+    ...rendered.matchAll(/^import\s+["'][^"']+["'];?[ \t]*(?=\r?$)|^import\b[^;]*?\bfrom\s*["'][^"']+["'];?[ \t]*(?=\r?$)/gm),
   ];
   const last = imports.at(-1);
   if (last) {
     const end = last.index + last[0].length;
-    return `${rendered.slice(0, end)}\n${COMPONENT_IMPORT}${rendered.slice(end)}`;
+    return `${rendered.slice(0, end)}${eol}${COMPONENT_IMPORT}${rendered.slice(end)}`;
   }
-  const directive = /^\s*(["'])use \w+\1;?[ \t]*\n/.exec(rendered);
+  const directive = /^\s*(["'])use \w+\1;?[ \t]*\r?\n/.exec(rendered);
   const at = directive ? directive[0].length : 0;
-  return `${rendered.slice(0, at)}${COMPONENT_IMPORT}\n${rendered.slice(at)}`;
+  return `${rendered.slice(0, at)}${COMPONENT_IMPORT}${eol}${rendered.slice(at)}`;
+}
+
+/** Whether a path from `dir` stays in it once every symlink on the way is followed. */
+function inside(dir: string, path: string): boolean {
+  try {
+    const root = realpathSync(dir);
+    let at = resolve(dir, path);
+    const rest: string[] = [];
+    while (!existsSync(at)) {
+      if (lstatSync(at, { throwIfNoEntry: false })) return false;
+      const up = dirname(at);
+      if (up === at) return false;
+      rest.unshift(basename(at));
+      at = up;
+    }
+    const from = relative(root, join(realpathSync(at), ...rest));
+    return from !== "" && from !== ".." && !from.startsWith(`..${sep}`) && !isAbsolute(from);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether a module mounts devknobs: it imports it, or one of its relative
+ * imports does. `look` gives a file's text, null where it has none.
+ */
+function mountsKnobs(path: string, source: string, look: (path: string) => string | null): boolean {
+  if (MOUNTS.test(source)) return true;
+  for (const [, , spec = ""] of source.matchAll(RELATIVE_IMPORTS)) {
+    const base = join(dirname(path), spec);
+    const candidates = [
+      base,
+      ...SCRIPT_EXTENSIONS.map((extension) => `${base}.${extension}`),
+      ...SCRIPT_EXTENSIONS.map((extension) => join(base, `index.${extension}`)),
+    ];
+    for (const candidate of candidates) {
+      const text = look(candidate);
+      if (text === null) continue;
+      if (MOUNTS.test(text)) return true;
+      break;
+    }
+  }
+  return false;
 }
 
 export interface Edit {
@@ -189,12 +253,19 @@ export interface Plan {
 export function plan(dir: string): Plan {
   const files = (path: string): boolean => existsSync(join(dir, path));
   const read = (path: string): string => readFileSync(join(dir, path), "utf8");
+  const look = (path: string): string | null => {
+    try {
+      return inside(dir, path) && statSync(join(dir, path)).isFile() ? read(path) : null;
+    } catch {
+      return null;
+    }
+  };
   let pkg: unknown = null;
   if (files("package.json")) {
     try {
-      pkg = JSON.parse(read("package.json"));
+      pkg = JSON.parse(read("package.json").replace(/^﻿/, ""));
     } catch {
-      pkg = {};
+      return { dir, edits: [], lines: [MESSAGES.packageJson], code: 1 };
     }
   }
   const found = framework(pkg, files, read);
@@ -218,22 +289,36 @@ export function plan(dir: string): Plan {
     // A file in `pages` is a route, so there the component goes beside that folder.
     const folder = found.kind === "next-app" ? dirname(beside) : dirname(dirname(beside));
     const component = join(folder, `${COMPONENT_NAME}.${typed ? "tsx" : "jsx"}`);
-    if (files(component)) lines.push(MESSAGES.unchanged(component));
-    else edit(component, "create", COMPONENT);
-    const source = read(beside);
-    if (source.includes(MARK) || source.includes(COMPONENT_NAME)) lines.push(MESSAGES.unchanged(beside));
-    else if (found.kind === "next-pages") byHand(MESSAGES.next, false);
+    if (!inside(dir, beside) || !inside(dir, component)) byHand(MESSAGES.next, false);
     else {
-      const next = withPanel(source);
-      if (next === null) byHand(MESSAGES.next, false);
-      else edit(beside, "change", next);
+      const source = read(beside);
+      const eol = eolOf(source);
+      const ours = source.includes(COMPONENT_IMPORT);
+      const makeComponent = (): void => {
+        if (files(component)) lines.push(MESSAGES.unchanged(component));
+        else edit(component, "create", COMPONENT.replaceAll("\n", eol));
+      };
+      if (ours || mountsKnobs(beside, source, look)) {
+        if (ours) makeComponent();
+        lines.push(MESSAGES.unchanged(beside));
+      } else if (found.kind === "next-pages") {
+        makeComponent();
+        byHand(MESSAGES.next, false);
+      } else {
+        const next = withPanel(source);
+        makeComponent();
+        if (next === null) byHand(MESSAGES.next, false);
+        else edit(beside, "change", next);
+      }
     }
   } else if (found.kind === "entry") {
-    if (found.make) edit(found.entry, "create", `${MOUNT_LINE}\n`);
+    if (!inside(dir, found.entry)) byHand(MESSAGES.entry, false);
+    else if (found.make) edit(found.entry, "create", `${MOUNT_LINE}\n`);
     else {
       const source = read(found.entry);
-      if (source.includes(MARK)) lines.push(MESSAGES.unchanged(found.entry));
-      else edit(found.entry, "change", `${source}${source === "" || source.endsWith("\n") ? "" : "\n"}${MOUNT_LINE}\n`);
+      const eol = eolOf(source);
+      if (MOUNTS.test(source)) lines.push(MESSAGES.unchanged(found.entry));
+      else edit(found.entry, "change", `${source}${source === "" || source.endsWith("\n") ? "" : eol}${MOUNT_LINE}${eol}`);
     }
   } else if (found.kind === "plain") byHand(MESSAGES.plain, false);
   else byHand(depends(pkg, "next") ? MESSAGES.next : MESSAGES.entry, true);
@@ -242,13 +327,33 @@ export function plan(dir: string): Plan {
   return { dir, edits, lines, code };
 }
 
-/** Write a plan's edits. */
-export function apply(planned: Plan): void {
-  for (const { path, content } of planned.edits) {
+/**
+ * Write a plan's edits, the changes to files before the new files. On an
+ * error the changed files get their text back, and the line to print is given.
+ */
+export function apply(planned: Plan): string | null {
+  const ordered = [...planned.edits].sort((a, b) => Number(a.kind === "create") - Number(b.kind === "create"));
+  const changed: { file: string; before: string }[] = [];
+  for (const { path, kind, content } of ordered) {
     const file = join(planned.dir, path);
-    mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, content);
+    try {
+      const before = kind === "change" ? readFileSync(file, "utf8") : null;
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, content, { flag: kind === "create" ? "wx" : "w" });
+      if (before !== null) changed.push({ file, before });
+    } catch (error) {
+      for (const { file: back, before } of changed) {
+        try {
+          writeFileSync(back, before);
+        } catch {
+          // The error line below is still the one to print.
+        }
+      }
+      const code: unknown = error instanceof Error ? Reflect.get(error, "code") : undefined;
+      return MESSAGES.writeFailed(path, typeof code === "string" ? code : String(error));
+    }
   }
+  return null;
 }
 
 /** Run the command with these arguments in a folder, and give its exit code. */
@@ -261,7 +366,13 @@ export function run(args: readonly string[], dir: string, print: (line: string) 
   const dry = flags.includes("--dry-run");
   const planned = plan(dir);
   if (dry) print(MESSAGES.dryRun);
-  else apply(planned);
+  else {
+    const failed = apply(planned);
+    if (failed !== null) {
+      print(failed);
+      return 1;
+    }
+  }
   for (const line of planned.lines) print(line);
   return planned.code;
 }

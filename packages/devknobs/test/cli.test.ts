@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { COMPONENT, framework, MESSAGES, moduleEntry, MOUNT_LINE, packageManager, run, withPanel } from "../src/cli";
@@ -295,5 +295,158 @@ describe("the layout edit", () => {
 
   test("is null with no `</body>`", () => {
     expect(withPanel("export default () => null;\n")).toBeNull();
+  });
+
+  test("keeps CRLF in every line it adds, and a directive first", () => {
+    expect(withPanel('"use client";\r\nexport default () => (\r\n  <body>\r\n  </body>\r\n);\r\n')).toBe(
+      '"use client";\r\nimport { DevPanel } from "./dev-knobs";\r\nexport default () => (\r\n  <body>\r\n    <DevPanel />\r\n  </body>\r\n);\r\n',
+    );
+    expect(withPanel('import "./a.css";\r\nexport default () => <body></body>;\r\n')).toBe(
+      'import "./a.css";\r\nimport { DevPanel } from "./dev-knobs";\r\nexport default () => <body><DevPanel /></body>;\r\n',
+    );
+  });
+
+  test("is null with more than one `</body>`", () => {
+    expect(withPanel("export default () => <body></body>;\n// never put scripts after </body>\n")).toBeNull();
+  });
+});
+
+describe("what init leaves alone", () => {
+  /** A line end with no CR before it. */
+  const BARE_LF = /(?<!\r)\n/;
+
+  test("a CRLF project gets CRLF in the layout, the component and the entry", () => {
+    const layout =
+      'import "./globals.css";\r\nexport default function L({ children }) {\r\n  return (\r\n    <html>\r\n      <body>\r\n        {children}\r\n      </body>\r\n    </html>\r\n  );\r\n}\r\n';
+    const dir = project({ "package.json": pkg({ next: "16" }), "app/layout.tsx": layout });
+    expect(init(dir).code).toBe(0);
+    const changed = readFileSync(join(dir, "app/layout.tsx"), "utf8");
+    expect(changed).toContain('import "./globals.css";\r\nimport { DevPanel } from "./dev-knobs";\r\n');
+    expect(changed).toContain("        <DevPanel />\r\n      </body>");
+    expect(changed).not.toMatch(BARE_LF);
+    const component = readFileSync(join(dir, "app/dev-knobs.tsx"), "utf8");
+    expect(component).toBe(COMPONENT.replaceAll("\n", "\r\n"));
+    expect(component.startsWith('"use client";\r\n')).toBe(true);
+    const vite = project({
+      "package.json": pkg({ vite: "7" }),
+      "index.html": '<script type="module" src="/src/main.ts"></script>',
+      "src/main.ts": "start();\r\nrun()",
+    });
+    expect(init(vite).code).toBe(0);
+    expect(readFileSync(join(vite, "src/main.ts"), "utf8")).toBe(`start();\r\nrun()\r\n${MOUNT_LINE}\r\n`);
+  });
+
+  test("a layout with `</body>` twice is left alone, with the step to do by hand", () => {
+    const layout = "export default ({children}) => <html><body>{children}</body></html>;\n// note: never put scripts after </body>\n";
+    const dir = project({ "package.json": pkg({ next: "16" }), "app/layout.tsx": layout });
+    const { code, lines } = init(dir);
+    expect(code).toBe(1);
+    expect(lines).toContain(MESSAGES.next);
+    expect(readFileSync(join(dir, "app/layout.tsx"), "utf8")).toBe(layout);
+  });
+
+  test("a file outside the project, by a path or a symlink, is never written", () => {
+    const outside = project({ "outside/shared.ts": "start();\n", "outside2/layout.tsx": "export default ({children}) => <html><body>{children}</body></html>;\n" });
+    mkdirSync(join(outside, "mono/apps/web"), { recursive: true });
+    writeFileSync(join(outside, "mono/apps/web/package.json"), pkg({ vite: "7" }));
+    writeFileSync(join(outside, "mono/apps/web/index.html"), '<script type="module" src="../../../outside/shared.ts"></script>');
+    const web = join(outside, "mono/apps/web");
+    expect(init(web)).toEqual({ code: 1, lines: ["npm i -D @vinena/knobs", MESSAGES.entry, ...TAIL] });
+    expect(readFileSync(join(outside, "outside/shared.ts"), "utf8")).toBe("start();\n");
+    const linked = project({ "package.json": pkg({ next: "16" }) });
+    mkdirSync(join(linked, "app"));
+    symlinkSync(join(outside, "outside2/layout.tsx"), join(linked, "app/layout.tsx"));
+    expect(init(linked)).toEqual({ code: 1, lines: ["npm i -D @vinena/knobs", MESSAGES.next, ...TAIL] });
+    expect(readFileSync(join(outside, "outside2/layout.tsx"), "utf8")).toBe("export default ({children}) => <html><body>{children}</body></html>;\n");
+    expect(existsSync(join(linked, "app/dev-knobs.tsx"))).toBe(false);
+  });
+
+  test("a comment that names the package does not count as mounted", () => {
+    const main = "// TODO try @vinena/knobs later\nstart();\n";
+    const dir = project({ "package.json": pkg({ vite: "7" }), "index.html": '<script type="module" src="/src/main.ts"></script>', "src/main.ts": main });
+    expect(init(dir).lines).toContain("changed src/main.ts");
+    expect(readFileSync(join(dir, "src/main.ts"), "utf8")).toBe(`${main}${MOUNT_LINE}\n`);
+  });
+
+  test("an import of the package in either quote kind counts as mounted", () => {
+    for (const main of ["import { mount } from '@vinena/knobs';\nmount();\n", "import ('@vinena/knobs').then((m) => m.mount());\n"]) {
+      const dir = project({ "package.json": pkg({ vite: "7" }), "index.html": '<script type="module" src="/src/main.ts"></script>', "src/main.ts": main });
+      expect(init(dir)).toEqual({ code: 0, lines: ["npm i -D @vinena/knobs", "no change: src/main.ts", ...TAIL] });
+      expect(readFileSync(join(dir, "src/main.ts"), "utf8")).toBe(main);
+    }
+  });
+
+  test("a layout that renders the user's own component that mounts knobs gets no second one", () => {
+    const layout = 'import { Knobs } from "./knobs";\nexport default ({children}) => <html><body>{children}<Knobs /></body></html>;\n';
+    const dir = project({
+      "package.json": pkg({ next: "16" }),
+      "app/knobs.tsx":
+        '"use client";\nimport dynamic from "next/dynamic";\nconst K = dynamic(() => import("@vinena/knobs/react").then((m) => m.DevKnobs), { ssr: false });\nexport function Knobs() { return <K />; }\n',
+      "app/layout.tsx": layout,
+    });
+    expect(init(dir)).toEqual({ code: 0, lines: ["npm i -D @vinena/knobs", "no change: app/layout.tsx", ...TAIL] });
+    expect(readFileSync(join(dir, "app/layout.tsx"), "utf8")).toBe(layout);
+    expect(existsSync(join(dir, "app/dev-knobs.tsx"))).toBe(false);
+  });
+
+  test("a layout or _app that already mounts knobs gets no component file", () => {
+    const mounted = 'import { DevKnobs } from "@vinena/knobs/react";\n';
+    const app = project({
+      "package.json": pkg({ next: "16", "@vinena/knobs": "1" }),
+      "app/layout.tsx": `${mounted}export default ({children}) => <html><body>{children}{process.env.NODE_ENV === "development" && <DevKnobs />}</body></html>;\n`,
+    });
+    expect(init(app).code).toBe(0);
+    expect(existsSync(join(app, "app/dev-knobs.tsx"))).toBe(false);
+    const pages = project({ "package.json": pkg({ next: "16" }), "pages/_app.tsx": `${mounted}export default function App() {}\n` });
+    expect(init(pages)).toEqual({ code: 0, lines: ["npm i -D @vinena/knobs", "no change: pages/_app.tsx", ...TAIL] });
+    expect(existsSync(join(pages, "dev-knobs.tsx"))).toBe(false);
+  });
+
+  test("a package.json with a byte order mark is read, and a broken one stops with one line", () => {
+    const bom = project({ "package.json": `﻿${pkg({ next: "16" })}`, "app/layout.tsx": "export default ({children}) => <html><body>{children}</body></html>;\n" });
+    expect(init(bom).lines.slice(0, 3)).toEqual(["npm i -D @vinena/knobs", "created app/dev-knobs.tsx", "changed app/layout.tsx"]);
+    const broken = project({ "package.json": '{ "dependencies": ', "app/layout.tsx": "x" });
+    const before = snapshot(broken);
+    expect(init(broken)).toEqual({ code: 1, lines: ["error: package.json"] });
+    expect(snapshot(broken)).toEqual(before);
+  });
+
+  test("a write that fails prints the path and the code, and leaves no half change", () => {
+    const layout = "export default ({children}) => <html><body>{children}</body></html>;\n";
+    const locked = project({ "package.json": pkg({ next: "16" }), "app/layout.tsx": layout });
+    chmodSync(join(locked, "app/layout.tsx"), 0o444);
+    expect(init(locked)).toEqual({ code: 1, lines: ["error: app/layout.tsx EACCES"] });
+    expect(existsSync(join(locked, "app/dev-knobs.tsx"))).toBe(false);
+    const shut = project({ "package.json": pkg({ next: "16" }), "app/layout.tsx": layout });
+    chmodSync(join(shut, "app"), 0o555);
+    try {
+      expect(init(shut)).toEqual({ code: 1, lines: ["error: app/dev-knobs.tsx EACCES"] });
+      expect(readFileSync(join(shut, "app/layout.tsx"), "utf8")).toBe(layout);
+    } finally {
+      chmodSync(join(shut, "app"), 0o755);
+    }
+  });
+
+  test("a script in an html comment is not the entry, and the first one that exists is", () => {
+    const html = '<!-- <script type="module" src="/src/old.ts"></script> -->\n<script type="module" src="/src/gone.ts"></script>\n<script type="module" src="/src/main.ts"></script>';
+    const dir = project({ "package.json": pkg({ vite: "7" }), "index.html": html, "src/old.ts": "old();\n", "src/main.ts": "start();\n" });
+    expect(init(dir).lines).toContain("changed src/main.ts");
+    expect(readFileSync(join(dir, "src/old.ts"), "utf8")).toBe("old();\n");
+    expect(moduleEntry(html, (path) => path === "src/main.ts")).toBe("src/main.ts");
+  });
+});
+
+describe("the bin entry", () => {
+  test("runs as a process: a dry run prints the report and exits with its code", () => {
+    const dir = project({ "package.json": pkg({ vite: "7" }), "index.html": '<script type="module" src="/src/main.ts"></script>', "src/main.ts": "start();\n" });
+    const before = snapshot(dir);
+    const child = Bun.spawnSync([process.execPath, join(import.meta.dir, "..", "src", "cli.ts"), "init", "--dry-run"], { cwd: dir });
+    expect(child.exitCode).toBe(0);
+    expect(child.stdout.toString()).toBe(`${["dry run", "npm i -D @vinena/knobs", "changed src/main.ts", ...TAIL].join("\n")}\n`);
+    expect(snapshot(dir)).toEqual(before);
+    const plain = project({ "index.html": "<body></body>" });
+    const byHand = Bun.spawnSync([process.execPath, join(import.meta.dir, "..", "src", "cli.ts"), "init", "--dry-run"], { cwd: plain });
+    expect(byHand.exitCode).toBe(1);
+    expect(byHand.stdout.toString()).toBe(`${["dry run", MESSAGES.plain, ...TAIL].join("\n")}\n`);
   });
 });
