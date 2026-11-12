@@ -33,18 +33,21 @@ describe('install prompt', () => {
   test('the button is named "Copy installation prompt" and does not show the prompt', () => {
     const html = renderToStaticMarkup(createElement(CopyInstallPrompt, { name: 'install_prompt' }));
     expect(m.copy_install_prompt()).toBe('Copy installation prompt');
-    expect(html).toMatch(/^<button[^>]*type="button"/);
-    expect(html).toMatch(/^<button[^>]*aria-label="Copy installation prompt"/);
+    expect(html).toMatch(/<button[^>]*type="button"/);
+    expect(html).toMatch(/<button[^>]*aria-label="Copy installation prompt"/);
     expect(html).toContain('aria-hidden="true"');
     expect(html).toContain('>Copy installation prompt<');
     expect(html).toContain(`>${m.copy_done()}<`);
     expect(html).toContain('data-copied="false"');
     expect(html).not.toContain('llms-full.txt');
+    // The star link comes only after a copy.
+    expect(html).not.toContain(m.link_star());
+    expect(html).not.toContain('<a');
   });
 
   test('/docs/start has the button under its title, and no agent section', () => {
     const html = renderToStaticMarkup(createElement(DocPage, { slug: 'start' }));
-    expect(html).toMatch(/<\/h1><button[^>]*>.*Copy installation prompt/);
+    expect(html).toMatch(/<\/h1><div[^>]*><button[^>]*>.*Copy installation prompt/);
     expect(html).not.toContain('agent-start');
     expect(html).not.toContain('id="manual"');
     expect(html).not.toContain('Set it up with your agent');

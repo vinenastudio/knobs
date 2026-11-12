@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { formatStars, readStars, STAR_COUNT_MIN } from './stars.ts';
+import { formatStars, readStars, STAR_COUNT_MIN, starsCacheKey } from './stars.ts';
 
 describe('formatStars', () => {
   test('writes a count below 10,000 in full, with a comma', () => {
@@ -29,5 +29,15 @@ describe('readStars', () => {
     expect(readStars({})).toBeNull();
     expect(readStars(null)).toBeNull();
     expect(readStars('nope')).toBeNull();
+  });
+});
+
+describe('starsCacheKey', () => {
+  test('drops the query, so every address shares one cached answer', () => {
+    expect(starsCacheKey('https://knobs.dev/api/stars')).toBe('https://knobs.dev/api/stars');
+    expect(starsCacheKey('https://knobs.dev/api/stars?x=1&y=2')).toBe(
+      'https://knobs.dev/api/stars',
+    );
+    expect(starsCacheKey('https://knobs.dev/api/stars?')).toBe('https://knobs.dev/api/stars');
   });
 });

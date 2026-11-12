@@ -14,6 +14,14 @@ export function readStars(body: unknown): number | null {
   return typeof body.stars === 'number' && Number.isFinite(body.stars) ? body.stars : null;
 }
 
+/** The key `/api/stars` is cached under at the edge: the request's address with no query. */
+export function starsCacheKey(url: string): string {
+  const key = new URL(url);
+  key.search = '';
+  key.hash = '';
+  return key.toString();
+}
+
 let loaded: Promise<number | null> | undefined;
 
 async function fetchStars(): Promise<number | null> {

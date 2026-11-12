@@ -127,8 +127,10 @@ const styles = create({
     paddingBottom: spacing.s16,
     paddingInline: spacing.s4,
   },
-  // The installation prompt under the first page's title, apart from the text below it.
+  // The installation prompt under the first page's title, apart from the text below it: room for
+  // the star link that comes under it on a narrow screen after a copy.
   prompt: {
+    marginBottom: spacing.s6,
     marginTop: spacing.s6,
   },
   // The previous and next pages, at each end of one row.
