@@ -1,6 +1,8 @@
 ---
 name: storybook
 description: Storybook documentation index — where to find current docs for writing stories, play-function interaction tests, the Vitest addon, and react-vite configuration. Use when writing or reviewing stories or Storybook config in this repo (packages/ui).
+metadata:
+  internal: true
 ---
 
 # Storybook Docs Skill
