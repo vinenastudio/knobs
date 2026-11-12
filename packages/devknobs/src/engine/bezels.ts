@@ -448,7 +448,7 @@ export async function loadAll(files: readonly string[]): Promise<HTMLImageElemen
       });
       if (ok) return image;
     }
-    throw new Error(`devknobs: ${file} did not load`);
+    throw new Error(`knobs: ${file} did not load`);
   };
   return Promise.all(files.map(loaded));
 }

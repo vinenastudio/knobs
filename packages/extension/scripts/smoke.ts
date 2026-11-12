@@ -2015,7 +2015,7 @@ async function pageOwnCopy() {
   // A copy that claims the page again each time: three take-backs, then it keeps the page.
   const warnings: Array<string> = [];
   tab.on('console', (message) => {
-    if (message.text().startsWith('devknobs:')) {
+    if (message.text().startsWith('knobs:')) {
       warnings.push(message.text());
     }
   });

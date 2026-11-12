@@ -58,26 +58,26 @@ describe("checkPatch", () => {
 
   test("throws at a bad value, naming the knob and the value", () => {
     const cases: [unknown, string][] = [
-      [{ scheme: "purple" }, 'devknobs: bad value for scheme: "purple"'],
-      [{ text: 500 }, "devknobs: bad value for text: 500"],
-      [{ width: 99999 }, "devknobs: bad value for width: 99999"],
-      [{ width: 10 }, "devknobs: bad value for width: 10"],
-      [{ dpr: 50 }, "devknobs: bad value for dpr: 50"],
-      [{ timeZone: "Mars/Olympus" }, 'devknobs: bad value for timeZone: "Mars/Olympus"'],
-      [{ mat: "#ABCDEF" }, 'devknobs: bad value for mat: "#ABCDEF"'],
-      [{ geo: { lat: 200 } }, "devknobs: bad value for geo.lat: 200"],
-      [{ clock: { speed: 0 } }, "devknobs: bad value for clock.speed: 0"],
-      [{ network: "offline" }, 'devknobs: bad value for network: "offline"'],
-      [{ locale: { lang: "!!" } }, 'devknobs: bad value for locale.lang: "!!"'],
-      [{ device: "nokia-3310" }, 'devknobs: bad value for device: "nokia-3310"'],
-      [{ text: "big" }, 'devknobs: bad value for text: "big"'],
-      [{ speed: Number.NaN }, "devknobs: bad value for speed: NaN"],
-      [{ text: Infinity }, "devknobs: bad value for text: Infinity"],
-      [{ scheme: undefined }, "devknobs: bad value for scheme: undefined"],
-      [{ scheme: null }, "devknobs: bad value for scheme: null"],
-      [{ scheme: Symbol("dark") }, "devknobs: bad value for scheme: Symbol(dark)"],
-      [{ text: 10n }, "devknobs: bad value for text: 10"],
-      [{ pseudo: "yes" }, 'devknobs: bad value for pseudo: "yes"'],
+      [{ scheme: "purple" }, 'knobs: bad value for scheme: "purple"'],
+      [{ text: 500 }, "knobs: bad value for text: 500"],
+      [{ width: 99999 }, "knobs: bad value for width: 99999"],
+      [{ width: 10 }, "knobs: bad value for width: 10"],
+      [{ dpr: 50 }, "knobs: bad value for dpr: 50"],
+      [{ timeZone: "Mars/Olympus" }, 'knobs: bad value for timeZone: "Mars/Olympus"'],
+      [{ mat: "#ABCDEF" }, 'knobs: bad value for mat: "#ABCDEF"'],
+      [{ geo: { lat: 200 } }, "knobs: bad value for geo.lat: 200"],
+      [{ clock: { speed: 0 } }, "knobs: bad value for clock.speed: 0"],
+      [{ network: "offline" }, 'knobs: bad value for network: "offline"'],
+      [{ locale: { lang: "!!" } }, 'knobs: bad value for locale.lang: "!!"'],
+      [{ device: "nokia-3310" }, 'knobs: bad value for device: "nokia-3310"'],
+      [{ text: "big" }, 'knobs: bad value for text: "big"'],
+      [{ speed: Number.NaN }, "knobs: bad value for speed: NaN"],
+      [{ text: Infinity }, "knobs: bad value for text: Infinity"],
+      [{ scheme: undefined }, "knobs: bad value for scheme: undefined"],
+      [{ scheme: null }, "knobs: bad value for scheme: null"],
+      [{ scheme: Symbol("dark") }, "knobs: bad value for scheme: Symbol(dark)"],
+      [{ text: 10n }, "knobs: bad value for text: 10"],
+      [{ pseudo: "yes" }, 'knobs: bad value for pseudo: "yes"'],
     ];
     for (const [patch, message] of cases) {
       expect(() => checkPatch(patch)).toThrow(new TypeError(message));
@@ -85,15 +85,15 @@ describe("checkPatch", () => {
   });
 
   test("throws at a knob or a field the state does not have", () => {
-    expect(() => checkPatch({ nope: 1 })).toThrow(new TypeError("devknobs: unknown knob nope"));
+    expect(() => checkPatch({ nope: 1 })).toThrow(new TypeError("knobs: unknown knob nope"));
     expect(() => checkPatch({ panel: { width: 300 } })).toThrow(
-      new TypeError("devknobs: unknown knob panel.width"),
+      new TypeError("knobs: unknown knob panel.width"),
     );
     expect(() => checkPatch({ clock: { until: 0 } })).toThrow(
-      new TypeError("devknobs: unknown knob clock.until"),
+      new TypeError("knobs: unknown knob clock.until"),
     );
     expect(() => checkPatch({ locale: { toString: "x" } })).toThrow(
-      new TypeError("devknobs: unknown knob locale.toString"),
+      new TypeError("knobs: unknown knob locale.toString"),
     );
   });
 
@@ -109,19 +109,19 @@ describe("checkPatch", () => {
       expect(() => checkPatch(patch)).not.toThrow();
     }
     const cases: [unknown, string][] = [
-      [{ grabColor: "teal" }, 'devknobs: bad value for grabColor: "teal"'],
-      [{ clock: { since: "now" } }, 'devknobs: bad value for clock.since: "now"'],
-      [{ panel: { side: "up" } }, 'devknobs: bad value for panel.side: "up"'],
-      [{ panel: { y: Number.NaN } }, "devknobs: bad value for panel.y: NaN"],
-      [{ panel: { tab: "middle" } }, 'devknobs: bad value for panel.tab: "middle"'],
-      [{ panel: { pinned: ["scheme", 3] } }, 'devknobs: bad value for panel.pinned: ["scheme",3]'],
-      [{ panel: { pinned: ["nope"] } }, 'devknobs: bad value for panel.pinned: ["nope"]'],
-      [{ panel: { pinned: ["speed"] } }, 'devknobs: bad value for panel.pinned: ["speed"]'],
+      [{ grabColor: "teal" }, 'knobs: bad value for grabColor: "teal"'],
+      [{ clock: { since: "now" } }, 'knobs: bad value for clock.since: "now"'],
+      [{ panel: { side: "up" } }, 'knobs: bad value for panel.side: "up"'],
+      [{ panel: { y: Number.NaN } }, "knobs: bad value for panel.y: NaN"],
+      [{ panel: { tab: "middle" } }, 'knobs: bad value for panel.tab: "middle"'],
+      [{ panel: { pinned: ["scheme", 3] } }, 'knobs: bad value for panel.pinned: ["scheme",3]'],
+      [{ panel: { pinned: ["nope"] } }, 'knobs: bad value for panel.pinned: ["nope"]'],
+      [{ panel: { pinned: ["speed"] } }, 'knobs: bad value for panel.pinned: ["speed"]'],
       [
         { panel: { pinned: ["scheme", "scheme"] } },
-        'devknobs: bad value for panel.pinned: ["scheme","scheme"]',
+        'knobs: bad value for panel.pinned: ["scheme","scheme"]',
       ],
-      [{ panel: { handle: "no" } }, 'devknobs: bad value for panel.handle: "no"'],
+      [{ panel: { handle: "no" } }, 'knobs: bad value for panel.handle: "no"'],
     ];
     for (const [patch, message] of cases) {
       expect(() => checkPatch(patch)).toThrow(new TypeError(message));
@@ -131,7 +131,7 @@ describe("checkPatch", () => {
   test("throws at anything but an object", () => {
     for (const patch of [null, undefined, "dark", 1, []]) {
       expect(() => checkPatch(patch)).toThrow(
-        new TypeError("devknobs: setState takes an object"),
+        new TypeError("knobs: setState takes an object"),
       );
     }
   });

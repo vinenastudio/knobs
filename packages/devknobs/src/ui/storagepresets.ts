@@ -91,7 +91,7 @@ export async function savePreset(shell: Shell, query: string): Promise<void> {
     const name = textField({ placeholder: "preset name", onEnter: save });
     const node = stack([
       noteLine(
-        `keeps ${holds}${query.trim() === "" ? "" : ", as the filter shows them"}, without devknobs' own`,
+        `keeps ${holds}${query.trim() === "" ? "" : ", as the filter shows them"}, without knobs' own`,
       ),
       name,
       problem,

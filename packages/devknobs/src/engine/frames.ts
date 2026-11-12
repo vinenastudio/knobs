@@ -64,7 +64,7 @@ export function loadKitWith(next: () => Promise<FrameKit>): void {
 
 /** The kit did not load: no frame comes, so the knobs that asked for one go back to none. */
 function failed(error: unknown): void {
-  console.error("devknobs: the device frame could not load", error);
+  console.error("knobs: the device frame could not load", error);
   down = true;
   before = null;
   latest = null;

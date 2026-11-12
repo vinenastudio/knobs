@@ -33,6 +33,12 @@ or by hand:
 npm i -D @vinena/knobs
 ```
 
+then add the mount line with one command, in a next or vite project. it changes the code for development only:
+
+```
+npx @vinena/knobs init
+```
+
 ## usage
 
 all of it is for dev only, so gate it yourself:

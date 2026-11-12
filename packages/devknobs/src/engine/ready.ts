@@ -15,7 +15,7 @@ export function whenSettled<T>(
   wait = READY_WAIT,
 ): Promise<T> {
   return new Promise((resolve, reject) => {
-    const notMounted = () => new Error("devknobs: not mounted");
+    const notMounted = () => new Error("knobs: not mounted");
     if (!mounted()) {
       reject(notMounted());
       return;
@@ -44,7 +44,7 @@ export function whenSettled<T>(
       if (leaving()) return;
       if (!mounted()) reject(notMounted());
       else if (settled()) resolve(value());
-      else reject(new Error("devknobs: not settled after 10 seconds"));
+      else reject(new Error("knobs: not settled after 10 seconds"));
     }, wait);
     frame = window.requestAnimationFrame(check);
   });

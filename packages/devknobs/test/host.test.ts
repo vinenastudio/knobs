@@ -248,7 +248,7 @@ describe("a host", () => {
     expect(owned(window)).toBe(true);
     expect(released).toBe(3);
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(String(warn.mock.calls[0]?.[0])).toStartWith("devknobs:");
+    expect(String(warn.mock.calls[0]?.[0])).toStartWith("knobs:");
     last();
     warn.mockRestore();
   });
