@@ -1,5 +1,5 @@
 ---
-name: devknobs
+name: knobs
 description: Test a web page under different conditions with devknobs and fix what breaks. Use when an agent needs to check a page in dark mode, with reduced motion or more contrast, in another locale or right to left, with larger text, offline or on a slow connection, on another device or width, in another time zone or at another time, and then find and fix the code behind anything that looks wrong.
 ---
 

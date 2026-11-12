@@ -1,6 +1,8 @@
 ---
 name: stylex
 description: StyleX authoring guide — writing/applying/merging styles, pseudo-classes, media queries, defineVars/defineConsts, themes, dynamic styles, TypeScript types, and common antipatterns. Use when writing or reviewing any StyleX styles in this repo.
+metadata:
+  internal: true
 ---
 
 # StyleX Authoring Guide
