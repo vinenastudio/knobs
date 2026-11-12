@@ -1,7 +1,7 @@
 ---
 title: devices
-meta_title: Device presets in devknobs: iPhone, Pixel, iPad and laptop
-description: iPhone, Pixel, iPad and laptop presets for devknobs, drawn with each maker's own bezel and the phone's browser around your page, in portrait or landscape.
+meta_title: Device presets in knobs: iPhone, Pixel, iPad and laptop
+description: iPhone, Pixel, iPad and laptop presets for knobs, drawn with each maker's own bezel and the phone's browser around your page, in portrait or landscape.
 order: 4
 updated: 2026-10-25
 ---

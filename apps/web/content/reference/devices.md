@@ -170,7 +170,7 @@ the page menu is three lines, and the status bar's glyphs are iOS 27's, about
 color, the rest gray, no outline. the iOS 27 simulator does not draw the
 dynamic island, so the island keeps its iOS 26.5 size. the address shows the frame's host, back
 and forward step through the frame's history and reload reloads it, and the
-rest is drawn only. the glyphs are drawn for devknobs, none come from Apple
+rest is drawn only. the glyphs are drawn for knobs, none come from Apple
 or Google. tablets, laptops and desktops have no browser drawn.
 
 ## user agent and reloads
@@ -192,7 +192,7 @@ the frame before its first script runs, as soon as the frame's window has it:
 the user agent fields, `ontouchstart`, the touch points and the pointer and
 hover answers of `matchMedia`, so even an inline script at the top of `<head>`
 reads the device, with no early script. on its first load, on a reload and on
-a link followed inside the frame alike. the copy of devknobs in the frame takes
+a link followed inside the frame alike. the copy of knobs in the frame takes
 those patches over when it mounts. tested in chrome. without a frame, a new
 user agent does not reload the page: reload it yourself, or load the [early
 script](/docs/start#early-script).
@@ -252,7 +252,7 @@ clear middle at 1.5 px per css px, and ships as an image. three.js runs only
 in that script, never in the package.
 
 in the page, the hinge sets the angle, at one constant speed, or through
-Apple's hinge spring under a hand on the fold slider. devknobs shows the frame
+Apple's hinge spring under a hand on the fold slider. knobs shows the frame
 nearest it, and the page sits in that frame's screen. the turning screen shows
 a picture of the page through a small WebGL2 blur, or plain layers where
 WebGL2 is not, and it stays still behind the turning glass, as on Apple's

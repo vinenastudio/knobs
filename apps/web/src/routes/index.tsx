@@ -45,7 +45,7 @@ export const Route = createFileRoute('/')({
         applicationCategory: 'DeveloperApplication',
         description: m.home_description(),
         image: IMAGE,
-        name: 'devknobs',
+        name: 'knobs',
         offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
         operatingSystem: 'Web, Chrome',
         publisher: { '@id': ORGANIZATION['@id'] },

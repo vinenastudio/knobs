@@ -1,14 +1,14 @@
 ---
 title: chrome extension
-meta_title: knobs Chrome extension: the devknobs panel on any website
-description: The devknobs Chrome extension puts the same panel on any site you open in Chrome or Edge, with no change to its code, and has Chrome set some knobs for real.
+meta_title: knobs Chrome extension: the knobs panel on any website
+description: The knobs Chrome extension puts the same panel on any site you open in Chrome or Edge, with no change to its code, and has Chrome set some knobs for real.
 order: 8
 updated: 2026-11-04
 ---
 
 ## what it does
 
-the same devknobs panel on any page you open, with no change to the site's code. the toolbar button opens it, and closing it from there turns knobs off for the tab: every knob back to its default, and a page loaded as another browser loads again. Chrome and Edge only.
+the same knobs panel on any page you open, with no change to the site's code. the toolbar button opens it, and closing it from there turns knobs off for the tab: every knob back to its default, and a page loaded as another browser loads again. Chrome and Edge only.
 
 ## install
 
@@ -16,7 +16,7 @@ install it from the [chrome web store](https://chromewebstore.google.com/detail/
 
 ## with the npm package
 
-the npm package is for your own app, in any browser. the extension is for any site, in Chrome and Edge. if the page runs devknobs too, the extension's panel wins, and the page's calls such as `setState` go to it. to try a local build of devknobs on your own site, set prefer to page in the panel's settings: the page's copy then runs the panel, with real browser settings off. it needs a page copy newer than 0.5.1 or a local build, and applies to every site in the Chrome profile. the panel's footer says which copy runs it.
+the npm package is for your own app, in any browser. the extension is for any site, in Chrome and Edge. if the page runs knobs too, the extension's panel wins, and the page's calls such as `setState` go to it. to try a local build of knobs on your own site, set prefer to page in the panel's settings: the page's copy then runs the panel, with real browser settings off. it needs a page copy newer than 0.5.1 or a local build, and applies to every site in the Chrome profile. the panel's footer says which copy runs it.
 
 the edits the Elements view keeps after a reload are in the extension's storage, per page, not in the page's `localStorage`, unless the page's own copy runs the panel (prefer page), which keeps them in the page's `localStorage`. a page script can change them for a short time after you click or press a key on that page, so kept html and attribute edits wait for your click on `apply` in the panel. turn the view's switch off to forget a page's edits; clearing the site's data does not.
 

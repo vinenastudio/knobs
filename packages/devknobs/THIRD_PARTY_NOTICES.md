@@ -1,6 +1,6 @@
 # third party notices
 
-devknobs ships, or adapts code from, the projects below. each is under the MIT license, or lucide under the ISC license, reproduced here, or Simple Icons under CC0 1.0. the bezel images at the end are not: Apple's are under Apple's terms, and Google's Pixel frames under the Apache License 2.0.
+knobs ships, or adapts code from, the projects below. each is under the MIT license, or lucide under the ISC license, reproduced here, or Simple Icons under CC0 1.0. the bezel images at the end are not: Apple's are under Apple's terms, and Google's Pixel frames under the Apache License 2.0.
 
 ## bippy
 

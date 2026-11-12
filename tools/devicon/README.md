@@ -1,6 +1,6 @@
 # devicon
 
-Makes the dev variant of an Xcode app icon: the app's real icon with a yellow "DEV" ribbon across the top-right corner, written as an `AppIcon-Dev.appiconset`. Debug builds use it, Release never changes. It is the native twin of the devknobs dev favicon and follows the same drawing spec (below).
+Makes the dev variant of an Xcode app icon: the app's real icon with a yellow "DEV" ribbon across the top-right corner, written as an `AppIcon-Dev.appiconset`. Debug builds use it, Release never changes. It is the native twin of the knobs dev favicon and follows the same drawing spec (below).
 
 One self-contained Swift file, no dependencies (Foundation, CoreGraphics, ImageIO, CoreText). Apps vendor a copy, for example as `scripts/devicon.swift`.
 
@@ -50,7 +50,7 @@ targets:
 
 ## Spec
 
-Shared with the devknobs favicon. `S` is the bitmap size in pixels; each size is drawn at its own size, never scaled down from a big render, since the rules depend on `S`.
+Shared with the knobs favicon. `S` is the bitmap size in pixels; each size is drawn at its own size, never scaled down from a big render, since the rules depend on `S`.
 
 1. Draw the source unchanged into the `S` x `S` canvas. For `--icon` on macOS, ictool exports the shape full bleed, so devicon places it in Apple's tile area: `round(S * 824 / 1024)` px, centered.
 2. Tile box `b`: the bounding box of pixels with alpha above 128, made square around its center. A fully opaque source, and every iOS icon, uses the whole canvas.

@@ -1,7 +1,7 @@
 ---
 title: agents
-meta_title: Drive devknobs from a coding agent with Playwright or MCP
-description: Let a coding agent drive devknobs from a browser tool like Playwright or the Chrome DevTools MCP: set knobs, wait for the page, grab what broke and fix it.
+meta_title: Drive knobs from a coding agent with Playwright or MCP
+description: Let a coding agent drive knobs from a browser tool like Playwright or the Chrome DevTools MCP: set knobs, wait for the page, grab what broke and fix it.
 order: 7
 updated: 2026-11-04
 ---
@@ -17,7 +17,7 @@ the page, such as playwright's `page.evaluate` or the chrome devtools mcp's
 - `setState()` throws a `TypeError` at a value the state does not take, and
   then changes nothing. `setState(getState())` takes the whole state back.
 - `ready()` resolves with the state once the page has caught up with the
-  knobs. it rejects when devknobs is not mounted, and past 10 seconds, so a
+  knobs. it rejects when knobs is not mounted, and past 10 seconds, so a
   timeout never passes for success.
 - [`grab()`](/docs/grab) takes an element, an array or a NodeList of them.
 - `edits()` gives the style and html edits made in inspect's view as json,
@@ -37,7 +37,7 @@ window.devknobs.setState({ scheme: 'dark', panel: { open: false, handle: false }
 await window.devknobs.ready();
 ```
 
-every way in puts the api on `window.devknobs` while devknobs is mounted: the
+every way in puts the api on `window.devknobs` while knobs is mounted: the
 script tag, `mount()` and `<DevKnobs />`. so does the copy inside the width
 knob's frame, and the [chrome extension](/docs/extension) on any page it runs on.
 

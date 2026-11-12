@@ -1,6 +1,6 @@
 ---
 title: grab and inspect
-meta_title: Grab and inspect elements for a coding agent with devknobs
+meta_title: Grab and inspect elements for a coding agent with knobs
 description: Grab any element on the page and copy its html, the components that rendered it and their source files for a coding agent, or inspect its box and css.
 order: 5
 updated: 2026-11-05
@@ -35,8 +35,8 @@ mount({ grabKey: 'alt+shift+g' });
 
 ## coming from react-grab
 
-devknobs has the same grab, the same line format and the same clipboard
-type. remove `react-grab`, mount devknobs, and pass `grabKey: "meta+c"`
+knobs has the same grab, the same line format and the same clipboard
+type. remove `react-grab`, mount knobs, and pass `grabKey: "meta+c"`
 (`"ctrl+c"` off a Mac) to keep react-grab's key.
 
 ## inspect
@@ -82,7 +82,7 @@ it the panel's height. drag an element's line by its
 handle, `⋮⋮`, to move it before or after another element, or into one. those
 edits go into the same changes, and the prompt asks your agent to change the
 component, as a re-render may undo an edit of the DOM. `<html>`, `<head>`
-and `<body>` and devknobs' own nodes and attributes cannot be replaced,
+and `<body>` and knobs' own nodes and attributes cannot be replaced,
 hidden, deleted or moved.
 
 the switch `keep edits after reload` in the panel's settings keeps the edits
@@ -92,7 +92,7 @@ it is off at first, and off forgets them. html and attribute edits are
 never made on load: they wait in the changes until you click `apply`, as a
 page script could have planted them, and one that could run a script is
 never made. a page keeps its first 200 edits, up to 256 KB, for 20 pages at
-most; forced states are never kept. edits made in devknobs' frame, for a
+most; forced states are never kept. edits made in knobs' frame, for a
 pinned panel or a device, are kept while it shows the same page, and made
 again in the frame after a reload. kept edits hold the page's text, attribute values and markup as
 edited. with the npm package they are in the page's `localStorage`, with the

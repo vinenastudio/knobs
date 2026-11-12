@@ -1,6 +1,6 @@
 ---
 title: the panel
-description: How the devknobs panel opens, moves, lists its knobs, searches, docks to the side of the window and takes its keys.
+description: How the knobs panel opens, moves, lists its knobs, searches, docks to the side of the window and takes its keys.
 order: 2
 ---
 
@@ -72,9 +72,9 @@ the pin is kept with the panel's place, in `localStorage` under `devknobs:place`
 
 ## settings
 
-the gear button at the end of the footer opens the settings, in place of the rows. the show handle switch there hides the handle while the panel is closed, so nothing of devknobs sits on the edge of the page; the panel key (`⇧K`) still opens it, and an open panel shows its handle as ever, to drag it or click it closed. turning the switch off says which key brings the panel back. the choice is kept in `localStorage` under `devknobs:prefs`, for every tab of the origin, and wins over the `handle` option. reset all leaves it.
+the gear button at the end of the footer opens the settings, in place of the rows. the show handle switch there hides the handle while the panel is closed, so nothing of knobs sits on the edge of the page; the panel key (`⇧K`) still opens it, and an open panel shows its handle as ever, to drag it or click it closed. turning the switch off says which key brings the panel back. the choice is kept in `localStorage` under `devknobs:prefs`, for every tab of the origin, and wins over the `handle` option. reset all leaves it.
 
-the dev tab icon switch draws a yellow `DEV` ribbon on every icon link of the page, the apple touch icon too, from the icon's own picture. an icon the page cannot read, from another origin that does not allow it (CORS), keeps its own picture, and below 32px the ribbon has no `DEV` text. it is `panel.devIcon`: `auto`, the default, shows it on a local host only (localhost, `*.localhost`, `*.local`, `0.0.0.0`, a loopback or private network address), `on` on any host, `off` on none, and it holds for this tab. turned off, or with devknobs unmounted, every link has its own address back.
+the dev tab icon switch draws a yellow `DEV` ribbon on every icon link of the page, the apple touch icon too, from the icon's own picture. an icon the page cannot read, from another origin that does not allow it (CORS), keeps its own picture, and below 32px the ribbon has no `DEV` text. it is `panel.devIcon`: `auto`, the default, shows it on a local host only (localhost, `*.localhost`, `*.local`, `0.0.0.0`, a loopback or private network address), `on` on any host, `off` on none, and it holds for this tab. turned off, or with knobs unmounted, every link has its own address back.
 
 the real phone mode switch shows only with a host that sends requests as another browser, the extension. on, the device's user agent and client hints go with the frame's own page loads, so a site serves its mobile site; the page around the frame, its service worker and other tabs keep the real browser. some sites may sign you out, as they see one session as two browsers. it is `panel.realPhone`, off by default, one setting for every tab and site, which the host keeps (`native.realPhone`). see [what servers see](/docs/extension#what-servers-see).
 
@@ -98,6 +98,6 @@ to see the page and the panel as a first visit does, add `devknobs=fresh` to the
 http://localhost:3000/?devknobs=fresh
 ```
 
-while it is on, devknobs leaves `localStorage` alone: the panel's place, its settings and the keys read as their defaults, nothing is written, and what was kept there is back as soon as the parameter goes. every load of the page starts with no knobs set, a reload too. the knobs still hold inside a visit and in the frame, and across the two loads devknobs asks for itself: the locale knob's reload, and the frame handing the address it went to back to the page as it goes. the parameter stays in the address while the frame navigates, so that load and a reload after it are in fresh mode too.
+while it is on, knobs leaves `localStorage` alone: the panel's place, its settings and the keys read as their defaults, nothing is written, and what was kept there is back as soon as the parameter goes. every load of the page starts with no knobs set, a reload too. the knobs still hold inside a visit and in the frame, and across the two loads knobs asks for itself: the locale knob's reload, and the frame handing the address it went to back to the page as it goes. the parameter stays in the address while the frame navigates, so that load and a reload after it are in fresh mode too.
 
 the footer says `fresh mode: nothing is kept`. it needs no change in the code, and works with the script tag, the import, the react component and the early script. a locale kept by the page in `localStorage` does not follow the locale knob while it is on.

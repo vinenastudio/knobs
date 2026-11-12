@@ -1,12 +1,12 @@
 ---
 title: start
-meta_title: Install devknobs: set up the knobs dev panel in your app
-description: Install @vinena/knobs from npm, mount the devknobs panel in development only, and load the early script for pages that read media queries or the time on load.
+meta_title: Install knobs: set up the knobs dev panel in your app
+description: Install @vinena/knobs from npm, mount the knobs panel in development only, and load the early script for pages that read media queries or the time on load.
 order: 1
 updated: 2026-10-25
 ---
 
-devknobs is a dev-only panel for flipping browser preferences from inside the page. one script tag and the knobs are there. no css to add, no code to change.
+knobs is a dev-only panel for flipping browser preferences from inside the page. one script tag and the knobs are there. no css to add, no code to change.
 
 want it on any site with no install? use the [chrome extension](/docs/extension).
 
@@ -44,7 +44,7 @@ the knobs live in `sessionStorage`, so they survive reloads and go away with the
 
 ## early script
 
-a page that reads a media query, the time or the user agent while it boots, before devknobs mounts, only sees the knob if the patch is already in place. put this first in `<head>`, in development only:
+a page that reads a media query, the time or the user agent while it boots, before knobs mounts, only sees the knob if the patch is already in place. put this first in `<head>`, in development only:
 
 ```html
 <script src="//unpkg.com/@vinena/knobs/dist/early.global.js"></script>

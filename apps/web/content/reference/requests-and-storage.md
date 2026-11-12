@@ -18,7 +18,7 @@ the request has, the arrows moving between them.
 - `Headers`: `General` (Request URL, Request Method, Status Code and Referrer
   Policy, where the request or the page sets one), `Response Headers` and
   `Request Headers`, each with a `Raw` toggle. `Redirected From` in General
-  is devknobs' own line: the browser lists a redirect as a row of its own,
+  is knobs' own line: the browser lists a redirect as a row of its own,
   and a page cannot see those rows, so the address it was asked for shows
   here. Request Headers says
   `Provisional headers are shown`: the page knows the headers it set itself,
@@ -39,7 +39,7 @@ the request has, the arrows moving between them.
   starts
 - `Initiator`: `Request call stack`, the function and its `file:line:col` a
   frame a line (a click copies the place), the frames of `node_modules` and
-  of devknobs one line that shows them, and `Request initiator chain`: the
+  of knobs one line that shows them, and `Request initiator chain`: the
   page, the script that made the request, and the request. what the page
   loaded itself says what loaded it, such as `an <img> element`
 - `Timing`: `Queued at` and `Started at`, then `Resource Scheduling`
@@ -53,7 +53,7 @@ the request has, the arrows moving between them.
   Size and Protocol the browser's list has as columns
 - `Cookies`, where there are some: `Request Cookies` and `Response Cookies`,
   each cookie with its Name, Value, Domain, Path, Expires / Max-Age, Size,
-  HttpOnly, Secure and SameSite, the ones known. `Partitioned` is devknobs'
+  HttpOnly, Secure and SameSite, the ones known. `Partitioned` is knobs'
   own word: the browser names the partition's top site, which a page cannot
   know. a page sees only the
   `Cookie` header it set itself, and never `Set-Cookie`, so this tab is rare
@@ -92,7 +92,7 @@ all of it as the page set it.
   its headers is kept as far as it came.
 - the last 300 requests are kept, in memory. nothing is stored, and nothing is
   sent anywhere. a reload starts the log again.
-- it records for as long as devknobs is mounted, the view open or not, and from
+- it records for as long as knobs is mounted, the view open or not, and from
   the page's first request with the [early script](/docs/start#early-script). there is no fake slow
   or failed response, and no throttling.
 
@@ -153,7 +153,7 @@ session storage, every cookie the page can delete, every database and every
 cache go in one go. what could not be removed is counted and said, and a
 reload is offered, never done for you.
 
-devknobs' own items (the key `devknobs` and every `devknobs:` key) are hidden
+knobs' own items (the key `devknobs` and every `devknobs:` key) are hidden
 and kept by every clear. a list that has some ends with a quiet line that
 says how many are hidden, and a press on it shows them.
 
@@ -179,7 +179,7 @@ read nor kept.
 
 ### what storage cannot show
 
-- cookies marked HttpOnly: a page cannot read them, so neither can devknobs
+- cookies marked HttpOnly: a page cannot read them, so neither can knobs
 - the storage of other origins, an iframe's or a cdn's included
 - the list of databases where `indexedDB.databases()` is missing
 - service worker registrations, WebSQL, the origin private file system and

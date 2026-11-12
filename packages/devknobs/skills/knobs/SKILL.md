@@ -1,28 +1,28 @@
 ---
 name: knobs
-description: Test a web page under different conditions with devknobs and fix what breaks. Use when an agent needs to check a page in dark mode, with reduced motion or more contrast, in another locale or right to left, with larger text, offline or on a slow connection, on another device or width, in another time zone or at another time, and then find and fix the code behind anything that looks wrong.
+description: Test a web page under different conditions with knobs and fix what breaks. Use when an agent needs to check a page in dark mode, with reduced motion or more contrast, in another locale or right to left, with larger text, offline or on a slow connection, on another device or width, in another time zone or at another time, and then find and fix the code behind anything that looks wrong.
 ---
 
-# devknobs
+# knobs
 
-devknobs is a dev panel that emulates browser conditions from inside the page.
+knobs is a dev panel that emulates browser conditions from inside the page.
 You drive it from any browser tool that can run JavaScript in the page:
 Playwright `page.evaluate`, Chrome DevTools MCP `evaluate_script`, or similar.
 
 ## Before you start
 
-devknobs must be installed in the app. See the install section of the
-devknobs README (`node_modules/@vinena/knobs/README.md`).
+knobs must be installed in the app. See the install section of the
+knobs README (`node_modules/@vinena/knobs/README.md`).
 
-Check that devknobs is mounted:
+Check that knobs is mounted:
 
 ```js
 await window.devknobs.ready();
 ```
 
-Every way of mounting devknobs puts the api on `window.devknobs`: the script
+Every way of mounting knobs puts the api on `window.devknobs`: the script
 tag, `mount()` and `<DevKnobs />`. Inside the width knob's frame the frame's own
-copy has it too. If `window.devknobs` is undefined, devknobs is not on this
+copy has it too. If `window.devknobs` is undefined, knobs is not on this
 page. The script tag build keeps the api after `unmount()`, so the api alone
 does not prove a mount. `ready()` does: it rejects at once with
 `devknobs: not mounted` when nothing is mounted.
@@ -75,7 +75,7 @@ as `grabColor` and the panel's place. Do not compare the two key for key.
    folds. Compare `getState()` with what you set.
 2. Wait for it to apply:
    - `reload` is `none` or `frame`: `await window.devknobs.ready()`.
-   - `reload` is `page`: the page may reload, or it may not. devknobs skips a
+   - `reload` is `page`: the page may reload, or it may not. knobs skips a
      reload that comes less than 5 seconds after the last one. Call
      `await window.devknobs.ready()` either way. If the page navigates
      instead, wait for the load in your browser tool and call
@@ -132,10 +132,10 @@ await window.devknobs.ready();
    frame?.contentDocument;
    ```
 
-   Read the DOM there. The page in the frame runs its own devknobs, so call
+   Read the DOM there. The page in the frame runs its own knobs, so call
    `grab` on `frame.contentWindow.devknobs` for elements in the frame. The top
    page's `grab` on such an element gives component names with no file or line.
-   After `ready()` the frame's devknobs is there if the app mounts devknobs on
+   After `ready()` the frame's knobs is there if the app mounts knobs on
    that page.
 
 ## Find the code
@@ -152,8 +152,8 @@ payload?.content;
 `content` is one line per element: its html, the components that rendered it
 and their source files with line and column. `entries[i].source?.filePath`
 holds the file, relative to the app's dev server root (the vite root), not the
-repo. In a monorepo, find the app first. `source` is null when devknobs cannot
-find one. `source.lineNumber` and `columnNumber` are null when devknobs finds
+repo. In a monorepo, find the app first. `source` is null when knobs cannot
+find one. `source.lineNumber` and `columnNumber` are null when knobs finds
 the file but not the line, and `content` then names the file alone. Search
 that file for the element's tag and class names. A line that is there points
 at the element's tag in the file. Open that file and fix the code.

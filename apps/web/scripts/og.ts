@@ -198,7 +198,7 @@ async function shoot(page: Page, url: string, headline: Take['headline']) {
   await page.evaluate(async (zoom) => {
     const knobs = window.devknobs;
     if (knobs === undefined) {
-      throw new Error('og: devknobs is not on the page');
+      throw new Error('og: knobs is not on the page');
     }
     knobs.setState({
       bars: 'expanded',
