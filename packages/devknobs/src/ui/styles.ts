@@ -1014,6 +1014,23 @@ input[type="checkbox"]:focus-visible { outline: 1px solid var(--faint); outline-
 .row-key { flex: none; align-self: center; font-size: 10px; line-height: 1.4; color: var(--faint); }
 .feedback { color: inherit; text-decoration: none; cursor: pointer; }
 .feedback:focus-visible { outline: 1px solid var(--faint); outline-offset: -1px; }
+/* The studio's credit under the settings' rows: its words and its wordmark, as quiet as the footer's text. */
+.credit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  padding: 8px var(--view-end) 4px var(--view-start);
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--faint);
+  text-decoration: none;
+  white-space: nowrap;
+  border-radius: 8px;
+}
+.credit:hover { color: var(--fg); }
+.credit:focus-visible { color: var(--fg); outline: 1px solid var(--faint); outline-offset: -1px; }
+.credit .wordmark { flex: none; width: auto; height: 0.85em; }
 .row-control { flex: none; align-self: center; margin-left: auto; }
 /* A row's small button inside its main, before what the main ends with,
    takes no height of its own, so the row is as tall as any. */

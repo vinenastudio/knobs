@@ -73,6 +73,8 @@ export interface PanelOptions {
   handle?: boolean;
   /** Who runs the panel, the host or the page, where a host gives the choice. */
   prefer?: PanelPrefer;
+  /** A host, such as the extension, runs this copy, and not the page. */
+  host?: boolean;
 }
 
 /** A host's choice of who runs the panel, as the settings and the footer show it. */
@@ -282,6 +284,7 @@ export function createPanel(options: PanelOptions = {}): Panel {
     },
     prefer: options.prefer ?? null,
     setPrefer: (value) => options.prefer?.change(value),
+    host: options.host === true,
     searching: () => palette.searching(),
     leaveSearch: () => palette.leaveSearch(),
   });

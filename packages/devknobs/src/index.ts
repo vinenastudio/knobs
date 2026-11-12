@@ -285,6 +285,7 @@ function attach(options: MountOptions): void {
     inspect,
     handle: options.handle,
     prefer: panelPrefer(options),
+    host: options.host === true,
   });
 }
 

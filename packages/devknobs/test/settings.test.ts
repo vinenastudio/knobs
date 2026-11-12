@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Keeper } from "../src/edit/keep";
-import { feedbackUrl, KEEP_HINT, KEEP_LABEL, keepRow } from "../src/ui/settings";
+import { BRANDS } from "../src/ui/icons";
+import { creditRow, feedbackUrl, githubRow, KEEP_HINT, KEEP_LABEL, keepRow, vinenaUrl } from "../src/ui/settings";
 import { fake, FakeNode } from "./styles-dom";
 
 describe("the keep edits row", () => {
@@ -74,6 +75,73 @@ describe("the keep edits row", () => {
     expect(turned).toEqual([true, false]);
     row.destroy();
     expect(listeners.size).toBe(0);
+  });
+});
+
+describe("the links after send feedback", () => {
+  const saved = Object.getOwnPropertyDescriptor(globalThis, "document");
+
+  beforeEach(() => {
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: {
+        createElement: (tag: string) => new FakeNode(tag),
+        createElementNS: (_namespace: string, tag: string) => new FakeNode(tag),
+      },
+    });
+  });
+
+  afterEach(() => {
+    if (saved) Object.defineProperty(globalThis, "document", saved);
+    else Reflect.deleteProperty(globalThis, "document");
+  });
+
+  const link = (node: HTMLElement): FakeNode | undefined => fake(node).all().find((one) => one.tag === "a");
+
+  test("the studio's address is the site's own, with the copy the link is in", () => {
+    expect(vinenaUrl(false)).toBe("https://vinena.studio/?utm_source=knobs.dev&utm_medium=referral&utm_campaign=panel");
+    expect(vinenaUrl(true)).toBe("https://vinena.studio/?utm_source=knobs.dev&utm_medium=referral&utm_campaign=extension");
+  });
+
+  test("the github row opens the repo in a new tab, under the GitHub mark", () => {
+    const row = githubRow();
+    const a = link(row);
+    expect(a?.getAttribute("href")).toBe("https://github.com/vinenastudio/knobs");
+    expect(a?.getAttribute("target")).toBe("_blank");
+    expect(a?.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(a?.className).toBe("main feedback");
+    expect(fake(row).textContent).toBe("github");
+    const [mark] = a?.children ?? [];
+    expect(typeof mark !== "string" && mark?.children.map((path) => typeof path !== "string" && path.getAttribute("d"))).toEqual([BRANDS.github[1]]);
+  });
+
+  test("the credit is one link in a new tab: its words, then the wordmark drawn and named, never typed", () => {
+    for (const host of [false, true]) {
+      const a = fake(creditRow(host));
+      expect(a.tag).toBe("a");
+      expect(a.getAttribute("href")).toBe(vinenaUrl(host));
+      expect(a.getAttribute("target")).toBe("_blank");
+      expect(a.getAttribute("rel")).toBe("noopener noreferrer");
+      expect(a.textContent).toBe("crafted at");
+      const mark = a.all().find((one) => one.tag === "svg");
+      expect(mark?.getAttribute("role")).toBe("img");
+      expect(mark?.getAttribute("aria-label")).toBe("Vinena");
+      expect(mark?.getAttribute("viewBox")).toBe("-3.1 0 537.6 100");
+      expect(mark?.all().find((one) => one.tag === "path")?.getAttribute("d")).toStartWith("M147.7 0L205.7 39.97");
+    }
+  });
+
+  test("neither link carries the page's address", () => {
+    Object.defineProperty(globalThis, "location", { configurable: true, value: { href: "https://example.com/secret?token=x" } });
+    try {
+      for (const node of [githubRow(), creditRow(false), creditRow(true)]) {
+        const a = fake(node).tag === "a" ? fake(node) : link(node);
+        expect(a?.getAttribute("href")).not.toContain("example.com");
+        expect(a?.listeners.size).toBe(0);
+      }
+    } finally {
+      Reflect.deleteProperty(globalThis, "location");
+    }
   });
 });
 

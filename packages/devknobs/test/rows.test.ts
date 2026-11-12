@@ -100,6 +100,7 @@ function buildSettings(more: Partial<SettingsContext> = {}): Settings {
     setNative: () => {},
     prefer: null,
     setPrefer: () => {},
+    host: false,
     searching: () => false,
     leaveSearch: () => {},
     ...more,
@@ -565,5 +566,22 @@ describe("the settings' head", () => {
       "row-button clear",
       "key-set row-control",
     ]);
+  });
+
+  test("the view ends with send feedback, the repo and the studio's credit, each a link in a new tab", () => {
+    for (const host of [false, true]) {
+      const view = fake(buildSettings({ host }).view);
+      const [feedback, github, credit] = view.children.slice(-3);
+      expect([feedback, github].map((row) => row?.find("row-label")[0]?.textContent)).toEqual(["send feedback", "github"]);
+      expect(github?.find("feedback")[0]?.attributes.get("href")).toBe("https://github.com/vinenastudio/knobs");
+      expect(credit?.className).toBe("credit");
+      expect(credit?.attributes.get("href")).toBe(
+        `https://vinena.studio/?utm_source=knobs.dev&utm_medium=referral&utm_campaign=${host ? "extension" : "panel"}`,
+      );
+      for (const link of [github?.find("feedback")[0], credit]) {
+        expect(link?.attributes.get("target")).toBe("_blank");
+        expect(link?.attributes.get("rel")).toBe("noopener noreferrer");
+      }
+    }
   });
 });
