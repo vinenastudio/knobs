@@ -369,7 +369,7 @@ export function storageView(options: Partial<StorageDeps> = {}): PaneView {
           ownLine.replaceChildren();
           return;
         }
-        ownToggle.textContent = own ? "hide devknobs' own" : `${hidden} hidden (devknobs' own)`;
+        ownToggle.textContent = own ? "hide knobs' own" : `${hidden} hidden (knobs' own)`;
         // The line stays on the page while it is there, so it keeps the focus as the list reads again.
         if (ownLine.children.length === 0) ownLine.replaceChildren(ownToggle);
       }
@@ -769,7 +769,7 @@ export function storageView(options: Partial<StorageDeps> = {}): PaneView {
     function clearAll(): void {
       const own = shell.own();
       void countSite(site, own).then((counts) => {
-        const kept = own ? ", devknobs' own items too" : ". devknobs' own items are kept";
+        const kept = own ? ", knobs' own items too" : ". knobs' own items are kept";
         shell.ask(`clear site data? ${countsText(counts)}${kept}`, "clear site data", () => {
           void clearSite(site, own).then((report) => {
             shell.say(reportLines(report), {

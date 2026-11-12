@@ -631,7 +631,7 @@ describe("the tree of stores", () => {
     shown.head("clear site data");
     await settle();
     expect(notes(over(shown))).toEqual([
-      "clear site data? 2 local, 1 database, 1 cache. devknobs' own items are kept",
+      "clear site data? 2 local, 1 database, 1 cache. knobs' own items are kept",
     ]);
     expect(focused()?.textContent).toBe("clear site data");
     expect(shown.escape()).toBe(true);
@@ -884,17 +884,17 @@ describe("local and session storage", () => {
     const line = ownLine(shown);
     expect(line?.tag).toBe("button");
     expect(line?.className).toBe("note note-button");
-    expect(line?.textContent).toBe("2 hidden (devknobs' own)");
+    expect(line?.textContent).toBe("2 hidden (knobs' own)");
     expect(under(shown).children[under(shown).children.length - 1]?.children).toEqual([line as FakeNode]);
     expect(chips(bar(shown))).toEqual(["add", "clear", "save as preset"]);
     line?.fire("click");
     expect(ownLine(shown)).toBe(line as FakeNode);
     expect(labels(shown)).toEqual(["token", "user", "devknobs", "devknobs:keys"]);
     expect(row(shown, "devknobs").find("row-label")[0]?.className).toBe("row-label cell-name columned quiet");
-    expect(ownLine(shown)?.textContent).toBe("hide devknobs' own");
+    expect(ownLine(shown)?.textContent).toBe("hide knobs' own");
     ownLine(shown)?.fire("click");
     expect(labels(shown)).toEqual(["token", "user"]);
-    expect(ownLine(shown)?.textContent).toBe("2 hidden (devknobs' own)");
+    expect(ownLine(shown)?.textContent).toBe("2 hidden (knobs' own)");
   });
 
   test("a row folds out in place to the whole value, json laid out where that loses nothing", async () => {
@@ -966,7 +966,7 @@ describe("local and session storage", () => {
     ownLine(shown)?.fire("click");
     const own = row(shown, "devknobs");
     own.find("main")[0]?.fire("dblclick");
-    expect(notes(own)).toEqual(["devknobs is devknobs' own. edit it anyway?"]);
+    expect(notes(own)).toEqual(["devknobs is knobs' own. edit it anyway?"]);
     expect(own.find("field-area")).toEqual([]);
   });
 
@@ -1058,7 +1058,7 @@ describe("local and session storage", () => {
     const own = row(shown, "devknobs");
     toggle(own);
     chip(own, "delete").fire("click");
-    expect(notes(own)).toEqual(["devknobs is devknobs' own. delete it anyway?"]);
+    expect(notes(own)).toEqual(["devknobs is knobs' own. delete it anyway?"]);
     expect(shown.site.localStorage.getItem("devknobs")).toBe("{}");
     chip(own, "cancel").fire("click");
     expect(chips(own)).toEqual(["copy value", "edit", "duplicate", "delete"]);
@@ -1122,7 +1122,7 @@ describe("local and session storage", () => {
     expect(shown.site.localStorage.all()).toEqual({ devknobs: "{}", "devknobs:keys": "{}" });
     expect(labels(shown)).toEqual([]);
     expect(shown.body.find("empty")[0]?.textContent).toBe("nothing in localStorage");
-    expect(ownLine(shown)?.textContent).toBe("2 hidden (devknobs' own)");
+    expect(ownLine(shown)?.textContent).toBe("2 hidden (knobs' own)");
     chip(bar(shown), "clear").fire("click");
     expect(notes(shown.body)).toEqual(["nothing to clear in localStorage"]);
   });
@@ -1707,7 +1707,7 @@ describe("clear site data", () => {
     await settle();
     // It is for all of the view, so it is asked over the tree, and not in a store's node.
     expect(notes(over(shown))).toEqual([
-      "clear site data? 2 local, 1 session, 2 cookies, 2 databases, 1 cache. devknobs' own items are kept",
+      "clear site data? 2 local, 1 session, 2 cookies, 2 databases, 1 cache. knobs' own items are kept",
     ]);
     expect(notes(shown.body)).toEqual([]);
     expect(chips(over(shown))).toEqual(["clear site data", "cancel"]);
@@ -1744,7 +1744,7 @@ describe("clear site data", () => {
     shown.head("clear site data");
     await settle();
     expect(notes(over(shown))).toContain(
-      "clear site data? 4 local, 2 session, 2 cookies, 2 databases, 1 cache, devknobs' own items too",
+      "clear site data? 4 local, 2 session, 2 cookies, 2 databases, 1 cache, knobs' own items too",
     );
     chip(over(shown), "clear site data").fire("click");
     await settle(20);
@@ -1774,7 +1774,7 @@ describe("presets", () => {
     chip(shown.body, "save as preset").fire("click");
     await settle();
     expect(notes(shown.body)).toContain(
-      "keeps 1 local, 1 session, 1 cookie, as the filter shows them, without devknobs' own",
+      "keeps 1 local, 1 session, 1 cookie, as the filter shows them, without knobs' own",
     );
     const [name] = shown.body.find("field-line");
     expect(focused()).toBe(name ?? null);

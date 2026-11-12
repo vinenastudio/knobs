@@ -488,7 +488,7 @@ function retake(options: MountOptions, native: { on: boolean; note: string | nul
   }
   if (retaken++ >= RETAKES) {
     if (retaken === RETAKES + 1) {
-      console.warn("devknobs: this page runs its own copy of devknobs, which does not know hosts; it keeps the page");
+      console.warn("knobs: this page runs its own copy of devknobs, which does not know hosts; it keeps the page");
     }
     return;
   }

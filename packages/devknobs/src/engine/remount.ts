@@ -90,7 +90,7 @@ export function keepMounted(node: Element, options: KeepOptions = {}): () => voi
     }
     if (!warned) {
       warned = true;
-      console.warn("devknobs: the page keeps removing devknobs' elements; putting them back less often");
+      console.warn("knobs: the page keeps removing knobs' elements; putting them back less often");
     }
     timer = window.setTimeout(restore, wait);
   }

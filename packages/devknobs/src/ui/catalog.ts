@@ -471,13 +471,13 @@ export const ROWS: readonly Row[] = [...KNOB_ROWS, ...ACTIONS.map(actionRow)];
 
 export function knobOf(id: KnobId): Knob {
   const knob = KNOBS.find((entry) => entry.id === id);
-  if (!knob) throw new Error(`devknobs: no knob ${id}`);
+  if (!knob) throw new Error(`knobs: no knob ${id}`);
   return knob;
 }
 
 export function rowOf(id: KnobId): KnobRow {
   const row = KNOB_ROWS.find((entry) => entry.knobs.includes(id));
-  if (!row) throw new Error(`devknobs: no row for ${id}`);
+  if (!row) throw new Error(`knobs: no row for ${id}`);
   return row;
 }
 

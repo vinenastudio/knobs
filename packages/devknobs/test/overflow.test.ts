@@ -75,10 +75,10 @@ describe("clipped", () => {
 describe("warning", () => {
   test("agrees with one element and with many", () => {
     expect(warning(1, 390, 24)).toBe(
-      "devknobs: 1 element sticks out of the 390px viewport, the page scrolls 24px sideways",
+      "knobs: 1 element sticks out of the 390px viewport, the page scrolls 24px sideways",
     );
     expect(warning(3, 390, 24)).toBe(
-      "devknobs: 3 elements stick out of the 390px viewport, the page scrolls 24px sideways",
+      "knobs: 3 elements stick out of the 390px viewport, the page scrolls 24px sideways",
     );
   });
 });

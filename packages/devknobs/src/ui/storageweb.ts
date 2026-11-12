@@ -148,7 +148,7 @@ export function webSection(shell: Shell, kind: WebKind): Section {
     /** One of devknobs' own asks once before it is changed. */
     function guard(doing: string, run: () => void): void {
       if (!item.own) run();
-      else askIn(shell, fold.body, `${key} is devknobs' own. ${doing} it anyway?`, doing, run, fill);
+      else askIn(shell, fold.body, `${key} is knobs' own. ${doing} it anyway?`, doing, run, fill);
     }
 
     function edit(): void {

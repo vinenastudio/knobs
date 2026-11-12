@@ -72,7 +72,7 @@ const KINDS: readonly EditKind[] = ["css-value", "css-toggle", "css-add", "css-r
 
 /** Why an edit was not made again. */
 export const REASONS = {
-  invalid: "not an edit devknobs reads",
+  invalid: "not an edit knobs reads",
   missing: "not found on the page",
   rule: "its rule is not on the page",
   changed: "the page has another value now",

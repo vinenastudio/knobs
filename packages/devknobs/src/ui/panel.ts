@@ -437,7 +437,7 @@ export function createPanel(options: PanelOptions = {}): Panel {
   /** Show the keys in force: on the handle, the footer and the shortcuts. */
   function renderKeys(): void {
     const now = keys.get();
-    handle.setAttribute("aria-label", `devknobs, press ${comboSpoken(now.panel)}`);
+    handle.setAttribute("aria-label", `knobs, press ${comboSpoken(now.panel)}`);
     footer.drawKeys(now);
     settings.drawKeys(now);
     knobRows.drawKeys(now);

@@ -200,7 +200,7 @@ function ensureOffscreen(): Promise<void> {
     });
     if (open.length === 0) {
       await chrome.offscreen.createDocument({
-        justification: "Reads the user's own color scheme and motion for the devknobs panel.",
+        justification: "Reads the user's own color scheme and motion for the knobs panel.",
         reasons: [chrome.offscreen.Reason.MATCH_MEDIA],
         url: 'offscreen.html',
       });

@@ -1292,7 +1292,7 @@ function open(veiled: number | null, first: boolean): void {
   // The page in the frame follows this one's mode, whatever its own address says.
   if (fresh()) frame.setAttribute(FRESH_ATTRIBUTE, "");
   frame.name = FRAME_NAME;
-  frame.title = "devknobs viewport";
+  frame.title = "knobs viewport";
   frame.setAttribute("sandbox", SANDBOX);
   frameUrl = window.location.href;
   address.follow({ page: frameDocument, locate, refresh: () => browser?.refresh() });
