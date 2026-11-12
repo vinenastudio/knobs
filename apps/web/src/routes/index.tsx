@@ -1,7 +1,6 @@
 import { colors, font, radius, spacing } from '@knobs/ui/tokens.stylex';
-import { create, defaultMarker, props, when } from '@stylexjs/stylex';
+import { create, props } from '@stylexjs/stylex';
 import { createFileRoute, useLocation } from '@tanstack/react-router';
-import { StarIcon } from 'lucide-react';
 import { lazy, Suspense, useEffect } from 'react';
 import { Stage } from '../demo/stage.tsx';
 import { track } from '../lib/analytics.ts';
@@ -10,8 +9,7 @@ import { CANONICAL_ORIGIN, canonicalLink } from '../lib/canonical.ts';
 import { CopyInstallPrompt } from '../lib/copy-install-prompt.tsx';
 import { CraftedAtVinena } from '../lib/crafted-at-vinena.tsx';
 import { FeedbackLink } from '../lib/feedback-link.tsx';
-import { GitHubButton, onGitHub, REPO } from '../lib/github.tsx';
-import { ICON } from '../lib/icon.ts';
+import { GitHubButton, onGitHub, REPO, StarLink } from '../lib/github.tsx';
 import { type PanelTour, usePanel } from '../lib/panel.ts';
 import { jsonLd, ORGANIZATION } from '../lib/schema.ts';
 import { IMAGE } from '../lib/share.ts';
@@ -120,9 +118,14 @@ const styles = create({
     marginTop: spacing.s4,
   },
   // The hero's two ways in, one row of equal height: the extension, then the installation prompt. On a
-  // narrow screen the prompt goes under the extension.
+  // narrow screen the prompt goes under the extension. Below the breakpoint the star link comes under
+  // the prompt's button after a copy, in the flow: the two keep their own height there (the same
+  // one, from the same padding and line), so the link does not stretch the extension's button.
   cta: {
-    alignItems: 'stretch',
+    alignItems: {
+      default: 'flex-start',
+      [WIDE]: 'stretch',
+    },
     display: 'flex',
     flexWrap: 'wrap',
     gap: spacing.s2,
@@ -233,27 +236,6 @@ const styles = create({
     fontWeight: font.weightRegular,
     margin: 0,
   },
-  // The star before its link, and the box its filled twin is laid over.
-  star: {
-    display: 'flex',
-    flexShrink: 0,
-    position: 'relative',
-  },
-  // The star filled in, over its outline, while the link is pointed at.
-  starFilled: {
-    inset: 0,
-    opacity: {
-      default: 0,
-      [when.ancestor(':hover')]: {
-        '@media (hover: hover)': 1,
-        default: null,
-      },
-    },
-    position: 'absolute',
-    transitionDuration: '120ms',
-    transitionProperty: 'opacity',
-    transitionTimingFunction: 'ease-out',
-  },
   text: {
     margin: 0,
   },
@@ -315,7 +297,9 @@ function Landing() {
         <p {...props(styles.note)}>{m.extension_line()}</p>
       </header>
 
-      <Tour install={<CopyInstallPrompt name="install_prompt_tour" style={styles.fill} />} />
+      <Tour
+        install={<CopyInstallPrompt name="install_prompt_tour" star={false} style={styles.fill} />}
+      />
 
       <section {...props(styles.section)} id="try">
         <h2 {...props(styles.sectionHeading)}>{m.stage_title()}</h2>
@@ -347,19 +331,7 @@ function Landing() {
           <GitHubMark />
           {m.link_github()}
         </a>
-        <a
-          href={REPO}
-          onClick={onGitHub('footer')}
-          rel="noreferrer"
-          target="_blank"
-          {...props(styles.link, styles.withIcon, defaultMarker())}
-        >
-          <span {...props(styles.star)}>
-            <StarIcon {...ICON} />
-            <StarIcon {...ICON} fill="currentColor" {...props(styles.starFilled)} />
-          </span>
-          {m.link_star()}
-        </a>
+        <StarLink placement="footer" />
         <a href={NPM} rel="noreferrer" target="_blank" {...props(styles.link, styles.withIcon)}>
           <NpmMark />
           {m.link_npm()}

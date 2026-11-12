@@ -4,6 +4,7 @@ import { ClipboardCheckIcon, SlidersHorizontalIcon, XIcon } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Bubble } from '../lib/bubble.tsx';
+import { StarLink } from '../lib/github.tsx';
 import { ICON } from '../lib/icon.ts';
 import { Key } from '../lib/keys.tsx';
 import { m } from '../paraglide/messages.js';
@@ -200,6 +201,10 @@ const styles = create({
     flexWrap: 'wrap',
     gap: spacing.s1,
   },
+  // The star link under the bubble's buttons, which takes the pointer.
+  star: {
+    pointerEvents: 'auto',
+  },
   // The setup prompt, whose copy button takes the pointer.
   takes: {
     flexBasis: 'auto',
@@ -312,6 +317,9 @@ export function Tour({ install }: { install: ReactNode }) {
                 {m.tour_explore()}
               </button>
             </div>
+            <p {...props(styles.bubbleLine)}>
+              <StarLink placement="tour" quiet style={styles.star} />
+            </p>
           </Bubble>
         )}
       </Layer>,

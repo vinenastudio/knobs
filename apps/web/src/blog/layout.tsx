@@ -3,6 +3,7 @@ import { create, defaultMarker, props, when } from '@stylexjs/stylex';
 import { Link, Outlet } from '@tanstack/react-router';
 import { KnobsMark } from '../lib/brand-marks.tsx';
 import { CodeBox } from '../lib/code-box.tsx';
+import { CraftedFoot } from '../lib/crafted-at-vinena.tsx';
 import { GitHubButton } from '../lib/github.tsx';
 import { usePanel } from '../lib/panel.ts';
 import { m } from '../paraglide/messages.js';
@@ -140,6 +141,7 @@ export function BlogLayout() {
         <GitHubButton />
       </nav>
       <Outlet />
+      <CraftedFoot placement="blog" />
     </div>
   );
 }
