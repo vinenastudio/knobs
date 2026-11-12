@@ -16,7 +16,7 @@ want it on any site with no install? use the [chrome extension](/docs/extension)
 npm i -D @vinena/knobs
 ```
 
-or add it with one command. it adds knobs to a next or vite project, in development only:
+then add the mount line with one command, in a next or vite project. it changes the code for development only:
 
 ```sh
 npx @vinena/knobs init

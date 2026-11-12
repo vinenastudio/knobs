@@ -488,7 +488,7 @@ function retake(options: MountOptions, native: { on: boolean; note: string | nul
   }
   if (retaken++ >= RETAKES) {
     if (retaken === RETAKES + 1) {
-      console.warn("knobs: this page runs its own copy of devknobs, which does not know hosts; it keeps the page");
+      console.warn("knobs: this page runs its own copy of knobs, which does not know hosts; it keeps the page");
     }
     return;
   }
@@ -602,7 +602,7 @@ export function edits(): Edit[] {
 export async function setEdits(list: readonly unknown[]): Promise<Replayed> {
   const host = hosted("setEdits");
   if (host) return host(list);
-  if (!Array.isArray(list)) throw new TypeError("devknobs.setEdits takes a list of edits, as edits() gives them");
+  if (!Array.isArray(list)) throw new TypeError("knobs: setEdits takes a list of edits, as edits() gives them");
   const { replayEdits } = await import("./edit/replay");
   const { applied, skipped } = replayEdits(editLog, list);
   return { applied, skipped };

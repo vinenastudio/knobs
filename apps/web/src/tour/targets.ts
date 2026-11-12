@@ -36,7 +36,7 @@ const HOOKS = {
   // Grab's overlay, on the page for as long as grab is on, in the document grab runs in.
   grabOverlay: 'div[data-devknobs="grab"]',
   // The handle on the window's edge, by the start of its aria-label.
-  handle: 'button[aria-label^="knobs"]',
+  handle: 'button[aria-label^="knobs"], button[aria-label^="devknobs"]',
   // One knob's line inside an open row's editor.
   knob: (id: string) => `[data-knob="${id}"]`,
   // A long list of values, such as the devices, and the mat's swatches.
