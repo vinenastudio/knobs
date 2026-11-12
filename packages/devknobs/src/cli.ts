@@ -52,9 +52,152 @@ export const MESSAGES = {
 /** An import of devknobs, static or dynamic, as a file that mounts it has. */
 const MOUNTS = /(?:\bfrom\s*|\bimport\s*\(\s*)(["'])@vinena\/knobs(?:\/react)?\1/;
 
-/** A module's text with its block comments and its whole-line `//` comments taken out. */
-function uncommented(text: string): string {
-  return text.replace(/\/\*[\s\S]*?\*\/|^[ \t]*\/\/.*$/gm, "");
+/**
+ * A module's text read once, start to end, in the same length: `code` has
+ * every comment blanked to spaces, `bare` also every string, template and
+ * regex body, so what is left in it at a line start is code. Quotes stay.
+ */
+function scan(text: string): { code: string; bare: string } {
+  const cuts: { start: number; end: number; comment: boolean }[] = [];
+  const holes: number[] = [];
+  let inTemplate = false;
+  let last = "";
+  let plainUntil = -1;
+  let i = 0;
+  while (i < text.length) {
+    if (inTemplate) {
+      const start = i;
+      while (i < text.length && text[i] !== "`" && !(text[i] === "$" && text[i + 1] === "{")) i += text[i] === "\\" ? 2 : 1;
+      cuts.push({ start, end: Math.min(i, text.length), comment: false });
+      if (i >= text.length) break;
+      if (text[i] === "`") {
+        inTemplate = false;
+        last = "`";
+        i += 1;
+      } else {
+        holes.push(0);
+        inTemplate = false;
+        last = "{";
+        i += 2;
+      }
+      continue;
+    }
+    const c = text[i] ?? "";
+    const next = text[i + 1];
+    if (c === "/" && next === "/") {
+      let end = text.indexOf("\n", i);
+      if (end < 0) end = text.length;
+      else if (text[end - 1] === "\r") end -= 1;
+      cuts.push({ start: i, end, comment: true });
+      i = end;
+    } else if (c === "/" && next === "*") {
+      const close = text.indexOf("*/", i + 2);
+      const end = close < 0 ? text.length : close + 2;
+      cuts.push({ start: i, end, comment: true });
+      i = end;
+    } else if (c === "/" && i > plainUntil && (last === "" || "(,=:[!&|?{};".includes(last))) {
+      let j = i + 1;
+      let inClass = false;
+      while (j < text.length && text[j] !== "\n" && (inClass || text[j] !== "/")) {
+        if (text[j] === "\\") j += 1;
+        else if (text[j] === "[") inClass = true;
+        else if (text[j] === "]") inClass = false;
+        j += 1;
+      }
+      if (text[j] === "/") {
+        cuts.push({ start: i + 1, end: j, comment: false });
+        i = j + 1;
+      } else {
+        plainUntil = j;
+        i += 1;
+      }
+      last = "/";
+    } else if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < text.length && text[j] !== c && text[j] !== "\n") j += text[j] === "\\" ? 2 : 1;
+      cuts.push({ start: i + 1, end: Math.min(j, text.length), comment: false });
+      i = text[j] === c ? j + 1 : j;
+      last = c;
+    } else if (c === "`") {
+      inTemplate = true;
+      i += 1;
+    } else {
+      const top = holes.length - 1;
+      const open = holes[top];
+      if (open !== undefined && c === "{") holes[top] = open + 1;
+      if (open !== undefined && c === "}") {
+        if (open === 0) {
+          holes.pop();
+          inTemplate = true;
+          i += 1;
+          continue;
+        }
+        holes[top] = open - 1;
+      }
+      if (!/\s/.test(c)) last = c;
+      i += 1;
+    }
+  }
+  const blank = (all: boolean): string => {
+    const parts: string[] = [];
+    let at = 0;
+    for (const cut of cuts) {
+      if (!all && !cut.comment) continue;
+      parts.push(text.slice(at, cut.start), " ".repeat(cut.end - cut.start));
+      at = cut.end;
+    }
+    parts.push(text.slice(at));
+    return parts.join("");
+  };
+  return { code: blank(false), bare: blank(true) };
+}
+
+/** Where the line of a module's last top-level import ends, before its end of line, or null with none. */
+function lastImportEnd(text: string, bare: string): number | null {
+  let found: number | null = null;
+  let from = 0;
+  for (;;) {
+    const at = bare.indexOf("import", from);
+    if (at < 0) return found;
+    from = at + 6;
+    if ((at > 0 && bare[at - 1] !== "\n") || /[\w$]/.test(bare[at + 6] ?? "")) continue;
+    let quote = from;
+    while (quote < bare.length && !"\"';`".includes(bare[quote] ?? "") && !bare.startsWith("\nimport", quote)) quote += 1;
+    from = quote;
+    const q = bare[quote];
+    if (q !== '"' && q !== "'") continue;
+    const clause = bare.slice(at + 6, quote).trimEnd();
+    if (clause !== "" && !(clause.endsWith("from") && !/[\w$]/.test(clause.at(-5) ?? ""))) continue;
+    const close = bare.indexOf(q, quote + 1);
+    if (close < 0 || !/^ +$/.test(bare.slice(quote + 1, close))) continue;
+    let end = close + 1;
+    if (bare[end] === ";") end += 1;
+    while (bare[end] === " " || bare[end] === "\t") end += 1;
+    from = end;
+    if (end === text.length || text[end] === "\n") found = text[end - 1] === "\r" ? end - 1 : end;
+    else if (text[end] === "\r" && text[end + 1] === "\n") found = end;
+  }
+}
+
+/**
+ * Where a module's directives end: after the line of its last one, where its
+ * comments and white space lead to `"use client"`-style directives. 0 with
+ * none, null with one this cannot keep first, such as one with code after it.
+ */
+function directiveEnd(text: string, bare: string): number | null {
+  let end = 0;
+  let at = 0;
+  for (;;) {
+    while (at < bare.length && /\s/.test(bare[at] ?? "")) at += 1;
+    const directive = /(["'])use \w+\1/y;
+    directive.lastIndex = at;
+    if (!directive.test(text)) return end;
+    const line = /;?[ \t]*(?:\/\/[^\r\n]*)?\r?\n/y;
+    line.lastIndex = directive.lastIndex;
+    if (!line.test(text)) return null;
+    end = line.lastIndex;
+    at = end;
+  }
 }
 
 /** The relative imports of a module, the path in group 2. */
@@ -182,17 +325,11 @@ export function withPanel(layout: string): string | null {
   const rendered = /^[ \t]*$/.test(indent)
     ? `${layout.slice(0, lineStart)}${indent}${indent.includes("\t") ? "\t" : "  "}${COMPONENT_RENDER}${eol}${layout.slice(lineStart)}`
     : `${layout.slice(0, close)}${COMPONENT_RENDER}${layout.slice(close)}`;
-  const imports = [
-    ...rendered.matchAll(/^import\s+["'][^"']+["'];?[ \t]*(?:\/\/[^\r\n]*|\/\*.*?\*\/[ \t]*)?(?=\r?$)|^import\b[^;]*?\bfrom\s*["'][^"']+["'];?[ \t]*(?:\/\/[^\r\n]*|\/\*.*?\*\/[ \t]*)?(?=\r?$)/gm),
-  ];
-  const last = imports.at(-1);
-  if (last) {
-    const end = last.index + last[0].length;
-    return `${rendered.slice(0, end)}${eol}${COMPONENT_IMPORT}${rendered.slice(end)}`;
-  }
-  const directive = /^(?:\s*(?:\/\/[^\n]*|\/\*[\s\S]*?\*\/))*\s*(["'])use \w+\1;?[ \t]*(?:\/\/[^\r\n]*)?\r?\n/.exec(rendered);
-  if (!directive && /^\s*["']use \w+["']/m.test(rendered)) return null;
-  const at = directive ? directive[0].length : 0;
+  const { bare } = scan(rendered);
+  const last = lastImportEnd(rendered, bare);
+  if (last !== null) return `${rendered.slice(0, last)}${eol}${COMPONENT_IMPORT}${rendered.slice(last)}`;
+  const at = directiveEnd(rendered, bare);
+  if (at === null) return null;
   return `${rendered.slice(0, at)}${COMPONENT_IMPORT}${eol}${rendered.slice(at)}`;
 }
 
@@ -221,7 +358,7 @@ function inside(dir: string, path: string): boolean {
  * imports does. `look` gives a file's text, null where it has none.
  */
 function mountsKnobs(path: string, source: string, look: (path: string) => string | null): boolean {
-  const live = uncommented(source);
+  const live = scan(source).code;
   if (MOUNTS.test(live)) return true;
   for (const [, , spec = ""] of live.matchAll(RELATIVE_IMPORTS)) {
     const base = join(dirname(path), spec);
@@ -233,7 +370,7 @@ function mountsKnobs(path: string, source: string, look: (path: string) => strin
     for (const candidate of candidates) {
       const text = look(candidate);
       if (text === null) continue;
-      if (MOUNTS.test(uncommented(text))) return true;
+      if (MOUNTS.test(scan(text).code)) return true;
       break;
     }
   }
@@ -342,7 +479,7 @@ export function plan(dir: string): Plan {
     else {
       const source = read(found.entry);
       const eol = eolOf(source);
-      if (MOUNTS.test(uncommented(source))) lines.push(MESSAGES.unchanged(found.entry));
+      if (MOUNTS.test(scan(source).code)) lines.push(MESSAGES.unchanged(found.entry));
       else edit(found.entry, "change", `${source}${source === "" || source.endsWith("\n") ? "" : eol}${MOUNT_LINE}${eol}`);
     }
   } else if (found.kind === "plain") byHand(MESSAGES.plain, false);

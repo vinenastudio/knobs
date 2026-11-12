@@ -322,6 +322,39 @@ describe("the layout edit", () => {
     expect(withPanel('"use client"; /* hooks below */\nexport default () => <body></body>;\n')).toBeNull();
   });
 
+  test("reads long comment heads in one pass, and keeps a directive first", () => {
+    const body = "export default ({ children }) => <html><body>{children}</body></html>;\n";
+    const rendered = "export default ({ children }) => <html><body>{children}<DevPanel /></body></html>;\n";
+    const urls = "// see https://nextjs.org/docs/app/api-reference/file-conventions/layout //\n".repeat(30);
+    const layout = `${"/".repeat(80)}\n${urls}${body}`;
+    const dir = project({ "package.json": pkg({ next: "16" }), "app/layout.tsx": layout });
+    const start = performance.now();
+    expect(init(dir).lines).toContain("changed app/layout.tsx");
+    expect(performance.now() - start).toBeLessThan(200);
+    expect(readFileSync(join(dir, "app/layout.tsx"), "utf8")).toBe(`import { DevPanel } from "./dev-knobs";\n${"/".repeat(80)}\n${urls}${rendered}`);
+    const blocks = "/* a */\n".repeat(200);
+    expect(withPanel(`${blocks}${body}`)).toBe(`import { DevPanel } from "./dev-knobs";\n${blocks}${rendered}`);
+    expect(withPanel(`${blocks}"use client";\n${body}`)).toBe(`${blocks}"use client";\nimport { DevPanel } from "./dev-knobs";\n${rendered}`);
+  });
+
+  test("keeps a directive first with a doc comment before it and slashes in the comment after it, in LF or CRLF", () => {
+    expect(withPanel('/** x **/\n"use client"; // a // b\nexport default () => <body></body>;\n')).toBe(
+      '/** x **/\n"use client"; // a // b\nimport { DevPanel } from "./dev-knobs";\nexport default () => <body><DevPanel /></body>;\n',
+    );
+    expect(withPanel('/** x **/\r\n// c\r\n"use client"; // a // b\r\nexport default () => <body></body>;\r\n')).toBe(
+      '/** x **/\r\n// c\r\n"use client"; // a // b\r\nimport { DevPanel } from "./dev-knobs";\r\nexport default () => <body><DevPanel /></body>;\r\n',
+    );
+    expect(withPanel('import "./a.css"; // a // b\r\nexport default () => <body></body>;\r\n')).toBe(
+      'import "./a.css"; // a // b\r\nimport { DevPanel } from "./dev-knobs";\r\nexport default () => <body><DevPanel /></body>;\r\n',
+    );
+  });
+
+  test("does not take a line in a template literal for an import", () => {
+    expect(withPanel('import a from "a";\nconst t = `\nimport b from "b";\n`;\nexport default () => <body></body>;\n')).toBe(
+      'import a from "a";\nimport { DevPanel } from "./dev-knobs";\nconst t = `\nimport b from "b";\n`;\nexport default () => <body><DevPanel /></body>;\n',
+    );
+  });
+
   test("is null with more than one `</body>`", () => {
     expect(withPanel("export default () => <body></body>;\n// never put scripts after </body>\n")).toBeNull();
   });
@@ -393,6 +426,17 @@ describe("what init leaves alone", () => {
     const next = project({ "package.json": pkg({ next: "16" }), "app/layout.tsx": layout });
     expect(init(next).lines.slice(0, 3)).toEqual(["npm i -D @vinena/knobs", "created app/dev-knobs.tsx", "changed app/layout.tsx"]);
     expect(readFileSync(join(next, "app/layout.tsx"), "utf8")).toContain("<DevPanel />");
+  });
+
+  test("a string or template literal that looks like a comment does not hide a real mount", () => {
+    for (const main of [
+      'fetch("/api/*");\nimport("@vinena/knobs").then(({ mount }) => mount()); // */\n',
+      'const docs = "https://knobs.dev";\nconst t = `\n// x`; import("@vinena/knobs").then(({ mount }) => mount());\n',
+    ]) {
+      const dir = project({ "package.json": pkg({ vite: "7" }), "index.html": '<script type="module" src="/src/main.ts"></script>', "src/main.ts": main });
+      expect(init(dir).lines).toContain("no change: src/main.ts");
+      expect(readFileSync(join(dir, "src/main.ts"), "utf8")).toBe(main);
+    }
   });
 
   test("an import of the package in either quote kind counts as mounted", () => {
