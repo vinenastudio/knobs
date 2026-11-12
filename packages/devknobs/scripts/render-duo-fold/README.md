@@ -20,7 +20,7 @@ are adapted from [jadon7/iphone-duo](https://github.com/jadon7/iphone-duo)
 downloads from apple.com. see THIRD_PARTY_NOTICES.md.
 
 these make the ends of the fold match Apple's own pictures of the Duo, open
-and shut, which devknobs shows once the hinge is still:
+and shut, which knobs shows once the hinge is still:
 
 - the black glass round each screen gives off light and takes none:
   `border.py` samples it in those pictures, px by px out from the screen's
@@ -41,7 +41,7 @@ and shut, which devknobs shows once the hinge is still:
   with a bright line along it. the model's other finish, Night Sky, is navy
   and no nearer. so the metal gives off light and takes none, as the border
   does, by the way it faces the camera: `matcap.py` lays a render of the
-  metal's normals on Apple's pictures, open and shut, as devknobs lays the
+  metal's normals on Apple's pictures, open and shut, as knobs lays the
   render, and writes into `matcap.json`, on a 64 by 64 grid of the ways it
   can face, the light that tone maps to the mean colour there. render.js reads
   it. the hinge strip's own bumps, its brushed look, go into which way it

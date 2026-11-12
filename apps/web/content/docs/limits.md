@@ -1,17 +1,17 @@
 ---
 title: limits and faq
-meta_title: devknobs limits and FAQ: what a page panel cannot fake
-description: What devknobs cannot fake from inside a page, such as cross-origin stylesheets, worker time zones and real touch, and answers to common questions about it.
+meta_title: knobs limits and FAQ: what a page panel cannot fake
+description: What knobs cannot fake from inside a page, such as cross-origin stylesheets, worker time zones and real touch, and answers to common questions about it.
 order: 9
 updated: 2026-10-29
 ---
 
-devknobs works from inside the page, so some things stay out of its reach.
+knobs works from inside the page, so some things stay out of its reach.
 
 ## main limits
 
 - only same-origin stylesheets can be rewritten. a cross-origin `<link>` keeps its real media behaviour.
-- a `MediaQueryList` made before devknobs mounted gets no change event. reload, or load the [early script](/docs/start) first.
+- a `MediaQueryList` made before knobs mounted gets no change event. reload, or load the [early script](/docs/start) first.
 - the time zone and the clock live in the page. workers, service workers and the server keep the real ones.
 - the clock moves the time a page reads, not the time that passes. timers keep real time.
 - the user agent knob changes what page code reads. the server still sees the real `User-Agent`, unless you use the [extension](/docs/extension).

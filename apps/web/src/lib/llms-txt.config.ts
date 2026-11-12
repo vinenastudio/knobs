@@ -29,5 +29,5 @@ export const llmsTxtConfig: LlmsTxtConfig = {
   ],
   siteUrl: CANONICAL_ORIGIN,
   summary:
-    'devknobs is a dev-only panel inside the page that shows your site on an iPhone or a Pixel, tomorrow morning, in Arabic or in dark mode.',
+    'knobs is a dev-only panel inside the page that shows your site on an iPhone or a Pixel, tomorrow morning, in Arabic or in dark mode.',
 };

@@ -1,20 +1,20 @@
 ---
 title: limits and faq
-description: What devknobs cannot fake from inside a page, and answers to common questions about it.
+description: What knobs cannot fake from inside a page, and answers to common questions about it.
 order: 9
 ---
 
-devknobs works from inside the page, so some things stay out of its reach. these are the limits, knob by knob.
+knobs works from inside the page, so some things stay out of its reach. these are the limits, knob by knob.
 
 ## stylesheets
 
 only same-origin stylesheets can be rewritten. a cross-origin `<link>` keeps
 its real media behaviour, because the browser refuses to hand over its rules.
-the same goes for css inside a shadow root that devknobs cannot reach.
+the same goes for css inside a shadow root that knobs cannot reach.
 
 ## media query lists
 
-a `MediaQueryList` made before devknobs mounted reads the emulated `matches`,
+a `MediaQueryList` made before knobs mounted reads the emulated `matches`,
 because the getter is patched on the prototype, but it gets no change event:
 there is no way to find it. reload once the knob is set, so the page makes its
 lists after the mount, or load the [early script](/docs/start#early-script) first.
@@ -23,7 +23,7 @@ lists after the mount, or load the [early script](/docs/start#early-script) firs
 
 the time zone knob lives in the page, so workers, service workers and server
 rendering keep the host zone, and a server rendered date can mismatch on
-hydration. code that kept a reference to `Date` from before devknobs loaded
+hydration. code that kept a reference to `Date` from before knobs loaded
 builds dates from local fields in the host zone (reading them is still
 emulated), and an `Intl.DateTimeFormat` made before then keeps the host zone.
 `Date.parse` reads a string as local time unless it has a `Z`, an offset or a
@@ -44,7 +44,7 @@ clock. a frozen clock waits. like the time zone, the clock lives in the page:
 workers, service workers and the server keep real time (see [the clock and
 your server](/docs/knobs#the-clock-and-your-server)), and a server rendered timestamp can mismatch on hydration.
 code that kept `Date`, `Date.now` or a `Temporal.Now` reader from before
-devknobs loaded reads the real time, so load the [early script](/docs/start#early-script) first.
+knobs loaded reads the real time, so load the [early script](/docs/start#early-script) first.
 `Intl.DateTimeFormat` `format()` with no date, `document.lastModified` and a
 file's `lastModified` read the real time too. only `fetch` and
 `XMLHttpRequest` carry the header: forms, links, `sendBeacon`, `EventSource`
@@ -61,7 +61,7 @@ device's frame as well, its reloads included. workers and service workers keep
 the real `navigator`. without a frame, code that read the user agent before
 the knob moved keeps what it read: reload, or load the [early script](/docs/start#early-script) first. in
 a frame the page reloads on its own. stylesheets in the frame's page see the
-touch screen's pointer and hover once devknobs mounts there, as before.
+touch screen's pointer and hover once knobs mounts there, as before.
 
 ## animation speed
 
@@ -83,7 +83,7 @@ follows the real mouse, as no script can turn it off. touch events and the
 `pointercancel` it sends are not trusted (`isTrusted` is false), it is one
 finger only, with no pinch and no long press menu, and a fling is a simple
 one, with no overscroll bounce. a page's own capture listeners on the window
-still get hover moves, and ones it put there before devknobs loaded read
+still get hover moves, and ones it put there before knobs loaded read
 `pointerType: "mouse"`. desktop Safari and Firefox have no
 `Touch` constructor, so they get the cursor, the pointer type and the scrolling
 but no touch events. turn the switch off for the mouse as it is: clicks,
@@ -144,13 +144,13 @@ them:
 - print media (rendering panel, or print preview)
 - trusted touch events, pinch and `:hover` that follows touch (device toolbar)
 - network throttling and a real offline (network panel)
-- the time zone of workers and of the page before devknobs loads (sensors panel, or a `TZ` environment variable when the browser starts)
+- the time zone of workers and of the page before knobs loads (sensors panel, or a `TZ` environment variable when the browser starts)
 
 ## faq
 
 ### does it ship to production?
 
-not unless you put it there. devknobs is for development only, and every way in is yours to gate: a dev check around a dynamic import, `next/dynamic` behind `NODE_ENV` in next.js, or a script tag kept out of the deployed page. a static import stays in the production bundle even behind a dev check, because the bundler still has to keep the module, so gate the import itself. see [start](/docs/start#usage).
+not unless you put it there. knobs is for development only, and every way in is yours to gate: a dev check around a dynamic import, `next/dynamic` behind `NODE_ENV` in next.js, or a script tag kept out of the deployed page. a static import stays in the production bundle even behind a dev check, because the bundler still has to keep the module, so gate the import itself. see [start](/docs/start#usage).
 
 ### which frameworks does it work with?
 
@@ -158,7 +158,7 @@ any page. it works on the page itself, so it needs no framework: the script tag 
 
 ### does it need react?
 
-no. devknobs is vanilla typescript with zero runtime dependencies, and react is optional (`@vinena/knobs/react`). react matters to [grab](/docs/grab) only: the component names and source places it copies come from react. without them, grab falls back to the element's html and a selector.
+no. knobs is vanilla typescript with zero runtime dependencies, and react is optional (`@vinena/knobs/react`). react matters to [grab](/docs/grab) only: the component names and source places it copies come from react. without them, grab falls back to the element's html and a selector.
 
 ### the extension or the npm package?
 

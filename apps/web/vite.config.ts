@@ -53,7 +53,7 @@ function devknobsSource(): Plugin {
       const [built] = [result].flat();
       const [chunk] = built && 'output' in built ? built.output : [];
       if (chunk?.type !== 'chunk') {
-        throw new Error(`devknobs: could not build ${root}/src/early.ts`);
+        throw new Error(`knobs: could not build ${root}/src/early.ts`);
       }
       // An edit to any of its sources rebuilds it on the next request.
       for (const file of chunk.moduleIds) {
