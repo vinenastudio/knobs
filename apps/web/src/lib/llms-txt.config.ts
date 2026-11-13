@@ -9,15 +9,19 @@ export const llmsTxtConfig: LlmsTxtConfig = {
 - [npm](https://www.npmjs.com/package/@vinena/knobs): the @vinena/knobs package
 - [Chrome Web Store](https://chromewebstore.google.com/detail/knobs/cpdmafeojnbdnnhldafobkaajiemcidj): the knobs extension
 - [GitHub](https://github.com/vinenastudio/knobs): the source of the package, the extension and this site`,
-  // The docs pages and the blog posts, as the sitemap lists them.
+  // The docs pages, the blog posts, the use pages and the comparison pages, as the sitemap lists them.
   extraPaths: async () => {
-    const [{ pages }, { posts }] = await Promise.all([
+    const [{ pages }, { posts }, { knobPages }, { comparePages }] = await Promise.all([
       import('../docs/pages.ts'),
       import('../blog/posts.ts'),
+      import('../use/pages.ts'),
+      import('../compare/pages.ts'),
     ]);
     return [
       ...pages.map((page) => `/docs/${page.slug}`),
       ...posts.map((post) => `/blog/${post.slug}`),
+      ...knobPages.map((page) => `/use/${page.slug}`),
+      ...comparePages.map((page) => `/compare/${page.slug}`),
     ];
   },
   pagesTitle: 'Pages',
@@ -26,6 +30,8 @@ export const llmsTxtConfig: LlmsTxtConfig = {
   sections: [
     { prefix: '/docs', title: 'Docs' },
     { prefix: '/blog', title: 'Blog' },
+    { prefix: '/use', title: 'Use cases' },
+    { prefix: '/compare', title: 'Comparisons' },
   ],
   siteUrl: CANONICAL_ORIGIN,
   summary:
