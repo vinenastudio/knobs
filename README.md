@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://chromewebstore.google.com/detail/knobs/cpdmafeojnbdnnhldafobkaajiemcidj">Add to Chrome</a> ·
   <a href="https://knobs.dev">knobs.dev</a> ·
-  <a href="https://knobs.dev/docs">docs</a> ·
+  <a href="https://knobs.dev/docs/start">docs</a> ·
   <a href="https://www.npmjs.com/package/@vinena/knobs">npm</a>
 </p>
 
@@ -91,10 +91,10 @@ Read https://knobs.dev/llms-full.txt first: it is the full knobs reference. Then
 - Offline, to see how the page acts with no connection
 
 <p align="center">
-  <a href="https://knobs.dev/docs"><img src="packages/extension/store/screenshot-1-scheme.png" width="24%" alt="Dark mode, without changing your Mac"></a>
-  <a href="https://knobs.dev/docs"><img src="packages/extension/store/screenshot-2-text.png" width="24%" alt="Bigger text, to see what breaks"></a>
-  <a href="https://knobs.dev/docs"><img src="packages/extension/store/screenshot-3-rtl.png" width="24%" alt="Right-to-left, on any page"></a>
-  <a href="https://knobs.dev/docs"><img src="packages/extension/store/screenshot-4-vision.png" width="24%" alt="See your colors with color blindness"></a>
+  <a href="https://knobs.dev/docs/start"><img src="packages/extension/store/screenshot-1-scheme.png" width="24%" alt="Dark mode, without changing your Mac"></a>
+  <a href="https://knobs.dev/docs/start"><img src="packages/extension/store/screenshot-2-text.png" width="24%" alt="Bigger text, to see what breaks"></a>
+  <a href="https://knobs.dev/docs/start"><img src="packages/extension/store/screenshot-3-rtl.png" width="24%" alt="Right-to-left, on any page"></a>
+  <a href="https://knobs.dev/docs/start"><img src="packages/extension/store/screenshot-4-vision.png" width="24%" alt="See your colors with color blindness"></a>
 </p>
 
 ## For coding agents

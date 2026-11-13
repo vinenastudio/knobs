@@ -85,7 +85,7 @@ function DevPage() {
 // that size, so these columns collapse the way they do on a real phone.
 const WIDE = '@media (min-width: 640px)';
 
-const DOCS = '/docs';
+const DOCS = '/docs/start';
 
 const BLOG = '/blog';
 

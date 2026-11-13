@@ -1,7 +1,7 @@
 import handler from '@tanstack/react-start/server-entry';
 import earlyScript from '@vinena/knobs/early?raw';
 import { initWorkersLogger } from 'evlog/workers';
-import { canonicalRedirect } from './lib/canonical.ts';
+import { canonicalRedirect, docsRedirect } from './lib/canonical.ts';
 import { paraglideMiddleware } from './paraglide/server.js';
 
 interface WorkerEnv {
@@ -82,6 +82,7 @@ export default {
     try {
       const response =
         canonicalRedirect(url) ??
+        docsRedirect(url) ??
         withEarlyScript(await paraglideMiddleware(request, () => handler.fetch(request)));
       log.set({ status: response.status });
       return response;
