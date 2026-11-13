@@ -129,9 +129,14 @@ class FakeElement {
   textContent = "";
   hidden = false;
   offsetWidth = 0;
+  /** How wide it is drawn, in css px. */
+  drawnWidth = 0;
   readonly classList = { add: () => {}, toggle: () => {}, contains: () => false };
 
   setAttribute(): void {}
+  getBoundingClientRect(): { width: number } {
+    return { width: this.drawnWidth };
+  }
   addEventListener(): void {}
   append(...nodes: FakeElement[]): void {
     this.children.push(...nodes);
@@ -205,12 +210,65 @@ describe("Safari's domain has room for its text", () => {
     painted.apply(false, look("mertduzgun.com"));
     painted.apply(true, look("mertduzgun.com"));
     painted.apply(false, look("mertduzgun.com"));
+    const advance = (from: number, to: number) => textWidth("mertduzgun.com", from, 500) / textWidth("mertduzgun.com", to, 500);
     expect(set).toEqual([
       "17px translate(-50%, -50%)",
-      `13px translate(-50%, -50%) scale(${17 / 13})`,
+      `13px translate(-50%, -50%) scale(${advance(17, 13)})`,
       "13px translate(-50%, -50%)",
-      `17px translate(-50%, -50%) scale(${13 / 17})`,
+      `17px translate(-50%, -50%) scale(${advance(13, 17)})`,
       "17px translate(-50%, -50%)",
+    ]);
+  });
+
+  test("a morph turned back midway starts where it is drawn, and its top goes on gliding", () => {
+    const screen = SCREENS.find((each) => each.id === "iphone-17-pro");
+    const full = screen && barsOf(screen, "portrait", "compact", false);
+    const mini = screen && barsOf(screen, "portrait", "compact", true);
+    const pill = mini?.shapes.find((shape) => shape.kind === "pill");
+    const address = full?.shapes.find((shape) => shape.kind === "field") ?? full?.shapes.find((shape) => shape.text !== undefined);
+    if (!screen || !full || !mini || !pill || !address) throw new Error("no bars");
+    const host = "claudemarketplaces.com";
+    const painted = buildSafari(full, mini, look(host), actions);
+    const root = painted.root as unknown as FakeElement;
+    const surface = root.children.find((child) => child.className.split(" ").includes("surface"));
+    const [domain] = surface?.querySelectorAll(".domain") ?? [];
+    if (!domain) throw new Error("no domain");
+    const writes: string[] = [];
+    for (const name of ["transition", "transitionProperty", "transform", "maxWidth"]) {
+      let value = "";
+      Object.defineProperty(domain.style, name, {
+        get: () => value,
+        set: (next: string) => {
+          value = next;
+          writes.push(`${name} ${next}`);
+        },
+      });
+    }
+    const saved = Object.getOwnPropertyDescriptor(globalThis, "getComputedStyle");
+    // Partway through, the domain is drawn 1.1 times its laid out size, 150 px wide.
+    Object.defineProperty(globalThis, "getComputedStyle", {
+      configurable: true,
+      value: (node: unknown) => ({ transform: node === domain ? "matrix(1.1, 0, 0, 1.1, 0, 0)" : "none" }),
+    });
+    domain.drawnWidth = 150;
+    try {
+      painted.apply(false, look(host));
+      painted.apply(true, look(host));
+      writes.length = 0;
+      painted.apply(false, look(host));
+    } finally {
+      if (saved) Object.defineProperty(globalThis, "getComputedStyle", saved);
+      else Reflect.deleteProperty(globalThis, "getComputedStyle");
+    }
+    const W = turn(screen, "portrait").width;
+    const scale = 1.1 * (textWidth(host, pill.text?.size ?? 0, 500) / textWidth(host, address.text?.size ?? 0, 500));
+    expect(writes).toEqual([
+      "transitionProperty top, height",
+      `transform translate(-50%, -50%) scale(${scale})`,
+      `maxWidth ${150 / scale}px`,
+      "transitionProperty ",
+      `maxWidth ${domainRoom(address, host, W)}px`,
+      "transform translate(-50%, -50%)",
     ]);
   });
 

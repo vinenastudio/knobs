@@ -125,7 +125,8 @@ export const SAFARI_CSS = `
   transition:
     top var(--main) ${MORPH.ease},
     height var(--main) ${MORPH.ease},
-    transform var(--main) ${MORPH.ease};
+    transform var(--main) ${MORPH.ease},
+    max-width var(--main) ${MORPH.ease};
 }
 /* The parts only the expanded bars have: an icon swap, out early, in late. */
 .safari .full {
@@ -847,18 +848,25 @@ export function buildSafari(full: Bars, mini: Bars, look: Look, actions: Actions
         const shown = minimized ? pill : (field ?? main);
         const size = shown.text?.size ?? SAFARI_TEXT.field;
         const was = Number(domain.dataset.size) || size;
-        // Read before anything changes, so a morph turned back midway goes on from where it is.
-        const drawn = was === size ? 1 : drawnScale(domain);
+        const room = domainRoom(shown, sight.host, screen);
         domain.dataset.size = String(size);
-        domain.style.fontSize = `${size}px`;
-        domain.style.maxWidth = `${domainRoom(shown, sight.host, screen)}px`;
         if (was !== size) {
-          // It starts as big as it was drawn at the old size and scales to the new one.
-          domain.style.transition = "none";
-          domain.style.transform = `translate(-50%, -50%) scale(${(drawn * was) / size})`;
+          // Read before anything changes, so a morph turned back midway goes on from where it is.
+          const seen = domain.getBoundingClientRect().width;
+          const host = domainOf(sight.host);
+          const advance = textWidth(host, was, DOMAIN_WEIGHT) / textWidth(host, size, DOMAIN_WEIGHT);
+          const scale = drawnScale(domain) * (advance || was / size);
+          // It starts drawn as it was, cut where it was, and only its scale and cut jump there:
+          // its top and height go on gliding.
+          domain.style.transitionProperty = "top, height";
+          domain.style.fontSize = `${size}px`;
+          domain.style.transform = `translate(-50%, -50%) scale(${scale})`;
+          domain.style.maxWidth = `${seen / scale}px`;
           void domain.offsetWidth;
-          domain.style.transition = "";
+          domain.style.transitionProperty = "";
         }
+        domain.style.fontSize = `${size}px`;
+        domain.style.maxWidth = `${room}px`;
         const top = minimized ? pill.height / 2 : Number(domain.dataset.top);
         domain.style.top = `${top}px`;
         domain.style.transform = "translate(-50%, -50%)";
