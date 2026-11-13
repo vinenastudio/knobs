@@ -651,11 +651,12 @@ describe("pictureOf, with pictures the frame may not read as they are", () => {
     const wrapped = new Node("div", {}, [caption({ zIndex: "5" })]).styled({ display: "contents" });
     expect(raised(new Node("section", {}, [wrapped, away().styled({ position: "relative" })]).styled({ display: "flex" }))).toBe(1);
     // An earlier caption that makes a stacking context paints over a picture in the flow.
-    const contexts: Record<string, string>[] = [{ willChange: "transform" }, { mixBlendMode: "multiply" }, { contain: "paint" }, { backdropFilter: "blur(2px)" }, { clipPath: "inset(0px)" }];
+    const contexts: Record<string, string>[] = [{ willChange: "transform" }, { mixBlendMode: "multiply" }, { contain: "paint" }, { backdropFilter: "blur(2px)" }, { clipPath: "inset(0px)" }, { viewTransitionName: "card" }, { contentVisibility: "auto" }];
     for (const style of contexts) {
       expect(raised(new Node("section", {}, [caption(style), away()]))).toBe(1);
     }
     expect(raised(new Node("section", {}, [caption({ willChange: "scroll-position" }), away()]))).toBe(0);
+    expect(raised(new Node("section", {}, [caption({ containerType: "inline-size" }), away()]))).toBe(0);
   });
 
   test("drawn back, the drawing goes over each covered picture only, cut off as the picture is", () => {

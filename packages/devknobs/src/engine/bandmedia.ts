@@ -438,11 +438,8 @@ const names = (value: string | undefined, words: Set<string>) => (value ?? "").s
 /** The `contain` values that make a stacking context. */
 const CONTAINS = new Set(["paint", "layout", "strict", "content"]);
 
-/** The `container-type` values that make one. */
-const CONTAINERS = new Set(["size", "inline-size"]);
-
 /** What a `will-change` may name that makes one. */
-const CHANGES = new Set(["transform", "opacity", "filter", "scale", "rotate", "translate", "isolation", "mix-blend-mode", "perspective", "clip-path", "mask", "contain"]);
+const CHANGES = new Set(["transform", "opacity", "filter", "scale", "rotate", "translate", "isolation", "mix-blend-mode", "perspective", "clip-path", "mask", "contain", "backdrop-filter", "mask-image", "-webkit-mask-image", "position", "view-transition-name", "offset-path"]);
 
 /** The box that lays `node` out: what holds it, past any `display: contents` that makes no box. */
 function boxOf(node: Element, view: Window): CSSStyleDeclaration | null {
@@ -472,7 +469,9 @@ function contextOf(style: CSSStyleDeclaration): boolean {
     Number.parseFloat(style.opacity) < 1 ||
     style.isolation === "isolate" ||
     names(style.contain, CONTAINS) ||
-    names(style.containerType, CONTAINERS) ||
+    inEffect(style.viewTransitionName) ||
+    style.contentVisibility === "auto" ||
+    inEffect(style.offsetPath) ||
     names(style.willChange, CHANGES)
   );
 }
@@ -486,7 +485,8 @@ function contextOf(style: CSSStyleDeclaration): boolean {
  * a browser computes it on any. The outermost that makes a stacking context
  * sets it, as the rest paints in that; one positioned that makes none lifts
  * only what nothing in it lifted yet. A `display: contents` makes no box, so
- * its own style does nothing.
+ * its own style does nothing. A known limit: `-webkit-box-reflect` and any
+ * other trigger `contextOf` does not list leave what it makes uncounted.
  */
 function rankOf(node: Element, top: Element, view: Window): number {
   let rank = 0;
