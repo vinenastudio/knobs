@@ -83,3 +83,15 @@ export function UsePageView({ slug }: { slug: string }) {
     </main>
   );
 }
+
+/** What `/use/<slug>` shows for a page that does not exist. */
+export function UseNotFound() {
+  return (
+    <main {...props(styles.main)}>
+      <h1 {...props(styles.title)}>{m.use_not_found()}</h1>
+      <p>
+        <Link to="/use">{m.use_not_found_link()}</Link>
+      </p>
+    </main>
+  );
+}

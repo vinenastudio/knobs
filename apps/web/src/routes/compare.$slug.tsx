@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { comparePageHead, loadComparePage } from '../compare/head.ts';
-import { ComparePageView } from '../compare/layout.tsx';
+import { CompareNotFound, ComparePageView } from '../compare/layout.tsx';
 
 // TanStack types head's loaderData from loader, so loader must come first (react-doctor
 // tanstack-start-route-property-order); the key sort would put it after head.
@@ -9,6 +9,7 @@ export const Route = createFileRoute('/compare/$slug')({
   loader: ({ params }) => loadComparePage(params.slug),
   head: ({ loaderData, params }) => comparePageHead(loaderData, params.slug),
   component: ComparePage,
+  notFoundComponent: CompareNotFound,
 });
 // oxlint-enable perfectionist/sort-objects
 

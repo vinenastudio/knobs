@@ -80,3 +80,15 @@ export function ComparePageView({ slug }: { slug: string }) {
     </main>
   );
 }
+
+/** What `/compare/<slug>` shows for a page that does not exist. */
+export function CompareNotFound() {
+  return (
+    <main {...props(styles.main)}>
+      <h1 {...props(styles.title)}>{m.compare_not_found()}</h1>
+      <p>
+        <Link to="/compare">{m.compare_not_found_link()}</Link>
+      </p>
+    </main>
+  );
+}
