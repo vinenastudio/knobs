@@ -1048,6 +1048,9 @@ class Tag {
     if (holder) holder.children = holder.children.filter((node) => node !== this);
     this.parentElement = null;
   }
+  getAttribute(name: string): string | null {
+    return this.attributes.get(name) ?? null;
+  }
   setAttribute(name: string, value: string): void {
     this.attributes.set(name, value);
   }
@@ -1096,9 +1099,9 @@ describe("copyPage, of a page with pictures and with what devknobs put on it", (
       new Tag("script"),
     ]);
     expect(copy.querySelectorAll("[data-devknobs]")).toEqual([]);
-    expect(copy.all().map((node) => node.localName)).toEqual(["head", "style", "body", "main", "p"]);
-    // The one style left is the copy's own, with the page's rules.
-    expect(copy.querySelector("style")?.attributes.has("data-devknobs")).toBe(false);
+    expect(copy.all().map((node) => node.localName)).toEqual(["head", "style", "style", "body", "main", "p"]);
+    // The styles left are the copy's own: the page's rules, and one that hides the controls a drawing puts on a video.
+    expect(copy.querySelectorAll("style").map((style) => style.attributes.has("data-devknobs"))).toEqual([false, false]);
     // The page itself keeps all of it.
     expect(live.querySelectorAll("[data-devknobs]").length).toBe(3);
   });
@@ -1122,5 +1125,34 @@ describe("copyPage, of a page with pictures and with what devknobs put on it", (
     // And the page's own are untouched.
     expect(live.querySelector("img")?.attributes.get("src")).toBe("cover.jpg");
     expect(live.querySelectorAll("source").length).toBe(1);
+  });
+
+  test("lays out visible the root or body whose overflow the viewport takes, which would cut off or scroll the copy, and only that one", () => {
+    /** The copy of a page whose root and body compute these overflows, across and down. */
+    const copyWith = (root: [string, string], body: [string, string], display = "block") => {
+      const live = new Tag("html", {}, [new Tag("head"), new Tag("body", {}, [new Tag("p")])]);
+      const inert = { importNode: (node: Tag) => node.clone(), createElement: (name: string) => new Tag(name) };
+      const overflow = (node: Tag) => {
+        const [overflowX, overflowY] = node === live ? root : body;
+        return { overflowX, overflowY, display: node === live ? display : "block" };
+      };
+      const doc = {
+        documentElement: live,
+        body: live.children[1],
+        styleSheets: [],
+        implementation: { createHTMLDocument: () => inert },
+        defaultView: { getComputedStyle: overflow, matchMedia: () => ({ matches: false }) },
+      };
+      const copy = copyPage({ contentDocument: doc } as unknown as HTMLIFrameElement) as unknown as Tag | null;
+      if (!copy) throw new Error("the page was not copied");
+      return [copy.getAttribute("style"), copy.querySelector("body")?.getAttribute("style") ?? null];
+    };
+    // html, body { height: 100% } body { overflow-x: hidden }: the body's goes to the viewport.
+    expect(copyWith(["visible", "visible"], ["hidden", "auto"])).toEqual([null, ";overflow:visible !important"]);
+    // The root's goes there instead, and the body keeps its own.
+    // A block root stays a formatting context, so its first child's top margin does not leave a gap above it in the copy.
+    expect(copyWith(["clip", "visible"], ["hidden", "auto"])).toEqual([";overflow:visible !important;display:flow-root !important", null]);
+    expect(copyWith(["clip", "visible"], ["hidden", "auto"], "flex")).toEqual([";overflow:visible !important", null]);
+    expect(copyWith(["visible", "visible"], ["visible", "visible"])).toEqual([null, null]);
   });
 });

@@ -2196,7 +2196,7 @@ describe("the pictures of the page a fold turns", () => {
       implementation: { createHTMLDocument: () => ({ importNode: () => new FakePage(), createElement: () => new FakeNode() }) },
       querySelectorAll: () => [picture],
       createRange: () => ({}),
-      defaultView: { MutationObserver: Watcher },
+      defaultView: { MutationObserver: Watcher, getComputedStyle: () => css },
     };
     const view = {
       get innerWidth() {

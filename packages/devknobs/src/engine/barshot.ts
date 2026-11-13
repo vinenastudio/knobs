@@ -1,6 +1,6 @@
 import { BARS_CSS } from "./browserdraw";
 import { type Bars, barsOf, layoutOf } from "./browserui";
-import { formOf } from "./devices";
+import { formOf, turn } from "./devices";
 import type { Rect } from "./mock";
 import { svgUrl } from "./pageshot";
 import { pillBox } from "./safaridraw";
@@ -63,7 +63,7 @@ export function glassOf(bars: Bars, host: string): Glass[] {
       .map(({ x, y, width, height, radius }) => ({ rect: { x, y, width, height }, radius }));
   }
   const pill = bars.shapes.find((shape) => shape.kind === "pill");
-  return pill ? [{ rect: pillBox(pill, host), radius: pill.radius }] : [];
+  return pill ? [{ rect: pillBox(pill, host, turn(bars.screen, bars.orientation).width), radius: pill.radius }] : [];
 }
 
 /** The bars as a screen shows them: their drawing on its way, the screen's css px, and their glass. */

@@ -36,18 +36,20 @@ function clear(color: string): boolean {
 }
 
 /** The elements of a page that show a picture of their own, which a drawing of the page cannot load and a rough one draws by hand. */
-const MEDIA = "img, video, canvas";
-type MediaNode = HTMLImageElement | HTMLVideoElement | HTMLCanvasElement;
+export const MEDIA = "img, video, canvas";
+export type MediaNode = HTMLImageElement | HTMLVideoElement | HTMLCanvasElement;
 
 /** A picture, video or drawing of the page that can be drawn now, and its size as made, in its own px. */
-interface Media {
+export interface Media {
   source: CanvasImageSource;
   width: number;
   height: number;
+  /** How many of the source's px one of its px as made takes, where they differ: 1 where unset. */
+  scale?: number;
 }
 
 /** What `node` shows, where it has it by now: a picture that has loaded, a video with a frame, a drawing with a size. */
-function mediaOf(node: MediaNode): Media | null {
+export function mediaOf(node: MediaNode): Media | null {
   // Told apart by what they have, as the frame's elements are not of this window's classes.
   if ("naturalWidth" in node) {
     const loaded = node.complete && node.naturalWidth > 0 && node.naturalHeight > 0;
@@ -67,6 +69,26 @@ function radiusOf(value: string, wide: number, tall: number): { x: number; y: nu
   return { x: px(across, wide), y: px(down, tall) };
 }
 
+/** What of an element's computed style fits a picture into its box. */
+export type FitStyle = Pick<
+  CSSStyleDeclaration,
+  | "borderLeftWidth"
+  | "borderRightWidth"
+  | "borderTopWidth"
+  | "borderBottomWidth"
+  | "paddingLeft"
+  | "paddingRight"
+  | "paddingTop"
+  | "paddingBottom"
+  | "objectFit"
+  | "objectPosition"
+  | "borderTopLeftRadius"
+  | "borderTopRightRadius"
+  | "borderBottomRightRadius"
+  | "borderBottomLeftRadius"
+  | "imageRendering"
+>;
+
 /**
  * Draw one of the page's pictures where its element shows it, `rect`, as its
  * `style` fits it in: inside the border and padding, cut and placed as
@@ -75,7 +97,12 @@ function radiusOf(value: string, wide: number, tall: number): { x: number; y: nu
  * drawn into the element's box whole is squeezed wherever the page cuts it
  * to cover the box, or leaves room around it.
  */
-export function drawMedia(pen: CanvasRenderingContext2D, media: Media, rect: DOMRect, style: CSSStyleDeclaration): void {
+export function drawMedia(
+  pen: CanvasRenderingContext2D,
+  media: Media,
+  rect: Pick<DOMRect, "left" | "top" | "width" | "height">,
+  style: FitStyle,
+): void {
   const px = (value: string) => Number.parseFloat(value) || 0;
   const left = px(style.borderLeftWidth) + px(style.paddingLeft);
   const right = px(style.borderRightWidth) + px(style.paddingRight);
@@ -103,7 +130,8 @@ export function drawMedia(pen: CanvasRenderingContext2D, media: Media, rect: DOM
     pen.clip();
   }
   if (style.imageRendering === "pixelated" || style.imageRendering === "crisp-edges") pen.imageSmoothingEnabled = false;
-  pen.drawImage(media.source, from.x, from.y, from.width, from.height, to.x, to.y, to.width, to.height);
+  const scale = media.scale ?? 1;
+  pen.drawImage(media.source, from.x * scale, from.y * scale, from.width * scale, from.height * scale, to.x, to.y, to.width, to.height);
   pen.restore();
 }
 
@@ -423,10 +451,43 @@ function blankPictures(live: Element, copy: Element): void {
 }
 
 /**
+ * A drawing runs no script, so Chrome and Safari draw a video's controls on
+ * each video in it, and a loading ring on one with a source, as it never
+ * loads: on the page they do not show.
+ */
+const NO_CONTROLS = "video::-webkit-media-controls { display: none !important; }";
+
+/** Does an element with `overflow` on one axis, as it computes, cut off what overflows it there? */
+export function cuts(overflow: string): boolean {
+  return overflow === "hidden" || overflow === "auto" || overflow === "scroll" || overflow === "clip";
+}
+
+/**
+ * The element of the page in `doc` whose overflow the viewport takes: the
+ * root, or the body where the root's overflow is visible both ways, or null
+ * where it has no body. The page lays that element out as if its overflow
+ * were visible. Its copy in a drawing is no document's root, so it would
+ * cut off what overflows it, or make a scroll container of it.
+ */
+export function viewportOverflow(doc: Document, view: Window): Element | null {
+  const root = doc.documentElement;
+  const style = view.getComputedStyle(root);
+  if (cuts(style.overflowX) || cuts(style.overflowY)) return root;
+  const { body } = doc;
+  return body?.localName === "body" && body.parentElement === root ? body : null;
+}
+
+/**
  * The page in `frame`, copied as it is now for `paintPage`, or null where it
  * is out of reach. What `leave` picks of the page is left out of the copy.
+ * `each` is told of each element of the page and its copy, before anything is
+ * taken out of the copy.
  */
-export function copyPage(frame: HTMLIFrameElement, leave?: (node: Element) => boolean): Element | null {
+export function copyPage(
+  frame: HTMLIFrameElement,
+  leave?: (node: Element) => boolean,
+  each?: (node: Element, copy: Element) => void,
+): Element | null {
   const doc = frame.contentDocument;
   if (!doc?.documentElement) return null;
   // Its styles inlined, as a drawing of it loads nothing of its own, and the
@@ -466,7 +527,7 @@ export function copyPage(frame: HTMLIFrameElement, leave?: (node: Element) => bo
   const inert = doc.implementation.createHTMLDocument("");
   const root = inert.importNode(doc.documentElement, true);
   pin(doc.documentElement, root);
-  if (leave || pinned) {
+  if (leave || pinned || each) {
     // The copy has the page's elements in the same order until some are taken out.
     const live = doc.documentElement.getElementsByTagName("*");
     const copied = root.getElementsByTagName("*");
@@ -476,14 +537,26 @@ export function copyPage(frame: HTMLIFrameElement, leave?: (node: Element) => bo
       if (!node || !copy) continue;
       if (leave?.(node)) markOwn(copy);
       pin(node, copy);
+      each?.(node, copy);
     }
   }
   blankPictures(doc.documentElement, root);
+  // The overflow the viewport took from the page, visible in the copy, as the page lays it out.
+  const lifted = view ? viewportOverflow(doc, view) : null;
+  const liftedCopy = lifted === doc.documentElement ? root : lifted ? root.querySelector("body") : null;
+  const liftedStyle = lifted && view ? view.getComputedStyle(lifted) : null;
+  if (liftedCopy && liftedStyle && (cuts(liftedStyle.overflowX) || cuts(liftedStyle.overflowY))) {
+    // The copy's root is not the drawing's root, so a block one is kept a formatting context of its own: its first child's top margin stays inside it.
+    const own = liftedCopy === root && liftedStyle.display === "block" ? ";display:flow-root !important" : "";
+    liftedCopy.setAttribute("style", `${liftedCopy.getAttribute("style") ?? ""};overflow:visible !important${own}`);
+  }
   // And nothing devknobs put on the page: what its knobs write is in the rules.
   for (const node of root.querySelectorAll(`script, link, style, noscript, ${ownSelector()}`)) node.remove();
+  const quiet = inert.createElement("style");
+  quiet.textContent = NO_CONTROLS;
   const style = inert.createElement("style");
   style.textContent = frozen.rules.join("\n");
-  (root.querySelector("head") ?? root).append(style);
+  (root.querySelector("head") ?? root).append(style, quiet);
   return root;
 }
 

@@ -247,6 +247,9 @@ class FakeElement {
 
   setAttribute(): void {}
   removeAttribute(): void {}
+  getBoundingClientRect(): { width: number } {
+    return { width: 0 };
+  }
   addEventListener(): void {}
   append(...nodes: FakeElement[]): void {
     this.children.push(...nodes);
