@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { DEFAULT_STATE, merge } from "../src/engine/store";
 import { readMessage } from "../src/engine/frame";
+import { oldKey } from "../src/engine/storekeys";
 import { PRESETS_KEY, PRESETS_VERSION, applyOnLoad } from "../src/storage/onload";
 import type { KnobsState, KnobsStatePatch } from "../src/types";
 import { actionKey, runAction, type Store, stopAction } from "../src/ui/actions";
@@ -302,7 +303,7 @@ describe("presets that applied on load", () => {
   };
 
   test("show on the storage row as a knob off its default does, so the automation is never out of sight", () => {
-    local.map.set(PRESETS_KEY, JSON.stringify({ v: PRESETS_VERSION, presets: [PRESET] }));
+    local.map.set(oldKey(PRESETS_KEY), JSON.stringify({ v: PRESETS_VERSION, presets: [PRESET] }));
     expect(rowText(row(), DEFAULT_STATE, LIVE)).toBe("off");
     expect(isListed(row(), DEFAULT_STATE)).toBe(false);
     expect(applyOnLoad()).toBe(1);
@@ -313,11 +314,11 @@ describe("presets that applied on load", () => {
   });
 
   test("reset all turns apply on load off for every preset, and keeps the presets", () => {
-    local.map.set(PRESETS_KEY, JSON.stringify({ v: PRESETS_VERSION, presets: [PRESET] }));
+    local.map.set(oldKey(PRESETS_KEY), JSON.stringify({ v: PRESETS_VERSION, presets: [PRESET] }));
     applyOnLoad();
     // Reset all stops every action, as the row's x does.
     stopAction(action());
-    expect(JSON.parse(local.map.get(PRESETS_KEY) ?? "")).toEqual({
+    expect(JSON.parse(local.map.get(oldKey(PRESETS_KEY)) ?? "")).toEqual({
       v: PRESETS_VERSION,
       presets: [{ ...PRESET, onLoad: false }],
     });

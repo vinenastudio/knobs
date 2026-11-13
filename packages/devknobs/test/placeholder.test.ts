@@ -16,6 +16,7 @@ import {
   writeSnapshot,
 } from "../src/engine/placeholder";
 import { DEFAULT_STATE, merge, parse, STATE_VERSION } from "../src/engine/store";
+import { oldKey } from "../src/engine/storekeys";
 
 const PHONE = merge(DEFAULT_STATE, { device: "iphone-18-pro" });
 const VIEW = { innerWidth: 1440, innerHeight: 900, devicePixelRatio: 2 };
@@ -97,28 +98,28 @@ describe("the kept drawing", () => {
   });
 
   test("is not shown when what was kept is not in its shape", () => {
-    items.set(SNAPSHOT_KEY, "{");
+    items.set(oldKey(SNAPSHOT_KEY), "{");
     expect(readSnapshot(PHONE, VIEW)).toBeNull();
-    items.set(SNAPSHOT_KEY, JSON.stringify({ ...kept(), html: 1 }));
+    items.set(oldKey(SNAPSHOT_KEY), JSON.stringify({ ...kept(), html: 1 }));
     expect(readSnapshot(PHONE, VIEW)).toBeNull();
-    items.set(SNAPSHOT_KEY, JSON.stringify({ ...kept(), look: { ...LOOK, background: "red" } }));
+    items.set(oldKey(SNAPSHOT_KEY), JSON.stringify({ ...kept(), look: { ...LOOK, background: "red" } }));
     expect(readSnapshot(PHONE, VIEW)).toBeNull();
-    items.set(SNAPSHOT_KEY, JSON.stringify({ ...kept(), look: { ...LOOK, scheme: "dim" } }));
+    items.set(oldKey(SNAPSHOT_KEY), JSON.stringify({ ...kept(), look: { ...LOOK, scheme: "dim" } }));
     expect(readSnapshot(PHONE, VIEW)).toBeNull();
   });
 
   test("is not shown when kept before the header was read, which its colors cannot tell", () => {
     const { header: _, ...before } = LOOK;
-    items.set(SNAPSHOT_KEY, JSON.stringify({ ...kept(), look: before }));
+    items.set(oldKey(SNAPSHOT_KEY), JSON.stringify({ ...kept(), look: before }));
     expect(readSnapshot(PHONE, VIEW)).toBeNull();
   });
 
   test("is kept with its version, read from before versions, and left alone from a newer devknobs", () => {
     writeSnapshot(kept());
-    expect(JSON.parse(items.get(SNAPSHOT_KEY) ?? "").v).toBe(SNAPSHOT_VERSION);
-    items.set(SNAPSHOT_KEY, JSON.stringify(kept()));
+    expect(JSON.parse(items.get(oldKey(SNAPSHOT_KEY)) ?? "").v).toBe(SNAPSHOT_VERSION);
+    items.set(oldKey(SNAPSHOT_KEY), JSON.stringify(kept()));
     expect(readSnapshot(PHONE, VIEW)).toEqual(kept());
-    items.set(SNAPSHOT_KEY, JSON.stringify({ v: SNAPSHOT_VERSION + 1, ...kept() }));
+    items.set(oldKey(SNAPSHOT_KEY), JSON.stringify({ v: SNAPSHOT_VERSION + 1, ...kept() }));
     expect(readSnapshot(PHONE, VIEW)).toBeNull();
   });
 });

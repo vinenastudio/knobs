@@ -21,6 +21,7 @@ import {
   type Seen,
   take,
 } from "../src/engine/scrollkeep";
+import { oldKey } from "../src/engine/storekeys";
 
 const NOW = 1_000_000;
 
@@ -351,7 +352,7 @@ describe("across a reload", () => {
     page("/", 0);
     resume();
     expect(puts).toEqual([640]);
-    expect(items.has(SCROLL_KEY)).toBe(false);
+    expect(items.has(oldKey(SCROLL_KEY))).toBe(false);
     page("/", 0);
     resume();
     expect(puts).toEqual([]);
@@ -371,7 +372,7 @@ describe("across a reload", () => {
     page("/docs", 0);
     resume();
     expect(puts).toEqual([]);
-    expect(items.has(SCROLL_KEY)).toBe(false);
+    expect(items.has(oldKey(SCROLL_KEY))).toBe(false);
   });
 
   test("the page's reload keeps the frame's place for the frame built after it", () => {
@@ -382,11 +383,11 @@ describe("across a reload", () => {
     page("/", 0);
     resume();
     expect(puts).toEqual([]);
-    expect(items.has(SCROLL_KEY)).toBe(true);
+    expect(items.has(oldKey(SCROLL_KEY))).toBe(true);
     page("/", 0, FRAME_NAME);
     resume();
     expect(puts).toEqual([320]);
-    expect(items.has(SCROLL_KEY)).toBe(false);
+    expect(items.has(oldKey(SCROLL_KEY))).toBe(false);
   });
 
   test("the frame's own reload keeps its place, and leaves the page's alone", () => {
@@ -408,7 +409,7 @@ describe("across a reload", () => {
       },
     };
     keep(away as unknown as Window, "frame");
-    expect(items.has(SCROLL_KEY)).toBe(false);
+    expect(items.has(oldKey(SCROLL_KEY))).toBe(false);
   });
 
   test("storage that refuses keeps and restores nothing", () => {

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { oldKey } from "../src/engine/storekeys";
 import type { CustomColor } from "../src/types";
 import { knobOf } from "../src/ui/catalog";
 import {
@@ -187,7 +188,7 @@ describe("createColors", () => {
     const none = createColors();
     expect(none.get()).toEqual(NONE);
     none.destroy();
-    local.set(COLORS_KEY, JSON.stringify({ mat: ["#ffd400"] }));
+    local.set(oldKey(COLORS_KEY), JSON.stringify({ mat: ["#ffd400"] }));
     const kept = createColors();
     expect(kept.get()).toEqual({ mat: ["#ffd400"], grab: [] });
     kept.destroy();
@@ -200,7 +201,7 @@ describe("createColors", () => {
     colors.subscribe(() => heard++);
     colors.set("mat", ["#ffd400"]);
     colors.set("grab", ["#ff8c00", "#101820"]);
-    expect(JSON.parse(local.get(COLORS_KEY) ?? "")).toEqual({
+    expect(JSON.parse(local.get(oldKey(COLORS_KEY)) ?? "")).toEqual({
       v: COLORS_VERSION,
       mat: ["#ffd400"],
       grab: ["#ff8c00", "#101820"],
@@ -209,7 +210,7 @@ describe("createColors", () => {
     colors.set("grab", []);
     expect(colors.get()).toEqual({ mat: ["#ffd400"], grab: [] });
     colors.set("mat", []);
-    expect(local.has(COLORS_KEY)).toBe(false);
+    expect(local.has(oldKey(COLORS_KEY))).toBe(false);
     expect(heard).toBe(4);
     colors.destroy();
   });
@@ -227,7 +228,7 @@ describe("createColors", () => {
   test("hears a color another document of the origin added", () => {
     const { local, fire, listening } = stubWindow();
     const colors = createColors();
-    local.set(COLORS_KEY, JSON.stringify({ grab: ["#ff8c00"] }));
+    local.set(oldKey(COLORS_KEY), JSON.stringify({ grab: ["#ff8c00"] }));
     fire("devknobs:prefs");
     expect(colors.get().grab).toEqual([]);
     fire(COLORS_KEY);
@@ -239,14 +240,14 @@ describe("createColors", () => {
   test("in fresh mode there are a first visit's colors, none, and one added here is not written", () => {
     const { local } = stubWindow("?devknobs=fresh");
     const stored = JSON.stringify({ v: COLORS_VERSION, mat: ["#101820"], grab: [] });
-    local.set(COLORS_KEY, stored);
+    local.set(oldKey(COLORS_KEY), stored);
     const colors = createColors();
     expect(colors.get()).toEqual(NONE);
     colors.set("mat", ["#ffd400"]);
     expect(colors.get().mat).toEqual(["#ffd400"]);
-    expect(local.get(COLORS_KEY)).toBe(stored);
+    expect(local.get(oldKey(COLORS_KEY))).toBe(stored);
     colors.set("mat", []);
-    expect(local.get(COLORS_KEY)).toBe(stored);
+    expect(local.get(oldKey(COLORS_KEY))).toBe(stored);
     colors.destroy();
   });
 
@@ -256,7 +257,7 @@ describe("createColors", () => {
     let heard = 0;
     colors.subscribe(() => heard++);
     colors.set("grab", ["#ff8c00"]);
-    local.set(COLORS_KEY, JSON.stringify({ grab: ["#101820"] }));
+    local.set(oldKey(COLORS_KEY), JSON.stringify({ grab: ["#101820"] }));
     fire(COLORS_KEY);
     fire(null);
     expect(colors.get().grab).toEqual(["#ff8c00"]);

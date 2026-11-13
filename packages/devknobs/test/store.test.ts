@@ -16,6 +16,7 @@ import {
   save,
 } from "../src/engine/store";
 import { MAT_COLOR_NAMES } from "../src/engine/matcolors";
+import { oldKey } from "../src/engine/storekeys";
 import { ZOOM_MAX, ZOOM_MIN } from "../src/engine/zoom";
 import type { ClockValue, KnobsState } from "../src/types";
 
@@ -592,28 +593,28 @@ describe("the kept place", () => {
   test("a save never writes it, whatever the panel does", () => {
     const { session, local } = stubStorage();
     const kept = { side: "left", y: 40, top: 40, edge: "none", tab: "none" };
-    local.set(PLACE_KEY, JSON.stringify(kept));
+    local.set(oldKey(PLACE_KEY), JSON.stringify(kept));
     const state = load();
     save(merge(state, { panel: { side: "right", y: 300, top: 280, edge: "bottom" } }));
-    expect(session.has(STORAGE_KEY)).toBe(true);
-    expect(JSON.parse(local.get(PLACE_KEY) ?? "")).toEqual(kept);
+    expect(session.has(oldKey(STORAGE_KEY))).toBe(true);
+    expect(JSON.parse(local.get(oldKey(PLACE_KEY)) ?? "")).toEqual(kept);
   });
 
   test("a save never writes the pin there either, and keeping it does", () => {
     const { local } = stubStorage();
     const pinned = merge(load(), { panel: { docked: true } });
     save(pinned);
-    expect(local.has(PLACE_KEY)).toBe(false);
+    expect(local.has(oldKey(PLACE_KEY))).toBe(false);
     keepPlace(pinned);
-    expect(JSON.parse(local.get(PLACE_KEY) ?? "").docked).toBe(true);
+    expect(JSON.parse(local.get(oldKey(PLACE_KEY)) ?? "").docked).toBe(true);
     expect(load().panel.docked).toBe(true);
   });
 
   test("a session neither keeps real phone mode nor brings an old one back", () => {
     const { session } = stubStorage();
     save(merge(load(), { panel: { realPhone: true } }));
-    expect(JSON.parse(session.get(STORAGE_KEY) ?? "").panel.realPhone).toBeUndefined();
-    session.set(STORAGE_KEY, JSON.stringify({ v: STATE_VERSION, panel: { realPhone: true } }));
+    expect(JSON.parse(session.get(oldKey(STORAGE_KEY)) ?? "").panel.realPhone).toBeUndefined();
+    session.set(oldKey(STORAGE_KEY), JSON.stringify({ v: STATE_VERSION, panel: { realPhone: true } }));
     expect(load().panel.realPhone).toBe(false);
   });
 
@@ -623,8 +624,8 @@ describe("the kept place", () => {
       panel: { side: "left", y: 120, top: 80, edge: "bottom", tab: "top" },
     });
     keepPlace(state);
-    expect(local.get(PLACE_KEY)).toBe(placeText(state));
-    expect(parse(null, local.get(PLACE_KEY)).panel).toEqual({
+    expect(local.get(oldKey(PLACE_KEY))).toBe(placeText(state));
+    expect(parse(null, local.get(oldKey(PLACE_KEY))).panel).toEqual({
       ...DEFAULT_STATE.panel,
       side: "left",
       y: 120,
@@ -644,7 +645,7 @@ describe("versions", () => {
     const { session } = stubStorage();
     const state = merge(DEFAULT_STATE, { scheme: "dark", mat: "green" });
     save(state);
-    const stored = JSON.parse(session.get(STORAGE_KEY) ?? "");
+    const stored = JSON.parse(session.get(oldKey(STORAGE_KEY)) ?? "");
     expect(stored.v).toBe(STATE_VERSION);
     expect(load()).toEqual(state);
   });
@@ -652,15 +653,15 @@ describe("versions", () => {
   test("a state and place kept before versions read as ever, and the next writes carry the version", () => {
     const { session, local } = stubStorage();
     const kept = { scheme: "dark", panel: { open: true, pinned: ["scheme"] } };
-    session.set(STORAGE_KEY, JSON.stringify(kept));
-    local.set(PLACE_KEY, JSON.stringify({ side: "left", y: 40, top: 40, edge: "none" }));
+    session.set(oldKey(STORAGE_KEY), JSON.stringify(kept));
+    local.set(oldKey(PLACE_KEY), JSON.stringify({ side: "left", y: 40, top: 40, edge: "none" }));
     const state = load();
     expect(state.scheme).toBe("dark");
     expect(state.panel).toMatchObject({ open: true, side: "left", pinned: ["scheme"] });
     save(state);
     keepPlace(state);
-    expect(JSON.parse(session.get(STORAGE_KEY) ?? "").v).toBe(STATE_VERSION);
-    expect(JSON.parse(local.get(PLACE_KEY) ?? "").v).toBe(PLACE_VERSION);
+    expect(JSON.parse(session.get(oldKey(STORAGE_KEY)) ?? "").v).toBe(STATE_VERSION);
+    expect(JSON.parse(local.get(oldKey(PLACE_KEY)) ?? "").v).toBe(PLACE_VERSION);
     expect(load()).toEqual(state);
   });
 
@@ -668,11 +669,11 @@ describe("versions", () => {
     const { session, local } = stubStorage();
     const state = JSON.stringify({ v: STATE_VERSION + 1, scheme: "dark" });
     const place = JSON.stringify({ v: PLACE_VERSION + 1, side: "left" });
-    session.set(STORAGE_KEY, state);
-    local.set(PLACE_KEY, place);
+    session.set(oldKey(STORAGE_KEY), state);
+    local.set(oldKey(PLACE_KEY), place);
     expect(load()).toEqual(DEFAULT_STATE);
-    expect(session.get(STORAGE_KEY)).toBe(state);
-    expect(local.get(PLACE_KEY)).toBe(place);
+    expect(session.get(oldKey(STORAGE_KEY))).toBe(state);
+    expect(local.get(oldKey(PLACE_KEY))).toBe(place);
   });
 });
 

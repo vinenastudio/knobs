@@ -356,7 +356,7 @@ describe("the tree of stores", () => {
   test("the presets stand last, under a small label of their own, as they are devknobs' and not the page's", async () => {
     const shown = await listed();
     const [group] = shown.root.find("group");
-    expect(OWN_GROUP).toBe("devknobs");
+    expect(OWN_GROUP).toBe("knobs");
     expect(group?.attributes.get("aria-label")).toBe(OWN_GROUP);
     expect(group?.find("group-label")[0]?.textContent).toBe(OWN_GROUP);
     expect(group?.find("row-label").map((label) => label.textContent)).toEqual(["presets"]);

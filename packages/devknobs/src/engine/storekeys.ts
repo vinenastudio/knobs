@@ -1,13 +1,16 @@
 /**
  * The names of the items knobs keeps in web storage. Each is `knobs` or
  * `knobs:<name>`, and was `devknobs` or `devknobs:<name>` before the rename.
- * An old npm copy and a new extension copy can share one origin, so for now
- * a read takes the new item first and the old one where the new is absent,
- * a write puts both, and a remove drops both.
+ * An old copy (an npm copy before 0.8, or the 0.7 extension) and a new copy
+ * can share one origin. The old copy reads and writes the old name only, and
+ * a new copy writes both names with one value, so where the two differ, the
+ * old copy wrote last. While both are written, the old name is the truth: a
+ * read takes the old item, a write puts the old item first and then the new
+ * one, a remove drops both, and an item is listed only where its old name is.
  *
- * Writing the old items goes away two minor releases after 0.8: from then on
- * only the new item is written, and a read that finds only the old one moves
- * it over and deletes it.
+ * Writing the old items goes away two minor releases after 0.8. That release
+ * must copy each old item to its new name once, then read the new name only,
+ * and drop the old item on every write, so a stale old item never comes back.
  */
 
 const NAME = "knobs";
@@ -36,18 +39,22 @@ export function sameItem(eventKey: string | null, key: string): boolean {
   return eventKey === key || eventKey === oldKey(key);
 }
 
-/** The item `key`, the new one first, then the old one. */
+/**
+ * The item `key`, read under its old name where it has one. A new item with
+ * no old one beside it is not read: an old copy removes the old name only, so
+ * that new item is one the old copy removed.
+ */
 export function readItem(storage: Storage | null | undefined, key: string): string | null {
   if (!storage) return null;
-  return storage.getItem(key) ?? storage.getItem(oldKey(key));
+  return storage.getItem(oldKey(key));
 }
 
-/** Write the item `key` under both names. */
+/** Write the item `key` under both names, the old one first, so a refused second write leaves the truth current. */
 export function writeItem(storage: Storage | null | undefined, key: string, value: string): void {
   if (!storage) return;
-  storage.setItem(key, value);
   const old = oldKey(key);
-  if (old !== key) storage.setItem(old, value);
+  storage.setItem(old, value);
+  if (old !== key) storage.setItem(key, value);
 }
 
 /** Drop the item `key` under both names. */
@@ -57,13 +64,15 @@ export function removeItem(storage: Storage | null | undefined, key: string): vo
   storage.removeItem(oldKey(key));
 }
 
-/** The new names of the items that start with `prefix`, a new name, under either name, each once. */
+/** The new names of the items that start with `prefix`, a new name, listed where their old name is, as `readItem` reads them. */
 export function itemKeys(storage: Storage, prefix: string): string[] {
-  const keys = new Set<string>();
+  const old = oldKey(prefix);
+  const keys: string[] = [];
   for (let index = 0; index < storage.length; index++) {
     const key = storage.key(index);
-    const name = key === null ? null : ownName(key);
-    if (name?.startsWith(prefix)) keys.add(name);
+    if (key === null || !key.startsWith(old)) continue;
+    const name = ownName(key) ?? key;
+    if (name.startsWith(prefix)) keys.push(name);
   }
-  return [...keys];
+  return keys;
 }

@@ -22,7 +22,7 @@ import {
 import { type Change, createEditLog, type Edit, type EditLog } from "../src/edit/log";
 import { AFTER_MISSED, replayEdits } from "../src/edit/replay";
 import { RISK } from "../src/edit/risk";
-import { itemKeys } from "../src/engine/storekeys";
+import { itemKeys, oldKey } from "../src/engine/storekeys";
 import { as, elem, page, type PageNode, svg, text } from "./dom-page";
 import { Block, fakeCss } from "./edit-block";
 
@@ -622,7 +622,7 @@ describe("the page's own store", () => {
   test("keeps a page's edits under its path, and the pages kept longest ago go past the cap", () => {
     const local = storage();
     at("/", local);
-    for (let page = 0; page < MAX_PAGES; page++) local.setItem(`${EDITS_KEY}/p${page}`, JSON.stringify({ v: 1, edits: [], at: 1000 + page }));
+    for (let page = 0; page < MAX_PAGES; page++) local.setItem(oldKey(`${EDITS_KEY}/p${page}`), JSON.stringify({ v: 1, edits: [], at: 1000 + page }));
     localEditsStore().save({ v: 1, edits: [] });
     const kept = itemKeys(local, EDITS_KEY);
     expect(kept).toHaveLength(MAX_PAGES);
@@ -640,8 +640,8 @@ describe("the page's own store", () => {
     const store = localEditsStore();
     window.location.pathname = "/shop/cart";
     store.save({ v: 1, edits: [] });
-    expect(local.getItem(`${EDITS_KEY}/shop`)).not.toBeNull();
-    expect(local.getItem(`${EDITS_KEY}/shop/cart`)).toBeNull();
+    expect(local.getItem(oldKey(`${EDITS_KEY}/shop`))).not.toBeNull();
+    expect(local.getItem(oldKey(`${EDITS_KEY}/shop/cart`))).toBeNull();
     store.save(null);
     expect(local.length).toBe(0);
   });
@@ -654,16 +654,16 @@ describe("the page's own store", () => {
       set(key, value);
     };
     at("/new", local);
-    for (const [page, when] of [["/a", 3], ["/b", 1], ["/c", 2]] as const) set(`${EDITS_KEY}${page}`, JSON.stringify({ v: 1, edits: [], at: when }));
+    for (const [page, when] of [["/a", 3], ["/b", 1], ["/c", 2]] as const) set(oldKey(`${EDITS_KEY}${page}`), JSON.stringify({ v: 1, edits: [], at: when }));
     localEditsStore().save({ v: 1, edits: [] });
-    expect(local.getItem(`${EDITS_KEY}/new`)).not.toBeNull();
-    expect(local.getItem(`${EDITS_KEY}/b`)).toBeNull();
-    expect(local.getItem(`${EDITS_KEY}/a`)).not.toBeNull();
+    expect(local.getItem(oldKey(`${EDITS_KEY}/new`))).not.toBeNull();
+    expect(local.getItem(oldKey(`${EDITS_KEY}/b`))).toBeNull();
+    expect(local.getItem(oldKey(`${EDITS_KEY}/a`))).not.toBeNull();
   });
 
   test("reads and writes nothing in fresh mode", () => {
     const local = storage();
-    local.setItem(`${EDITS_KEY}/`, JSON.stringify({ v: 1, edits: [] }));
+    local.setItem(oldKey(`${EDITS_KEY}/`), JSON.stringify({ v: 1, edits: [] }));
     at("/", local, "?devknobs=fresh");
     expect(localEditsStore().load()).toBeNull();
     localEditsStore().save(null);

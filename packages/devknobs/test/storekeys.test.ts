@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { EDITS_KEY, localEditsStore } from "../src/edit/keep";
 import { wiped } from "../src/engine/fresh";
-import { load, merge, save, STORAGE_KEY } from "../src/engine/store";
+import { DEFAULT_STATE, keepPlace, load, merge, save, STORAGE_KEY } from "../src/engine/store";
 import {
   isOwnKey,
   itemKeys,
@@ -12,7 +12,13 @@ import {
   sameItem,
   writeItem,
 } from "../src/engine/storekeys";
+import { storedPresets } from "../src/storage/onload";
+import { type Preset, savePresets } from "../src/storage/presets";
 import { isOwn } from "../src/storage/site";
+import { createPrefs, PREFS_KEY, PREFS_VERSION } from "../src/ui/prefs";
+
+/** Where a document's fresh mode is settled, as fresh.ts keeps it. */
+const FRESH_MODE = Symbol.for("devknobs.fresh");
 
 function storage(): Storage {
   const items = new Map<string, string>();
@@ -60,13 +66,25 @@ describe("the names of the items knobs keeps", () => {
 });
 
 describe("reading, writing and removing", () => {
-  test("a read takes the new item first, then the old one", () => {
+  test("a read takes the old name, which an old copy writes last", () => {
     const store = storage();
     expect(readItem(store, "knobs:prefs")).toBeNull();
     store.setItem("devknobs:prefs", "old");
     expect(readItem(store, "knobs:prefs")).toBe("old");
     store.setItem("knobs:prefs", "new");
-    expect(readItem(store, "knobs:prefs")).toBe("new");
+    expect(readItem(store, "knobs:prefs")).toBe("old");
+  });
+
+  test("a new item with no old one beside it reads as removed", () => {
+    const store = storage();
+    store.setItem("knobs:prefs", "new");
+    expect(readItem(store, "knobs:prefs")).toBeNull();
+  });
+
+  test("a key with no old name reads as itself", () => {
+    const store = storage();
+    store.setItem("token", "x");
+    expect(readItem(store, "token")).toBe("x");
   });
 
   test("a write puts both names, a remove drops both", () => {
@@ -78,21 +96,33 @@ describe("reading, writing and removing", () => {
     expect(keys(store)).toEqual([]);
   });
 
+  test("a write puts the old name first, so a refused second write leaves it current", () => {
+    const store = storage();
+    writeItem(store, "knobs:prefs", "one");
+    const set = store.setItem;
+    store.setItem = (key: string, value: string) => {
+      if (key === "knobs:prefs") throw new Error("QuotaExceededError");
+      set(key, value);
+    };
+    expect(() => writeItem(store, "knobs:prefs", "two")).toThrow();
+    expect(readItem(store, "knobs:prefs")).toBe("two");
+  });
+
   test("no storage reads as nothing, and writes nothing", () => {
     expect(readItem(null, "knobs")).toBeNull();
     expect(() => writeItem(null, "knobs", "x")).not.toThrow();
     expect(() => removeItem(undefined, "knobs")).not.toThrow();
   });
 
-  test("the items under a prefix list once each, under the new name", () => {
+  test("the items under a prefix list once each, under the new name, where their old name is", () => {
     const store = storage();
     store.setItem("knobs:edits:/a", "1");
     store.setItem("devknobs:edits:/a", "1");
     store.setItem("devknobs:edits:/b", "2");
     store.setItem("knobs:edits:/c", "3");
     store.setItem("knobs:prefs", "{}");
-    store.setItem("knobs:edits-mine", "page");
-    expect(itemKeys(store, "knobs:edits:").sort()).toEqual(["knobs:edits:/a", "knobs:edits:/b", "knobs:edits:/c"]);
+    store.setItem("devknobs:edits-mine", "page");
+    expect(itemKeys(store, "knobs:edits:").sort()).toEqual(["knobs:edits:/a", "knobs:edits:/b"]);
   });
 });
 
@@ -162,6 +192,88 @@ describe("an old copy and a new copy on one origin", () => {
     window.dispatchEvent(event("devknobs:edits:/other"));
     stop();
     expect(heard).toBe(2);
+  });
+});
+
+describe("an old copy writes after the new one", () => {
+  let before: PropertyDescriptor | undefined;
+
+  function open(local: Storage, session: Storage, search = ""): void {
+    before ??= Object.getOwnPropertyDescriptor(globalThis, "window");
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: Object.assign(new EventTarget(), {
+        localStorage: local,
+        sessionStorage: session,
+        location: { pathname: "/", search },
+        name: "",
+      }),
+    });
+  }
+
+  afterEach(() => {
+    if (before) Object.defineProperty(globalThis, "window", before);
+    else Reflect.deleteProperty(globalThis, "window");
+    before = undefined;
+  });
+
+  test("the new copy hears the old copy's preferences and reads them", () => {
+    const local = storage();
+    open(local, storage());
+    const prefs = createPrefs();
+    prefs.setHandle(false);
+    expect(local.getItem("devknobs:prefs")).toBe(local.getItem(PREFS_KEY));
+    // The old copy turns the handle back on, under the old name only.
+    local.setItem("devknobs:prefs", JSON.stringify({ v: PREFS_VERSION }));
+    window.dispatchEvent(Object.assign(new Event("storage"), { key: "devknobs:prefs" }));
+    expect(prefs.get().handle).toBe(true);
+    prefs.destroy();
+  });
+
+  test("presets the old copy deleted stay deleted", () => {
+    const local = storage();
+    open(local, storage());
+    const preset: Preset = { name: "a", local: [], session: [], cookies: [], onLoad: true, clearFirst: false };
+    expect(savePresets([preset])).toBeNull();
+    expect(storedPresets()).toHaveLength(1);
+    // The old copy saves no presets: it removes the old name only.
+    local.removeItem("devknobs:storage-presets");
+    expect(storedPresets()).toEqual([]);
+  });
+
+  test("fresh mode the old copy settled first starts the new copy from the defaults", () => {
+    const local = storage();
+    const session = storage();
+    open(local, session);
+    save(merge(load(), { scheme: "dark" }));
+    keepPlace(merge(load(), { panel: { side: "left", docked: true } }));
+    Reflect.deleteProperty(window, FRESH_MODE);
+    Object.assign(window, { location: { pathname: "/", search: "?devknobs=fresh" } });
+    // The 0.7 extension at document start drops `devknobs` and `devknobs:*` only, and settles the mode.
+    for (const key of keys(session)) if (key === "devknobs" || key.startsWith("devknobs:")) session.removeItem(key);
+    Reflect.set(window, FRESH_MODE, true);
+    expect(session.getItem(STORAGE_KEY)).not.toBeNull();
+    expect(load()).toEqual(DEFAULT_STATE);
+  });
+
+  test("the new copy takes the panel's place the old copy kept", () => {
+    const local = storage();
+    open(local, storage());
+    keepPlace(merge(load(), { panel: { side: "left" } }));
+    const moved = JSON.parse(local.getItem("devknobs:place") ?? "{}");
+    local.setItem("devknobs:place", JSON.stringify({ ...moved, side: "right", docked: true }));
+    expect(load().panel).toMatchObject({ side: "right", docked: true });
+  });
+
+  test("a page the old copy forgot is gone for the new copy too", () => {
+    const local = storage();
+    open(local, storage());
+    localEditsStore().save({ v: 1, edits: [] });
+    expect(itemKeys(local, EDITS_KEY)).toEqual([`${EDITS_KEY}/`]);
+    // The old copy evicts the page: it removes the old name only.
+    local.removeItem("devknobs:edits:/");
+    expect(itemKeys(local, EDITS_KEY)).toEqual([]);
+    expect(localEditsStore().load()).toBeNull();
   });
 });
 

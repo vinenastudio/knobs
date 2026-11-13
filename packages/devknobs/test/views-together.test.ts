@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as engine from "../src/engine";
 import { DEFAULT_STATE, merge } from "../src/engine/store";
+import { oldKey } from "../src/engine/storekeys";
 import type { GrabControl } from "../src/grab/control";
 import { createStore, type RequestStore } from "../src/requests/store";
 import { applyOnLoad, PRESETS_KEY, PRESETS_VERSION } from "../src/storage/onload";
@@ -211,7 +212,7 @@ describe("reset all, with every action on the page", () => {
       onLoad: true,
       clearFirst: false,
     };
-    at.site.localStorage.setItem(PRESETS_KEY, JSON.stringify({ v: PRESETS_VERSION, presets: [preset] }));
+    at.site.localStorage.setItem(oldKey(PRESETS_KEY), JSON.stringify({ v: PRESETS_VERSION, presets: [preset] }));
     applyOnLoad();
     expect(actionOf("storage").value?.()).toBe("1 preset");
     await showStorage(at);
@@ -219,7 +220,7 @@ describe("reset all, with every action on the page", () => {
     expect(at.pane.view()).toBeNull();
     expect(live(at)).toEqual([]);
     expect(actionOf("storage").value?.()).toBe("");
-    expect(JSON.parse(at.site.localStorage.getItem(PRESETS_KEY) ?? "")).toEqual({
+    expect(JSON.parse(at.site.localStorage.getItem(oldKey(PRESETS_KEY)) ?? "")).toEqual({
       v: PRESETS_VERSION,
       presets: [{ ...preset, onLoad: false }],
     });

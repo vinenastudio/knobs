@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import { DEFAULT_STATE } from "../src/engine/store";
+import { oldKey } from "../src/engine/storekeys";
 import type { Inspection, RuleBlock, StyleBlock, StyleDeclaration } from "../src/styles/types";
 import type { KnobsState } from "../src/types";
 import { createPrefs, PREFS_KEY, PREFS_VERSION, type StylesMode } from "../src/ui/prefs";
@@ -571,7 +572,7 @@ describe("the mode in the preferences", () => {
     const node = start(door(prefs));
     expect(choices(node)[0]).toEqual(["simple", "true", true]);
     choose(node, "advanced");
-    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({ v: PREFS_VERSION, stylesMode: "advanced" });
+    expect(JSON.parse(local.get(oldKey(PREFS_KEY)) ?? "")).toEqual({ v: PREFS_VERSION, stylesMode: "advanced" });
     view?.destroy();
     prefs.destroy();
     const next = createPrefs();
@@ -582,13 +583,13 @@ describe("the mode in the preferences", () => {
   test("in fresh mode is simple whatever is kept, and the one picked is not written", () => {
     const local = stubStorage("?devknobs=fresh");
     const was = JSON.stringify({ v: 3, stylesMode: "advanced" });
-    local.set(PREFS_KEY, was);
+    local.set(oldKey(PREFS_KEY), was);
     const prefs = createPrefs();
     const node = start(door(prefs));
     expect(choices(node)[0]).toEqual(["simple", "true", true]);
     choose(node, "advanced");
     expect(choices(node)[1]).toEqual(["advanced", "true", true]);
-    expect(local.get(PREFS_KEY)).toBe(was);
+    expect(local.get(oldKey(PREFS_KEY))).toBe(was);
     prefs.destroy();
   });
 });
