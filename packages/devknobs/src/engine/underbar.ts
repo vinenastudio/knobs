@@ -1,7 +1,8 @@
+import { bandMedia, bandSpan, forgetPixels, inSpan, meets, type Overlay, overlayOf, type Span } from "./bandmedia";
 import { el, type Look, place } from "./browserkit";
 import type { Bars } from "./browserui";
 import type { Rect } from "./mock";
-import { copyPage, drawing, layoutZoom, ownZoom, rootSize, rootZoom, svgUrl } from "./pageshot";
+import { copyPage, drawing, layoutZoom, MEDIA, ownZoom, rootSize, rootZoom, svgUrl } from "./pageshot";
 
 /**
  * The page under Safari's bottom bars. The frame ends where Safari's viewport
@@ -11,10 +12,12 @@ import { copyPage, drawing, layoutZoom, ownZoom, rootSize, rootZoom, svgUrl } fr
  * viewport's bottom edge: one picture of the whole document, drawn by the
  * browser through an svg, which a scroll only moves. It is pictured again
  * when the page changes, at most as often as keeps its cost to a tenth of
- * the time. What is pinned to the screen is left out of it, as it stays in
- * the viewport on the phone, and a fixed footer's color is carried down
- * instead, by the screen's fill under the band. A page out of reach shows
- * that fill too.
+ * the time, and when the band scrolls past the pictures read for it. The
+ * pictures, videos and drawings near the band are in it as they show, which
+ * a drawing of the copy could not load (see `bandmedia.ts`). What is pinned
+ * to the screen is left out of it, as it stays in the viewport on the phone,
+ * and a fixed footer's color is carried down instead, by the screen's fill
+ * under the band. A page out of reach shows that fill too.
  */
 
 export const UNDERBAR_CSS = `
@@ -25,7 +28,8 @@ export const UNDERBAR_CSS = `
   transform-origin: 0 0;
 }
 .underbar[hidden] { display: none; }
-.underbar > img {
+.underbar > img,
+.underbar > canvas {
   position: absolute;
   left: 0;
   top: 0;
@@ -84,20 +88,44 @@ export interface Picture {
   src: string;
   width: number;
   height: number;
+  /** The stretch of the document whose pictures it shows, or null where the page has none to show. */
+  span: Span | null;
+  /** What the frame may not read near the band, drawn by hand over it. */
+  overlay: Overlay | null;
+}
+
+/** Is a load of `target`, in a page scrolled `scrollY`, one of a picture or video that meets `span`? */
+function nearLoad(target: EventTarget | null, scrollY: number, span: Span): boolean {
+  const node = target as Element | null;
+  if (!node || typeof node.getBoundingClientRect !== "function" || !node.matches?.("img, video")) return false;
+  return meets(node.getBoundingClientRect(), scrollY, span);
 }
 
 /**
  * The whole page in `frame` as an svg as tall as the document, laid out as
  * the frame lays it out, or null where it is out of reach. Its viewport
  * lengths and the root's height are the frame's, and what is fixed to the
- * screen is left out.
+ * screen is left out. The pictures near the band, `band` of the document's
+ * css px tall under the viewport, are in it, and `loaded` is told when one
+ * comes that was not there yet.
  */
-export function pictureOf(frame: HTMLIFrameElement): Picture | null {
+export function pictureOf(frame: HTMLIFrameElement, band = 0, loaded: () => void = () => {}): Picture | null {
   const doc = frame.contentDocument;
   const view = frame.contentWindow;
   if (!doc?.documentElement || !view || view.innerWidth <= 0) return null;
   const { innerWidth: width, innerHeight: tall } = view;
-  const copy = copyPage(frame, (node) => view.getComputedStyle(node).position === "fixed");
+  const span = bandSpan(view.scrollY, tall, band);
+  const media = bandMedia(doc, view, span, loaded);
+  /** What goes into the copies of the pictures, once the copy's viewport lengths are px: data has none. */
+  const puts: (() => void)[] = [];
+  const copy = copyPage(
+    frame,
+    (node) => view.getComputedStyle(node).position === "fixed",
+    (node, copied) => {
+      const put = media.fills.get(node);
+      if (put) puts.push(() => put(copied));
+    },
+  );
   if (!copy) return null;
   for (const style of copy.querySelectorAll("style")) {
     style.textContent = viewportUnits(style.textContent ?? "", tall);
@@ -105,6 +133,7 @@ export function pictureOf(frame: HTMLIFrameElement): Picture | null {
   for (const node of copy.querySelectorAll("[style]")) {
     node.setAttribute("style", viewportUnits(node.getAttribute("style") ?? "", tall));
   }
+  for (const put of puts) put();
   const full = Math.max(doc.documentElement.scrollHeight, tall);
   // The root as tall as the frame's, so a body at 100% is too, as the picture's own viewport is not.
   // Its box has the root's own zoom in it already, which its zoomed height would add again.
@@ -114,7 +143,16 @@ export function pictureOf(frame: HTMLIFrameElement): Picture | null {
   const zoomed = rootZoom(doc, view, zoom);
   copy.setAttribute("style", `${copy.getAttribute("style") ?? ""};${sized};height:${root}px !important${zoomed}`);
   const markup = new XMLSerializer().serializeToString(copy);
-  return { src: svgUrl(drawing(markup, width, full, sized, zoom)), width, height: full };
+  // A page with no pictures anywhere needs no new picture as it scrolls.
+  const shows = doc.querySelector(MEDIA) !== null || /url\(\s*(?!["']?data:|&quot;data:)/i.test(markup);
+  const ratio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+  return {
+    src: svgUrl(drawing(markup, width, full, sized, zoom)),
+    width,
+    height: full,
+    span: shows ? span : null,
+    overlay: overlayOf(media.unread, span, width, ratio),
+  };
 }
 
 export interface Underbar {
@@ -135,6 +173,8 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
   glass.append(band);
   let image: HTMLImageElement | null = null;
   let picture: Picture | null = null;
+  /** What the frame may not read near the band, over the picture. */
+  let cover: HTMLCanvasElement | null = null;
   /** What the picture was taken of: the page, its viewport and the document's height. */
   let taken = "";
   let watched: Document | null = null;
@@ -144,8 +184,35 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
   let painting = false;
   let last = 0;
   let cost = 0;
-  /** The band's width, in the screen's css px. */
+  /** The band's width and height, in the screen's css px. */
   let wide = 0;
+  let high = 0;
+
+  /** Picture the page again: it changed, or the pictures near the band did. */
+  const again = () => {
+    changed = true;
+    soon();
+  };
+  /** The band's height in the document's css px, `across` of them as wide as the band. */
+  const bandOf = (across: number) => (wide > 0 ? (high * across) / wide : 0);
+  /** A picture or video near the band came in, which no change to the page tells of. */
+  const onLoad = (event: Event) => {
+    try {
+      const view = frame.contentWindow;
+      if (!view || band.hidden) return;
+      const span = bandSpan(view.scrollY, view.innerHeight, bandOf(view.innerWidth));
+      if (nearLoad(event.target, view.scrollY, span)) again();
+    } catch {
+      // The frame went to another origin.
+    }
+  };
+  const dropCover = () => {
+    if (!cover) return;
+    cover.remove();
+    cover.width = 0;
+    cover.height = 0;
+    cover = null;
+  };
 
   const keyOf = (): string | null => {
     try {
@@ -154,11 +221,13 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
       if (!doc?.documentElement || !view) return null;
       if (doc !== watched) {
         observer?.disconnect();
-        const next = new MutationObserver(() => {
-          changed = true;
-          soon();
-        });
+        watched?.removeEventListener("load", onLoad, true);
+        watched?.removeEventListener("loadeddata", onLoad, true);
+        const next = new MutationObserver(again);
         next.observe(doc, { subtree: true, childList: true, attributes: true, characterData: true });
+        // Loads go on in the capture, as they do not bubble.
+        doc.addEventListener("load", onLoad, true);
+        doc.addEventListener("loadeddata", onLoad, true);
         observer = next;
         watched = doc;
         changed = true;
@@ -166,6 +235,7 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
         image?.remove();
         image = null;
         picture = null;
+        dropCover();
         taken = "";
       }
       return `${view.innerWidth}|${view.innerHeight}|${doc.documentElement.scrollHeight}`;
@@ -179,8 +249,12 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
     try {
       const view = frame.contentWindow;
       if (!view) return;
-      const shift = bandShift(view.scrollY, view.innerHeight, wide / picture.width);
+      const scale = wide / picture.width;
+      const shift = bandShift(view.scrollY, view.innerHeight, scale);
       image.style.transform = `translate3d(0, ${shift}px, 0)`;
+      if (cover && picture.overlay) cover.style.transform = `translate3d(0, ${shift + picture.overlay.span.top * scale}px, 0)`;
+      // Scrolled past the pictures read for the band: read those it meets now.
+      if (picture.span && !inSpan(picture.span, view.scrollY, view.innerHeight, bandOf(picture.width))) again();
     } catch {
       // The frame went to another origin.
     }
@@ -194,6 +268,7 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
       image?.remove();
       image = null;
       picture = null;
+      dropCover();
       return;
     }
     if (!changed && key === taken) return;
@@ -202,7 +277,7 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
     const start = performance.now();
     let next: Picture | null = null;
     try {
-      next = pictureOf(frame);
+      next = pictureOf(frame, bandOf(frame.contentWindow?.innerWidth ?? 0), again);
     } catch {
       next = null;
     }
@@ -219,12 +294,18 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
     last = performance.now();
     performance.measure("devknobs underbar picture", { start, duration: cost });
     painting = false;
-    if (!next || !drawn) return;
+    if (!next || !drawn) {
+      if (next?.overlay) next.overlay.canvas.width = 0;
+      return;
+    }
     fresh.alt = "";
     if (image) image.replaceWith(fresh);
     else band.append(fresh);
     image = fresh;
     picture = next;
+    dropCover();
+    cover = next.overlay?.canvas ?? null;
+    if (cover) band.append(cover);
     taken = key;
     fit();
     // The page may have changed while it was pictured.
@@ -243,6 +324,11 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
     if (!image || !picture) return;
     image.style.width = `${wide}px`;
     image.style.height = `${(picture.height * wide) / picture.width}px`;
+    if (cover && picture.overlay) {
+      const { span } = picture.overlay;
+      cover.style.width = `${wide}px`;
+      cover.style.height = `${((span.bottom - span.top) * wide) / picture.width}px`;
+    }
     move();
   }
 
@@ -258,6 +344,7 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
       // Drawn at the frame's zoom, from where it sits at that zoom, as the frame is.
       place(band, rect.x * zoom, rect.y * zoom, rect.width, rect.height);
       wide = rect.width;
+      high = rect.height;
       band.style.transform = zoom === 1 ? "" : `scale(${zoom})`;
       band.style.background = look.background;
       const key = keyOf();
@@ -273,7 +360,11 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
       clearTimeout(waiting);
       observer?.disconnect();
       observer = null;
+      watched?.removeEventListener("load", onLoad, true);
+      watched?.removeEventListener("loadeddata", onLoad, true);
       watched = null;
+      dropCover();
+      forgetPixels();
       band.remove();
     },
   };

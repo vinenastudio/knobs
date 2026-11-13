@@ -1,0 +1,468 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { bandSpan, forgetPixels, inSpan, layersOf, readSize, sizedPicture, urlOf } from "../src/engine/bandmedia";
+import { blankUrl } from "../src/engine/pageshot";
+import { pictureOf } from "../src/engine/underbar";
+
+/** How the page in the frame lays out: its viewport, its scroll and its device px. */
+const VIEW = { innerWidth: 400, innerHeight: 700, scrollX: 0, scrollY: 0, devicePixelRatio: 3 };
+
+/** A computed style with what a page that sets nothing computes. */
+function computed(over: Record<string, string> = {}): Record<string, string> {
+  return {
+    position: "static",
+    overflowX: "visible",
+    overflowY: "visible",
+    backgroundImage: "none",
+    backgroundSize: "auto",
+    backgroundPosition: "0% 0%",
+    objectFit: "fill",
+    objectPosition: "50% 50%",
+    imageRendering: "auto",
+    fontSize: "16px",
+    zoom: "1",
+    borderLeftWidth: "0px",
+    borderRightWidth: "0px",
+    borderTopWidth: "0px",
+    borderBottomWidth: "0px",
+    paddingLeft: "0px",
+    paddingRight: "0px",
+    paddingTop: "0px",
+    paddingBottom: "0px",
+    borderTopLeftRadius: "0px",
+    borderTopRightRadius: "0px",
+    borderBottomRightRadius: "0px",
+    borderBottomLeftRadius: "0px",
+    ...over,
+  };
+}
+
+/** Does `node` match one part of a selector list: a name or an attribute that is set. */
+function matchesPart(node: Node, part: string): boolean {
+  return part.startsWith("[") ? node.attributes.has(part.slice(1, -1)) : node.localName === part;
+}
+
+/** An element of the frame's page, or of its copy: where it lies in the document, what it computes, and what it holds. */
+class Node {
+  children: Node[] = [];
+  parentElement: Node | null = null;
+  readonly attributes = new Map<string, string>();
+  text = "";
+  /** Its box in the document's css px, and its computed style. */
+  box = { left: 0, top: 0, width: 0, height: 0 };
+  style = computed();
+  constructor(
+    readonly localName: string,
+    attributes: Record<string, string> = {},
+    children: Node[] = [],
+  ) {
+    for (const [name, value] of Object.entries(attributes)) this.attributes.set(name, value);
+    this.append(...children);
+  }
+  at(left: number, top: number, width: number, height: number): this {
+    this.box = { left, top, width, height };
+    return this;
+  }
+  styled(over: Record<string, string>): this {
+    this.style = computed(over);
+    return this;
+  }
+  /** Its box in the viewport, as the frame is scrolled now. */
+  getBoundingClientRect() {
+    const top = this.box.top - VIEW.scrollY;
+    const { left, width, height } = this.box;
+    return { left, top, width, height, right: left + width, bottom: top + height, x: left, y: top };
+  }
+  get textContent(): string {
+    return this.text;
+  }
+  set textContent(text: string) {
+    this.text = text;
+  }
+  append(...nodes: Node[]): void {
+    for (const node of nodes) {
+      node.parentElement = this;
+      this.children.push(node);
+    }
+  }
+  remove(): void {
+    const holder = this.parentElement;
+    if (holder) holder.children = holder.children.filter((node) => node !== this);
+    this.parentElement = null;
+  }
+  getAttribute(name: string): string | null {
+    return this.attributes.get(name) ?? null;
+  }
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
+  }
+  hasAttribute(name: string): boolean {
+    return this.attributes.has(name);
+  }
+  removeAttribute(name: string): void {
+    this.attributes.delete(name);
+  }
+  all(): Node[] {
+    return this.children.flatMap((child) => [child, ...child.all()]);
+  }
+  getElementsByTagName(): Node[] {
+    return this.all();
+  }
+  matches(selector: string): boolean {
+    return selector.split(",").some((part) => matchesPart(this, part.trim()));
+  }
+  closest(selector: string): Node | null {
+    for (let at: Node | null = this; at; at = at.parentElement) if (at.matches(selector)) return at;
+    return null;
+  }
+  querySelectorAll(selector: string): Node[] {
+    return this.all().filter((node) => node.matches(selector));
+  }
+  querySelector(selector: string): Node | null {
+    return this.querySelectorAll(selector)[0] ?? null;
+  }
+  /** A copy as a document of its own imports it: what is set on it, with nothing it shows. */
+  clone(): Node {
+    return new Node(this.localName, Object.fromEntries(this.attributes), this.children.map((child) => child.clone()));
+  }
+  addEventListener(): void {}
+}
+
+/** A picture of the page: its address, its size as made, and whether the frame may read it. */
+class Picture extends Node {
+  complete = true;
+  currentSrc: string;
+  src: string;
+  constructor(
+    address: string,
+    public naturalWidth: number,
+    public naturalHeight: number,
+    readonly tainted = false,
+  ) {
+    super("img", { src: address });
+    this.currentSrc = address;
+    this.src = address;
+  }
+  get srcset(): string {
+    return this.getAttribute("srcset") ?? "";
+  }
+}
+
+/** A drawing of the page, `width` by `height` px. */
+class Drawing extends Node {
+  constructor(
+    public width: number,
+    public height: number,
+  ) {
+    super("canvas", { width: String(width), height: String(height) });
+  }
+}
+
+/** A picture the frame makes to read a background picture by: it has the page's at once, where the page has loaded it. */
+class Probe {
+  complete = false;
+  naturalWidth = 0;
+  naturalHeight = 0;
+  tainted = false;
+  currentSrc = "";
+  heard: (() => void)[] = [];
+  constructor(
+    readonly ownerDocument: unknown,
+    readonly loaded: Map<string, { width: number; height: number; tainted?: boolean }>,
+  ) {}
+  addEventListener(_type: string, listener: () => void): void {
+    this.heard.push(listener);
+  }
+  set src(address: string) {
+    this.currentSrc = address;
+    const has = this.loaded.get(address);
+    if (!has) return;
+    this.complete = true;
+    this.naturalWidth = has.width;
+    this.naturalHeight = has.height;
+    this.tainted = has.tainted ?? false;
+  }
+}
+
+/** A canvas of the host's, which tells what was drawn on it, and as data what was drawn, or throws where that came from another origin. */
+class Canvas {
+  width = 0;
+  height = 0;
+  readonly calls: [string, unknown[]][] = [];
+  drawn: unknown[] = [];
+  static made: Canvas[] = [];
+  static reads = new Map<string, number>();
+  constructor() {
+    Canvas.made.push(this);
+  }
+  getContext() {
+    const calls = this.calls;
+    const record = (name: string) => (...args: unknown[]) => {
+      calls.push([name, args]);
+      if (name === "drawImage") this.drawn.push(args[0]);
+    };
+    return new Proxy({} as Record<string, unknown>, {
+      get: (target, name: string) => (name in target ? target[name] : record(name)),
+      set: (target, name: string, value) => {
+        target[name] = value;
+        return true;
+      },
+    });
+  }
+  toDataURL(): string {
+    const source = this.drawn.at(-1) as { tainted?: boolean; currentSrc?: string; label?: string } | undefined;
+    if (source?.tainted) throw new Error("SecurityError: the canvas has been tainted");
+    const label = source?.currentSrc || source?.label || "?";
+    Canvas.reads.set(label, (Canvas.reads.get(label) ?? 0) + 1);
+    return `data:image/webp;base64,${label}@${this.width}x${this.height}`;
+  }
+}
+
+/** The copy the picture was made of, as it was serialized. */
+let serialized: Node | null = null;
+
+function markupOf(node: Node): string {
+  const attrs = [...node.attributes].map(([name, value]) => ` ${name}="${value.replace(/"/g, "&quot;")}"`).join("");
+  return `<${node.localName}${attrs}>${node.text}${node.children.map(markupOf).join("")}</${node.localName}>`;
+}
+
+const GLOBALS = ["document", "window", "XMLSerializer"];
+let before: unknown[] = [];
+
+beforeEach(() => {
+  before = GLOBALS.map((name) => Reflect.get(globalThis, name));
+  Reflect.set(globalThis, "document", { createElement: () => new Canvas() });
+  Reflect.set(globalThis, "window", { devicePixelRatio: 2 });
+  Reflect.set(globalThis, "XMLSerializer", class {
+    serializeToString(node: Node): string {
+      serialized = node;
+      return markupOf(node);
+    }
+  });
+  Canvas.made = [];
+  Canvas.reads = new Map();
+  serialized = null;
+  VIEW.scrollY = 0;
+});
+
+afterEach(() => {
+  for (const [index, name] of GLOBALS.entries()) Reflect.set(globalThis, name, before[index]);
+  forgetPixels();
+});
+
+/** The frame, with `body` for its page, `loaded` for the pictures its css has loaded, and `rules` for its css. */
+function frameOf(body: Node[], loaded = new Map<string, { width: number; height: number; tainted?: boolean }>(), rules: string[] = []) {
+  const root = new Node("html", {}, [new Node("head"), new Node("body", {}, body)]);
+  root.box = { left: 0, top: 0, width: VIEW.innerWidth, height: 4000 };
+  const probes: Probe[] = [];
+  const inert = { importNode: (node: Node) => node.clone(), createElement: (name: string) => new Node(name) };
+  const view = {
+    ...VIEW,
+    get scrollY() {
+      return VIEW.scrollY;
+    },
+    getComputedStyle: (node: Node) => node.style,
+    matchMedia: () => ({ matches: false }),
+  };
+  const doc = {
+    documentElement: Object.assign(root, { scrollHeight: 4000 }),
+    styleSheets: [{ cssRules: rules.map((cssText) => ({ cssText })) }],
+    defaultView: view,
+    implementation: { createHTMLDocument: () => inert },
+    createElement: () => {
+      const probe = new Probe(doc, loaded);
+      probes.push(probe);
+      return probe;
+    },
+    querySelector: (selector: string) => root.querySelector(selector),
+    querySelectorAll: (selector: string) => root.querySelectorAll(selector),
+  };
+  const frame = { contentDocument: doc, contentWindow: view } as unknown as HTMLIFrameElement;
+  return { frame, probes };
+}
+
+/** The copy's element that stands for `node` of the page, found by its id. */
+function copyOf(id: string): Node | undefined {
+  return serialized?.all().find((node) => node.getAttribute("id") === id);
+}
+
+/** The band in these tests: 100 css px of the document under the viewport. */
+const BAND = 100;
+
+describe("pictureOf, with pictures near the band", () => {
+  test("a picture straddling the viewport's bottom edge is in the copy as its own px, at the size it lays out at", () => {
+    const hero = new Picture("https://site.test/hero.jpg", 1600, 1200).at(0, 600, 400, 300);
+    hero.setAttribute("id", "hero");
+    hero.setAttribute("srcset", "hero@2x.jpg 2x");
+    const { frame } = frameOf([hero]);
+    expect(pictureOf(frame, BAND)).not.toBeNull();
+    // Read at what the box shows at the phone's 3 device px, not at the 1600 px it has.
+    const data = "data:image/webp;base64,https://site.test/hero.jpg@1200x900";
+    expect(copyOf("hero")?.getAttribute("src")).toBe(sizedPicture(data, 1600, 1200));
+    expect(copyOf("hero")?.hasAttribute("srcset")).toBe(false);
+    // Laid out as large as the page's, the data stretched over it.
+    expect(decodeURIComponent(sizedPicture(data, 1600, 1200))).toBe(
+      'data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1200" viewBox="0 0 1600 1200" preserveAspectRatio="none">' +
+        `<image href="${data}" width="1600" height="1200" preserveAspectRatio="none"/></svg>`,
+    );
+  });
+
+  test("a background picture near the band is in the copy's style, its gradient kept", () => {
+    const card = new Node("div", { id: "card" }).at(0, 650, 400, 200).styled({
+      backgroundImage: 'linear-gradient(red, blue), url("https://site.test/paper.png")',
+    });
+    const loaded = new Map([["https://site.test/paper.png", { width: 64, height: 64 }]]);
+    const { frame } = frameOf([card], loaded);
+    pictureOf(frame, BAND);
+    const picture = sizedPicture("data:image/webp;base64,https://site.test/paper.png@64x64", 64, 64);
+    expect(copyOf("card")?.getAttribute("style")).toBe(`;background-image:linear-gradient(red, blue), url("${picture}") !important`);
+  });
+
+  test("a drawing under the band is in the copy as what it shows now, fitted as the page fits it", () => {
+    const chart = Object.assign(new Drawing(800, 80), { label: "chart" }).at(0, 720, 400, 40);
+    chart.setAttribute("id", "chart");
+    const { frame } = frameOf([chart]);
+    pictureOf(frame, BAND);
+    const picture = sizedPicture("data:image/webp;base64,chart@800x80", 800, 80);
+    expect(copyOf("chart")?.getAttribute("style")).toBe(
+      `;background-image:url("${picture}") !important;background-size:100% 100% !important;` +
+        "background-position:50% 50% !important;background-repeat:no-repeat !important;background-origin:content-box !important",
+    );
+  });
+
+  test("a picture from another origin the frame may not read stays blank in the copy and is drawn over it, in its box", () => {
+    const away = new Picture("https://cdn.other.test/x.jpg", 800, 400, true).at(0, 700, 400, 200);
+    away.setAttribute("id", "away");
+    const { frame } = frameOf([away]);
+    const picture = pictureOf(frame, BAND);
+    expect(copyOf("away")?.getAttribute("src")).toBe(blankUrl(800, 400));
+    const overlay = picture?.overlay;
+    expect(overlay?.span).toEqual(bandSpan(0, 700, BAND));
+    // Over the span, at the host's 2 device px, the document's top at the span's.
+    const canvas = overlay?.canvas as unknown as Canvas;
+    expect([canvas.width, canvas.height]).toEqual([800, 2 * (overlay?.span.bottom ?? 0)]);
+    // Drawn whole on a canvas of its own first, then from it into its box, the canvas let go of after.
+    const [source, ...place] = (canvas.calls.find(([name]) => name === "drawImage")?.[1] ?? []) as [Canvas, ...number[]];
+    expect(source.drawn).toEqual([away]);
+    expect(place).toEqual([0, 0, 800, 400, 0, 700, 400, 200]);
+    expect([source.width, source.height]).toEqual([0, 0]);
+  });
+
+  test("a picture from another origin picked from a set by density is cut by its px, not by its size as made", () => {
+    // 1000 px picked for a 400 px box at the phone's 3: its size as made is 400 by 225.
+    const away = new Picture("https://cdn.other.test/x-1000.jpg", 400, 225, true).at(0, 700, 400, 225);
+    away.setAttribute("srcset", "https://cdn.other.test/x-1000.jpg 1000w");
+    const { frame } = frameOf([away]);
+    const canvas = pictureOf(frame, BAND)?.overlay?.canvas as unknown as Canvas;
+    const [source, ...place] = (canvas.calls.find(([name]) => name === "drawImage")?.[1] ?? []) as [Canvas, ...number[]];
+    expect(source.drawn).toEqual([away]);
+    // Read at the device's px, and cut as many of them for each px as made.
+    expect(source.calls.find(([name]) => name === "drawImage")?.[1]).toEqual([away, 0, 0, 1200, 675]);
+    expect(place).toEqual([0, 0, 1200, 675, 0, 700, 400, 225]);
+  });
+
+  test("one drawn over the copy is cut off where what holds it cuts it off, at its round corners", () => {
+    const away = new Picture("https://cdn.other.test/x.jpg", 800, 400, true).at(-6, 694, 412, 212);
+    const holder = new Node("span", {}, [away]).at(0, 700, 400, 200).styled({ overflowX: "clip", overflowY: "clip", borderTopLeftRadius: "16px" });
+    const { frame } = frameOf([holder]);
+    const canvas = pictureOf(frame, BAND)?.overlay?.canvas as unknown as Canvas;
+    const names = canvas.calls.map(([name]) => name);
+    expect(names.slice(names.indexOf("save"), names.indexOf("drawImage") + 1)).toEqual(["save", "beginPath", "roundRect", "clip", "save", "drawImage"]);
+    expect(canvas.calls.find(([name]) => name === "roundRect")?.[1]).toEqual([0, 700, 400, 200, 16]);
+  });
+
+  test("a page with nothing it cannot read has no overlay", () => {
+    const hero = new Picture("https://site.test/hero.jpg", 1600, 1200).at(0, 600, 400, 300);
+    const { frame } = frameOf([hero]);
+    expect(pictureOf(frame, BAND)?.overlay).toBeNull();
+  });
+
+  test("a picture read once is kept: a picture taken again reads it no more, while a drawing is read each time", () => {
+    const hero = new Picture("https://site.test/hero.jpg", 1600, 1200).at(0, 600, 400, 300);
+    const chart = Object.assign(new Drawing(800, 80), { label: "chart" }).at(0, 720, 400, 40);
+    const { frame } = frameOf([hero, chart]);
+    pictureOf(frame, BAND);
+    pictureOf(frame, BAND);
+    expect(Canvas.reads.get("https://site.test/hero.jpg")).toBe(1);
+    expect(Canvas.reads.get("chart")).toBe(2);
+  });
+
+  test("pictures far from the band, and those pinned to the screen, are not read and stay blank", () => {
+    const far = new Picture("https://site.test/far.jpg", 800, 600).at(0, 3000, 400, 300);
+    far.setAttribute("id", "far");
+    const pin = new Picture("https://site.test/pin.png", 40, 40).at(0, 650, 40, 40);
+    const bar = new Node("nav", { id: "bar" }, [pin]).at(0, 650, 400, 50).styled({ position: "fixed" });
+    const { frame } = frameOf([far, bar]);
+    const picture = pictureOf(frame, BAND);
+    expect(copyOf("far")?.getAttribute("src")).toBe(blankUrl(800, 600));
+    expect(Canvas.reads.size).toBe(0);
+    // What is pinned is left out of the copy whole.
+    expect(copyOf("bar")).toBeUndefined();
+    expect(picture?.span).toEqual({ top: 0, bottom: 1500 });
+  });
+
+  test("scrolled on, the pictures read are those near the band there", () => {
+    VIEW.scrollY = 2400;
+    const far = new Picture("https://site.test/far.jpg", 800, 600).at(0, 3000, 400, 300);
+    far.setAttribute("id", "far");
+    const { frame } = frameOf([far]);
+    pictureOf(frame, BAND);
+    expect(copyOf("far")?.getAttribute("src")).toBe(sizedPicture("data:image/webp;base64,https://site.test/far.jpg@800x600", 800, 600));
+  });
+
+  test("a background picture the page has not loaded yet tells when it comes", () => {
+    const card = new Node("div", { id: "card" }).at(0, 650, 400, 200).styled({ backgroundImage: 'url("https://site.test/late.png")' });
+    const { frame, probes } = frameOf([card]);
+    let heard = 0;
+    pictureOf(frame, BAND, () => heard++);
+    expect(copyOf("card")?.hasAttribute("style")).toBe(false);
+    for (const listener of probes[0]?.heard ?? []) listener();
+    expect(heard).toBe(1);
+  });
+
+  test("a page with no pictures does not need a new picture as it scrolls, its fonts as data none either", () => {
+    const font = '@font-face { font-family: "a"; src: url("data:font/woff2;base64,AA") }';
+    const { frame } = frameOf([new Node("p").at(0, 0, 400, 20)], undefined, [font]);
+    expect(pictureOf(frame, BAND)?.span).toBeNull();
+    const { frame: pictured } = frameOf([new Node("p").at(0, 0, 400, 20)], undefined, ['.a { background: url("/far.png") }']);
+    expect(pictureOf(pictured, BAND)?.span).toEqual(bandSpan(0, 700, BAND));
+  });
+});
+
+describe("bandSpan and inSpan", () => {
+  test("the band and a viewport's height past it each way", () => {
+    expect(bandSpan(1000, 700, 100)).toEqual({ top: 1000, bottom: 2500 });
+    expect(bandSpan(0, 700, 100).top).toBe(0);
+  });
+
+  test("a scroll inside the reach needs no new picture, one past it does", () => {
+    const span = bandSpan(1000, 700, 100);
+    expect(inSpan(span, 1000, 700, 100)).toBe(true);
+    expect(inSpan(span, 1700, 700, 100)).toBe(true);
+    expect(inSpan(span, 1701, 700, 100)).toBe(false);
+    expect(inSpan(span, 299, 700, 100)).toBe(false);
+  });
+});
+
+describe("readSize", () => {
+  test("no more px than the box shows at its device px, nor than the picture has", () => {
+    expect(readSize({ width: 1600, height: 1200 }, 400, 300, 3)).toEqual({ width: 1200, height: 900 });
+    expect(readSize({ width: 100, height: 100 }, 400, 300, 3)).toEqual({ width: 100, height: 100 });
+  });
+
+  test("a huge picture is read at 4 million px at most", () => {
+    const size = readSize({ width: 8000, height: 8000 }, 4000, 4000, 3);
+    expect(size.width * size.height).toBeLessThanOrEqual(4e6);
+  });
+});
+
+describe("layersOf and urlOf", () => {
+  test("cuts a computed background at its top commas", () => {
+    expect(layersOf('linear-gradient(rgb(0, 0, 0), red), url("a,b.png"), none')).toEqual(['linear-gradient(rgb(0, 0, 0), red)', 'url("a,b.png")', "none"]);
+  });
+
+  test("the address of a url layer only", () => {
+    expect(urlOf('url("https://a.test/b.png")')).toBe("https://a.test/b.png");
+    expect(urlOf("url(b.png)")).toBe("b.png");
+    expect(urlOf("linear-gradient(red, blue)")).toBeNull();
+  });
+});

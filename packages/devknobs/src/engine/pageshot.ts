@@ -36,18 +36,20 @@ function clear(color: string): boolean {
 }
 
 /** The elements of a page that show a picture of their own, which a drawing of the page cannot load and a rough one draws by hand. */
-const MEDIA = "img, video, canvas";
-type MediaNode = HTMLImageElement | HTMLVideoElement | HTMLCanvasElement;
+export const MEDIA = "img, video, canvas";
+export type MediaNode = HTMLImageElement | HTMLVideoElement | HTMLCanvasElement;
 
 /** A picture, video or drawing of the page that can be drawn now, and its size as made, in its own px. */
-interface Media {
+export interface Media {
   source: CanvasImageSource;
   width: number;
   height: number;
+  /** How many of the source's px one of its px as made takes, where they differ: 1 where unset. */
+  scale?: number;
 }
 
 /** What `node` shows, where it has it by now: a picture that has loaded, a video with a frame, a drawing with a size. */
-function mediaOf(node: MediaNode): Media | null {
+export function mediaOf(node: MediaNode): Media | null {
   // Told apart by what they have, as the frame's elements are not of this window's classes.
   if ("naturalWidth" in node) {
     const loaded = node.complete && node.naturalWidth > 0 && node.naturalHeight > 0;
@@ -75,7 +77,12 @@ function radiusOf(value: string, wide: number, tall: number): { x: number; y: nu
  * drawn into the element's box whole is squeezed wherever the page cuts it
  * to cover the box, or leaves room around it.
  */
-export function drawMedia(pen: CanvasRenderingContext2D, media: Media, rect: DOMRect, style: CSSStyleDeclaration): void {
+export function drawMedia(
+  pen: CanvasRenderingContext2D,
+  media: Media,
+  rect: Pick<DOMRect, "left" | "top" | "width" | "height">,
+  style: CSSStyleDeclaration,
+): void {
   const px = (value: string) => Number.parseFloat(value) || 0;
   const left = px(style.borderLeftWidth) + px(style.paddingLeft);
   const right = px(style.borderRightWidth) + px(style.paddingRight);
@@ -103,7 +110,8 @@ export function drawMedia(pen: CanvasRenderingContext2D, media: Media, rect: DOM
     pen.clip();
   }
   if (style.imageRendering === "pixelated" || style.imageRendering === "crisp-edges") pen.imageSmoothingEnabled = false;
-  pen.drawImage(media.source, from.x, from.y, from.width, from.height, to.x, to.y, to.width, to.height);
+  const scale = media.scale ?? 1;
+  pen.drawImage(media.source, from.x * scale, from.y * scale, from.width * scale, from.height * scale, to.x, to.y, to.width, to.height);
   pen.restore();
 }
 
@@ -425,8 +433,14 @@ function blankPictures(live: Element, copy: Element): void {
 /**
  * The page in `frame`, copied as it is now for `paintPage`, or null where it
  * is out of reach. What `leave` picks of the page is left out of the copy.
+ * `each` is told of each element of the page and its copy, before anything is
+ * taken out of the copy.
  */
-export function copyPage(frame: HTMLIFrameElement, leave?: (node: Element) => boolean): Element | null {
+export function copyPage(
+  frame: HTMLIFrameElement,
+  leave?: (node: Element) => boolean,
+  each?: (node: Element, copy: Element) => void,
+): Element | null {
   const doc = frame.contentDocument;
   if (!doc?.documentElement) return null;
   // Its styles inlined, as a drawing of it loads nothing of its own, and the
@@ -466,7 +480,7 @@ export function copyPage(frame: HTMLIFrameElement, leave?: (node: Element) => bo
   const inert = doc.implementation.createHTMLDocument("");
   const root = inert.importNode(doc.documentElement, true);
   pin(doc.documentElement, root);
-  if (leave || pinned) {
+  if (leave || pinned || each) {
     // The copy has the page's elements in the same order until some are taken out.
     const live = doc.documentElement.getElementsByTagName("*");
     const copied = root.getElementsByTagName("*");
@@ -476,6 +490,7 @@ export function copyPage(frame: HTMLIFrameElement, leave?: (node: Element) => bo
       if (!node || !copy) continue;
       if (leave?.(node)) markOwn(copy);
       pin(node, copy);
+      each?.(node, copy);
     }
   }
   blankPictures(doc.documentElement, root);
