@@ -88,7 +88,7 @@ const FRAME_NAME = 'devknobs-frame';
 function devknobsFrame(): HTMLIFrameElement | null {
   return (
     document
-      .querySelector('[data-devknobs="viewport"]')
+      .querySelector('[data-knobs="viewport"],[data-devknobs="viewport"]')
       ?.shadowRoot?.querySelector<HTMLIFrameElement>(`iframe[name="${FRAME_NAME}"]`) ?? null
   );
 }

@@ -393,11 +393,11 @@ class FakeElement extends EventTarget {
     this.attributes.delete(name);
   }
 
-  /** An attribute selector such as `[data-devknobs]`, the only kind the frame asks for. */
+  /** Attribute selectors such as `[data-knobs],[data-devknobs]`, the only kind the frame asks for. */
   closest(selector: string): FakeElement | null {
-    const name = selector.slice(1, -1);
+    const names = selector.split(",").map((one) => one.trim().slice(1, -1));
     for (let node: FakeElement | null = this; node; node = node.parent) {
-      if (node.hasAttribute(name)) return node;
+      if (names.some((name) => node.hasAttribute(name))) return node;
     }
     return null;
   }
@@ -783,7 +783,7 @@ describe("the frame over the page", () => {
   test("hides the page's popovers until it goes", () => {
     apply(VIEWPORT);
     expect(widthStyle()?.textContent).toContain(
-      ":popover-open:not([data-devknobs]){display:none!important}",
+      ":popover-open:not([data-knobs],[data-devknobs]){display:none!important}",
     );
     reset();
     expect(widthStyle()).toBeUndefined();
@@ -1493,6 +1493,7 @@ describe("the frame in fresh mode", () => {
     freshPage();
     apply(VIEWPORT);
     expect(frameElement().hasAttribute(FRESH_ATTRIBUTE)).toBe(true);
+    expect(frameElement().hasAttribute("data-knobs-fresh")).toBe(true);
   });
 
   test("tells it nothing with the mode off", () => {
@@ -3369,6 +3370,7 @@ describe("a panel pinned to its side", () => {
       expect(Reflect.get(named("size"), "hidden")).toBe(false);
       // The host still covers the window: the room is the letterbox's padding.
       const host = body.children.find((child) => child.getAttribute("data-devknobs") === "viewport");
+      expect(host?.getAttribute("data-knobs")).toBe("viewport");
       expect(Reflect.get(host?.style ?? {}, "cssText")).toContain("inset:0");
     });
 

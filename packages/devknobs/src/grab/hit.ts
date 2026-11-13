@@ -1,5 +1,7 @@
 // adapted from react-grab (MIT, Copyright (c) 2025 Aiden Bai)
 
+import { isMarked } from "../mark";
+
 /** What a hit test needs of a document or a shadow root. */
 export interface HitRoot {
   elementFromPoint(x: number, y: number): Element | null;
@@ -43,7 +45,7 @@ export function composedParent(element: Element): Element | null {
 /** Part of devknobs itself: its panel, its frame's letterbox, its overlays. */
 export function isDevknobs(element: Element): boolean {
   for (let current: Element | null = element; current; current = composedParent(current)) {
-    if (current.hasAttribute("data-devknobs")) return true;
+    if (isMarked(current)) return true;
   }
   return false;
 }
@@ -136,7 +138,7 @@ function descend(start: Element, x: number, y: number): Element {
       if (!children) continue;
       for (let index = 0; index < children.length; index++) {
         const child = children[index];
-        if (!child || child.hasAttribute("data-devknobs") || !holds(child, x, y)) continue;
+        if (!child || isMarked(child) || !holds(child, x, y)) continue;
         if (isHidden(child) || isClearLayer(child)) continue;
         const size = area(child);
         if (size > smallest) continue;

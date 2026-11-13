@@ -14,12 +14,17 @@
 import { addStyle, ensureStyle, isDocument, type OwnStyle } from "../engine/style";
 import type { Change, EditKind, EditPlace, EditTarget } from "./log";
 import { riskyElement } from "./risk";
+import { ATTRIBUTES, isMarked, isOwnName, ownSelector, removeMark, setMark } from "../mark";
 
 /** The html edits, by their kind. */
 export type HtmlKind = Extract<EditKind, "text" | "attr" | "html" | "hide" | "delete" | "move">;
 
-/** The attribute a hidden element carries. devknobs' own, so the tree and a copy leave it out. */
-export const HIDE_ATTRIBUTE = "data-devknobs-hide";
+/**
+ * The attribute a hidden element carries. knobs' own, so the tree and a copy leave it out.
+ * Both names are written, but hide is matched and read by the old name only, so an older
+ * copy that takes off only `data-devknobs-hide` shows the element again.
+ */
+export const HIDE_ATTRIBUTE = ATTRIBUTES.hide;
 
 /** What hides an element and all in it, as the browsers' tools hide one: its box keeps its place. */
 export const HIDE_CSS = `[${HIDE_ATTRIBUTE}], [${HIDE_ATTRIBUTE}] * { visibility: hidden !important; }`;
@@ -53,11 +58,6 @@ function isElement(node: Node): node is Element {
 
 function isShadowRoot(node: Node): node is ShadowRoot {
   return node.nodeType === 11 && "host" in node;
-}
-
-/** An attribute devknobs puts on the page's nodes, which no edit sets. */
-function isOwnName(name: string): boolean {
-  return name.toLowerCase().startsWith("data-devknobs");
 }
 
 /** The white space a text starts and ends with, which an edit of it keeps. */
@@ -199,8 +199,8 @@ export function hideStyle(element: Element): void {
 export function hideEdit(target: EditTarget, element: Element, style: (element: Element) => void = hideStyle): Change {
   const hidden = element.hasAttribute(HIDE_ATTRIBUTE);
   const set = (on: boolean): void => {
-    if (on) element.setAttribute(HIDE_ATTRIBUTE, "");
-    else element.removeAttribute(HIDE_ATTRIBUTE);
+    if (on) setMark(element, HIDE_ATTRIBUTE);
+    else removeMark(element, HIDE_ATTRIBUTE);
   };
   return {
     edit: { kind: "hide", target: { ...target }, property: "hidden", before: hidden ? "hidden" : null, after: hidden ? null : "hidden" },
@@ -251,7 +251,7 @@ export function deleteEdit(target: EditTarget, node: Node, before: string, prope
 
 /** devknobs' own element: its panel, its boxes, the styles it puts on the page. */
 function isOwnElement(node: Node): boolean {
-  return isElement(node) && node.hasAttribute("data-devknobs");
+  return isElement(node) && isMarked(node);
 }
 
 /** The element after a node among its parent's, devknobs' own left out. Null at the end. */
@@ -285,7 +285,7 @@ export function movable(node: Node): node is Element {
   if (node.namespaceURI === HTML && (node.localName === "head" || node.localName === "body")) return false;
   // A script, frame or base moved runs, loads or reads the page's addresses again: neither it nor one holding it moves.
   if (riskyElement(node) || Array.from(node.querySelectorAll("*")).some(riskyElement)) return false;
-  return node.querySelector("[data-devknobs]") === null;
+  return node.querySelector(ownSelector()) === null;
 }
 
 /**

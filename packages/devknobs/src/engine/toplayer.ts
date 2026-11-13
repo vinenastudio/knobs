@@ -1,4 +1,5 @@
 import { ensureStyle, removeStyle } from "./style";
+import { either, OLD_MARK } from "../mark";
 
 /**
  * Devknobs' own layers in the top layer, over the page's modal dialogs,
@@ -60,7 +61,7 @@ export const HOST_RESET = `
 }`;
 
 /** A host's backdrop stays out, whatever the page gives every backdrop. */
-const BACKDROP_CSS = "[data-devknobs][popover]::backdrop{display:none!important}";
+const BACKDROP_CSS = `${either(OLD_MARK, "][popover]::backdrop")}{display:none!important}`;
 
 /** How an element tells it is in the top layer: an open popover, a modal dialog, the fullscreen element. */
 const TOP_LAYER = [":popover-open", ":modal", ":fullscreen"];

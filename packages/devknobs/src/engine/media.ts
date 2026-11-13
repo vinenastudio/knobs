@@ -2,6 +2,7 @@ import type { ContrastValue, MotionValue, SchemeValue, TransparencyValue } from 
 import { addLayer, baseMatchMedia, removeLayer } from "./matchmedia";
 import { markInline } from "./owninline";
 import { authoredMedia } from "./text";
+import { isMarked } from "../mark";
 
 export type MediaFeature =
   | "prefers-color-scheme"
@@ -288,7 +289,7 @@ function ensureObserver(): void {
       for (const node of Array.from(record.addedNodes)) {
         const name = node.nodeName;
         if (name !== "STYLE" && name !== "LINK") continue;
-        if ((node as Element).hasAttribute?.("data-devknobs")) continue;
+        if (isMarked(node as Element)) continue;
         if (name === "LINK") node.addEventListener("load", schedule, { once: true });
         schedule();
       }

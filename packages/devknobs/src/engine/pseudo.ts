@@ -5,6 +5,8 @@
  * real translation exists. "Settings" reads "[Ŝéţţîñĝš ···]".
  */
 
+import { ownSelector } from "../mark";
+
 const PLAIN = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const ACCENTED = "áƀçðéƒĝĥîĵķļɱñöþǫŕšţûṽŵẋýžÅƁÇÐÉƑĜĤÎĴĶĻṀÑÖÞǪŔŜŢÛṼŴẊÝŽ";
 
@@ -21,7 +23,7 @@ const ATTRIBUTES = ["placeholder", "title", "aria-label", "alt"];
  * Raw text, user input and devknobs' own nodes stay as they are, and so does an
  * option without a value, whose text is the value its form sends.
  */
-const SKIPPED = "script,style,noscript,textarea,option:not([value]),[data-devknobs]";
+const SKIPPED = `script,style,noscript,textarea,option:not([value]),${ownSelector()}`;
 
 const LETTER = /\p{L}/u;
 

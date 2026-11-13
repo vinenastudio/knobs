@@ -14,6 +14,7 @@ import { createColorReader } from "./paint";
 import { createThemeReader, type GrabTone, invertTheme, type Theme } from "./theme";
 import { addStyle } from "../engine/style";
 import { HOST_RESET, holdInTopLayer, LAYER } from "../engine/toplayer";
+import { markOwn } from "../mark";
 
 /**
  * Over the page and under the panel, where the browser has no top layer for
@@ -504,7 +505,7 @@ function place(node: HTMLElement, shape: readonly number[], ratio: number): void
  */
 export function createOverlay(quiet = false, model = false): BoxOverlay {
   const host = document.createElement("div");
-  host.setAttribute("data-devknobs", "grab");
+  markOwn(host, "grab");
   host.style.cssText = `position:fixed;inset:0;width:auto;height:auto;pointer-events:none;z-index:${Z_INDEX}`;
   const root = host.attachShadow({ mode: "open" });
   addStyle(root, HOST_RESET + HOST_CSS + CSS);

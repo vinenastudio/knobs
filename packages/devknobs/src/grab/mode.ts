@@ -9,6 +9,7 @@ import { createNavigator, stepOf } from "./navigate";
 import { createOverlay, HIDE_WAIT, type Overlay } from "./overlay";
 import { copiedText, flushPicks, togglePick } from "./picks";
 import type { GrabEntry } from "./types";
+import { ownSelector } from "../mark";
 
 /** How long the pointer rests on an element before its context is worked out, in ms. */
 const PREPARE = 80;
@@ -131,7 +132,7 @@ export function startMode(options: ModeOptions, page: ModePage = PAGE): Mode {
   let settleTimer = 0;
   let stopped = false;
 
-  ensureStyle("grab-cursor").textContent = "*:not([data-devknobs]){cursor:crosshair!important}";
+  ensureStyle("grab-cursor").textContent = `*:not(${ownSelector()}){cursor:crosshair!important}`;
   // The touch pointer gives the mouse back while grab picks.
   pause(true);
 

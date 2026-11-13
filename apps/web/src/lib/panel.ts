@@ -60,7 +60,7 @@ function whenIdle(task: () => void): () => void {
 
 // The devknobs host element. Its shadow root is open, so a click inside the
 // panel still reaches `document` with the real button in its composed path.
-const PANEL = '[data-devknobs="panel"]';
+const PANEL = '[data-knobs="panel"],[data-devknobs="panel"]';
 
 /**
  * A composed path is a list of `EventTarget`s: the shadow root, `document` and

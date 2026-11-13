@@ -48,6 +48,7 @@ import { type Entry, isElement, markupOf, parentOf, type Row } from "./domtree";
 import { htmlEditor } from "./htmledit";
 import { comboLabel, letterMatches, typesInField, withShift } from "./keys";
 import type { HtmlSize } from "./prefs";
+import { ownSelector } from "../mark";
 
 /** What a key on the selected line does. */
 export type TreeEditAction = "text" | "attr" | "html" | "hide" | "delete" | "up" | "down";
@@ -179,7 +180,7 @@ function isFrame(element: Element): boolean {
 
 /** Whether an element holds devknobs' own nodes, as the body holds the panel and the head its styles. */
 export function holdsOwn(element: Element): boolean {
-  return element.querySelector("[data-devknobs]") !== null;
+  return element.querySelector(ownSelector()) !== null;
 }
 
 /** The actions a line can take. */

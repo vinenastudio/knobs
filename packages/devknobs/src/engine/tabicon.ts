@@ -1,5 +1,6 @@
 import type { DevIconValue } from "../types";
 import { drawDevIcon, type IconSource } from "./devicon";
+import { ATTRIBUTES, removeMark, setMark } from "../mark";
 
 /**
  * The dev ribbon on the page's own icons, so a dev tab tells itself apart
@@ -11,10 +12,10 @@ import { drawDevIcon, type IconSource } from "./devicon";
  */
 
 /** Where a link keeps the address it had before the ribbon. */
-export const ORIGINAL_HREF = "data-devknobs-href";
+export const ORIGINAL_HREF = ATTRIBUTES.href;
 
 /** Marks the icon link devknobs added, on a page with none, for its `/favicon.ico`. */
-export const ADDED_ICON = "data-devknobs-icon";
+export const ADDED_ICON = ATTRIBUTES.icon;
 
 /** The icon a page with no icon link has, where the browser looks for one. */
 const FALLBACK = "/favicon.ico";
@@ -128,7 +129,7 @@ export function createTabIcon(env: TabIconEnv): TabIcon {
         return;
       }
       drawn.set(link, { url, original: href });
-      link.setAttribute(ORIGINAL_HREF, href);
+      setMark(link, ORIGINAL_HREF, href);
       link.setAttribute("href", url);
     });
   }
@@ -140,7 +141,7 @@ export function createTabIcon(env: TabIconEnv): TabIcon {
     if (!mine) return;
     drawn.delete(link);
     if (link.getAttribute("href") === mine.url) link.setAttribute("href", mine.original);
-    link.removeAttribute(ORIGINAL_HREF);
+    removeMark(link, ORIGINAL_HREF);
   }
 
   function linksIn(node: Node): Element[] {
@@ -156,7 +157,7 @@ export function createTabIcon(env: TabIconEnv): TabIcon {
       const link = doc.createElement("link");
       link.setAttribute("rel", "icon");
       link.setAttribute("href", FALLBACK);
-      link.setAttribute(ADDED_ICON, "");
+      setMark(link, ADDED_ICON);
       added = link;
       (doc.head ?? doc.documentElement).append(link);
       swap(link);
@@ -219,7 +220,7 @@ export function createTabIcon(env: TabIconEnv): TabIcon {
       for (const [link, { url, original }] of drawn) {
         // A link the page has pointed elsewhere since keeps the page's address.
         if (link.getAttribute("href") === url) link.setAttribute("href", original);
-        link.removeAttribute(ORIGINAL_HREF);
+        removeMark(link, ORIGINAL_HREF);
       }
       drawn.clear();
       added?.remove();

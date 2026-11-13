@@ -1014,7 +1014,7 @@ export default function FoldTunePanel() {
   // On the body and marked as devknobs' own, as the tour is: devknobs hides
   // every other child of the body, and every other popover, under a device.
   return createPortal(
-    <div {...props(styles.card)} data-devknobs="foldtune" ref={card}>
+    <div {...props(styles.card)} data-devknobs="foldtune" data-knobs="foldtune" ref={card}>
       <div
         {...props(styles.head)}
         onPointerCancel={endDrag}

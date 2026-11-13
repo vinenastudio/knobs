@@ -552,7 +552,7 @@ export function Layer({
   }, []);
 
   return (
-    <div {...props(styles.layer)} data-devknobs="tour" ref={layer}>
+    <div {...props(styles.layer)} data-devknobs="tour" data-knobs="tour" ref={layer}>
       <span {...props(styles.dim, styles.dimWhole)} aria-hidden="true" ref={whole} />
       <div {...props(styles.box, strong && styles.boxStrong)} aria-hidden="true" ref={box}>
         <span {...props(styles.dim, dim && styles.dimOn)} ref={shade} />

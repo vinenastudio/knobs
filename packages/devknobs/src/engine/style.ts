@@ -3,6 +3,8 @@
  * one of those, which a page's Content Security Policy does not block, as it
  * blocks a `<style>` without `'unsafe-inline'`; elsewhere it is a `<style>`.
  */
+
+import { findOwn, markOwn } from "../mark";
 export interface OwnStyle {
   textContent: string | null;
   readonly sheet: CSSStyleSheet | null;
@@ -133,7 +135,7 @@ export function switchedSheet(root: Root, name: string): SwitchedSheet | null {
     };
   }
   const style = documentOf(root).createElement("style");
-  style.setAttribute("data-devknobs", name);
+  markOwn(style, name);
   if (isDocument(root)) (root.head ?? root.documentElement).appendChild(style);
   else root.append(style);
   const sheet = style.sheet;
@@ -157,17 +159,17 @@ export function switchedSheet(root: Root, name: string): SwitchedSheet | null {
 /** The sheet devknobs keeps on the page under `name`, if it has one. */
 export function findStyle(name: string, doc: Document = document): OwnStyle | null {
   const sheet = "adoptedStyleSheets" in doc ? doc.adoptedStyleSheets.find((own) => Reflect.get(own, NAME) === name) : undefined;
-  return sheet ? wrap(doc, sheet) : doc.querySelector<HTMLStyleElement>(`style[data-devknobs="${name}"]`);
+  return sheet ? wrap(doc, sheet) : findOwn<HTMLStyleElement>(doc, name, "style");
 }
 
-/** Every node devknobs adds to the page carries `data-devknobs`. */
+/** Every node devknobs adds to the page carries `data-knobs` and `data-devknobs`. */
 export function ensureStyle(name: string, doc: Document = document): OwnStyle {
   const existing = findStyle(name, doc);
   if (existing) return existing;
   const Sheet = constructable(doc);
   if (Sheet) return adopt(doc, Sheet, name);
   const style = doc.createElement("style");
-  style.setAttribute("data-devknobs", name);
+  markOwn(style, name);
   (doc.head ?? doc.documentElement).appendChild(style);
   return style;
 }

@@ -178,7 +178,7 @@ describe("the early cover", () => {
   test("hides the page for a panel pinned to its side alone, with no mat over it", () => {
     const cover = earlyCover(JSON.stringify({ panel: { docked: true } }));
     expect(cover).toContain("html{overflow:hidden!important}");
-    expect(cover).toContain("body>:not([data-devknobs]){content-visibility:hidden!important}");
+    expect(cover).toContain("body>:not([data-knobs],[data-devknobs]){content-visibility:hidden!important}");
     expect(cover).not.toContain("html::after");
     expect(cover).not.toContain("background");
     // Closed, the frame is up still, at the window's width.

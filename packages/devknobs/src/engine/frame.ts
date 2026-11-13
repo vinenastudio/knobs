@@ -1,9 +1,10 @@
 import { type BoxRing, RINGS } from "../grab/boxmodel";
 import type { KnobsState, KnobsStatePatch, PanelValue, SchemeValue } from "../types";
 import { parse } from "./store";
+import { ATTRIBUTES, hasMark } from "../mark";
 
 /** Marks the iframe the width knob renders the page in. */
-export const FRAME_ATTRIBUTE = "data-devknobs-frame";
+export const FRAME_ATTRIBUTE = ATTRIBUTES.frame;
 
 /**
  * The same frame by window name. A page that cannot reach its frame element,
@@ -75,7 +76,8 @@ export interface Envelope {
 /** Is this page the one the width knob renders inside its frame? */
 export function isDevknobsFrame(): boolean {
   try {
-    if (window.frameElement?.hasAttribute(FRAME_ATTRIBUTE)) return true;
+    const owner = window.frameElement;
+    if (owner && hasMark(owner, FRAME_ATTRIBUTE)) return true;
   } catch {
     // A parent on another origin. The name still tells.
   }

@@ -1,4 +1,5 @@
 import { ensureStyle, removeStyle } from "./style";
+import { OWN_AND_IN } from "../mark";
 
 const NAME = "outlines";
 
@@ -8,7 +9,7 @@ export function apply(value: boolean): void {
     return;
   }
   ensureStyle(NAME).textContent =
-    "body *:not([data-devknobs],[data-devknobs] *){outline:1px solid rgba(127,127,127,.5)!important}";
+    `body *:not(${OWN_AND_IN}){outline:1px solid rgba(127,127,127,.5)!important}`;
 }
 
 export function reset(): void {

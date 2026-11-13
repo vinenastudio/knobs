@@ -80,6 +80,7 @@ import { cover, uncover } from "./underneath";
 import { VIEWPORT_CSS } from "./viewportcss";
 import { visionFilter } from "./vision";
 import { anchorScroll, percent, type Point, stepZoom, wheelZoom, ZOOM_PRESETS } from "./zoom";
+import { findOwn, markOwn, ownSelector, setMark } from "../mark";
 
 export { type Fit, fit, label, origin, STRIP } from "./fit";
 
@@ -514,7 +515,7 @@ function showZoom(place: Fit): void {
  * out, and takes a new width at once where the panel glides to it.
  */
 function panelWidth(): number {
-  return document.querySelector<HTMLElement>('[data-devknobs="panel"]')?.offsetWidth ?? 0;
+  return findOwn<HTMLElement>(document, "panel")?.offsetWidth ?? 0;
 }
 
 /**
@@ -1104,7 +1105,7 @@ function hidePage(): void {
   // Popovers paint in the top layer, over the frame, wherever they sit.
   const style = ensureStyle(NAME);
   style.textContent =
-    "html{overflow:hidden!important}:popover-open:not([data-devknobs]){display:none!important}";
+    `html{overflow:hidden!important}:popover-open:not(${ownSelector()}){display:none!important}`;
   // A constructed sheet stays with the document, whatever a page does to its head.
   const node = styleNode(style);
   if (node) stopKeepingStyle = keepMounted(node, { home: () => document.head ?? document.documentElement });
@@ -1261,7 +1262,7 @@ function open(veiled: number | null, first: boolean): void {
   const body = document.body;
   if (host || !needsFrame(current) || !body) return;
   host = document.createElement("div");
-  host.setAttribute("data-devknobs", "viewport");
+  markOwn(host, "viewport");
   host.style.cssText = `position:fixed;inset:0;z-index:${Z_INDEX}`;
   const root = host.attachShadow({ mode: "open" });
   addStyle(root, VIEWPORT_CSS);
@@ -1288,9 +1289,9 @@ function open(veiled: number | null, first: boolean): void {
   glass = document.createElement("div");
   glass.className = "glass";
   frame = document.createElement("iframe");
-  frame.setAttribute(FRAME_ATTRIBUTE, "");
+  setMark(frame, FRAME_ATTRIBUTE);
   // The page in the frame follows this one's mode, whatever its own address says.
-  if (fresh()) frame.setAttribute(FRESH_ATTRIBUTE, "");
+  if (fresh()) setMark(frame, FRESH_ATTRIBUTE);
   frame.name = FRAME_NAME;
   frame.title = "knobs viewport";
   frame.setAttribute("sandbox", SANDBOX);

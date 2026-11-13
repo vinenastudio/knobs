@@ -149,6 +149,16 @@ describe("the tree's lines", () => {
     expect(tree.reveal(as(panel.childNodes[0] as PageNode))).toBe(false);
   });
 
+  test("leaves out a newer copy's nodes and attributes too, and keeps another tool's data-knobs-…", () => {
+    const panel = elem("div", { "data-knobs": "panel" }, elem("span"));
+    const doc = page(() => [
+      elem("head", {}, elem("style", { "data-knobs": "scheme" })),
+      elem("body", { "data-knobs-replay": "before", "data-knobs-theme": "dark" }, elem("main", { "data-knobs-font": "serif" }), panel),
+    ]);
+    const tree = model(doc);
+    expect(lines(tree)).toEqual(["<!DOCTYPE html>", '<html lang="en">', "  <head></head>", '  <body data-knobs-theme="dark">', '    <main data-knobs-font="serif"></main>', "  </body>", "</html>"]);
+  });
+
   test("a closed element opens and closes, with its end tag on a line of its own while open", () => {
     const list = elem("ul", {}, elem("li"), elem("li"));
     const doc = page(() => [elem("body", {}, list)]);
@@ -462,6 +472,13 @@ describe("the tree as built", () => {
     const hid = rows(node).find((row) => said(row).startsWith('<button id="save">')) as FakeNode;
     expect(hid.classList.contains("dom-hid")).toBe(true);
     expect(hid.find("dom-flash")).toEqual([]);
+    // An older copy shows it again by the old name only: the new one left on it hides nothing.
+    save.setAttribute("data-knobs-hide", "");
+    save.removeAttribute(HIDE_ATTRIBUTE);
+    observer.callback([{ type: "attributes", target: as(save), attributeName: HIDE_ATTRIBUTE } as unknown as MutationRecord]);
+    jest.advanceTimersByTime(SETTLE);
+    const shown = rows(node).find((row) => said(row).startsWith('<button id="save"')) as FakeNode;
+    expect(shown.classList.contains("dom-hid")).toBe(false);
     // The editor selects a line as a click does.
     lent.hooks?.select(as(app));
     expect(selected).toEqual([[as(app), null]]);
