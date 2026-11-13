@@ -2,7 +2,7 @@ import { bandMedia, bandSpan, forgetPixels, inSpan, meets, type Overlay, overlay
 import { el, type Look, place } from "./browserkit";
 import type { Bars } from "./browserui";
 import type { Rect } from "./mock";
-import { copyPage, drawing, layoutZoom, MEDIA, ownZoom, rootSize, rootZoom, svgUrl } from "./pageshot";
+import { copyPage, cuts, drawing, layoutZoom, MEDIA, ownZoom, rootSize, rootZoom, svgUrl, viewportOverflow } from "./pageshot";
 
 /**
  * The page under Safari's bottom bars. The frame ends where Safari's viewport
@@ -17,7 +17,9 @@ import { copyPage, drawing, layoutZoom, MEDIA, ownZoom, rootSize, rootZoom, svgU
  * a drawing of the copy could not load (see `bandmedia.ts`). What is pinned
  * to the screen is left out of it, as it stays in the viewport on the phone,
  * and a fixed footer's color is carried down instead, by the screen's fill
- * under the band. A page out of reach shows that fill too.
+ * under the band. A page out of reach shows that fill too. A page that
+ * scrolls in its body, not in its document, shows its body's content past
+ * the viewport, as far down as the body is scrolled.
  */
 
 export const UNDERBAR_CSS = `
@@ -83,6 +85,43 @@ export function viewportUnits(css: string, height: number): string {
   return css.replace(VH, (_, amount: string) => `${Math.round(Number(amount) * height) / 100}px`);
 }
 
+/**
+ * The body of the page in `doc`, where the page scrolls in it and not in its
+ * document: the root's overflow went to the viewport, so the body keeps its
+ * own, which scrolls up and down. Null where the document scrolls.
+ */
+export function bodyScroller(doc: Document, view: Window): HTMLElement | null {
+  const { body } = doc;
+  if (!body || viewportOverflow(doc, view) !== doc.documentElement) return null;
+  const { overflowY } = view.getComputedStyle(body);
+  // One that clips makes no scroll container.
+  return cuts(overflowY) && overflowY !== "clip" ? body : null;
+}
+
+/** How far down the page in `doc` is scrolled, in its document and in a body that scrolls, in css px. */
+export function scrollOf(doc: Document, view: Window): number {
+  return view.scrollY + (bodyScroller(doc, view)?.scrollTop ?? 0);
+}
+
+/** How tall the page in `doc` is laid out in its copy, a body that scrolls laid out whole, in css px. */
+function heightOf(doc: Document, view: Window): number {
+  const full = doc.documentElement.scrollHeight;
+  const body = bodyScroller(doc, view);
+  if (!body) return full;
+  return Math.max(full, body.getBoundingClientRect().top + view.scrollY + body.clientTop + body.scrollHeight);
+}
+
+/**
+ * Lay the copy of a body that scrolls, `copy`, out whole, cut off at its
+ * sides only, as it shows past the viewport. It stays a formatting context of
+ * its own, so its content's margins lay out as the page's do.
+ */
+function unscroll(copy: Element, body: HTMLElement, view: Window): void {
+  const style = view.getComputedStyle(body);
+  const own = style.display === "block" ? ";display:flow-root !important" : "";
+  copy.setAttribute("style", `${copy.getAttribute("style") ?? ""};overflow-x:clip !important;overflow-y:visible !important${own}`);
+}
+
 /** The picture of a page as an svg, `width` by `height` css px, and its markup's address. */
 export interface Picture {
   src: string;
@@ -118,8 +157,9 @@ export function pictureOf(frame: HTMLIFrameElement, band = 0, loaded: () => void
   const view = frame.contentWindow;
   if (!doc?.documentElement || !view || view.innerWidth <= 0) return null;
   const { innerWidth: width, innerHeight: tall } = view;
-  const span = bandSpan(view.scrollY, tall, band);
-  const media = bandMedia(doc, view, span, loaded);
+  const scrolled = scrollOf(doc, view);
+  const span = bandSpan(scrolled, tall, band);
+  const media = bandMedia(doc, view, span, loaded, scrolled);
   /** What goes into the copies of the pictures, once the copy's viewport lengths are px: data has none. */
   const puts: (() => void)[] = [];
   const copy = copyPage(
@@ -138,7 +178,10 @@ export function pictureOf(frame: HTMLIFrameElement, band = 0, loaded: () => void
     node.setAttribute("style", viewportUnits(node.getAttribute("style") ?? "", tall));
   }
   for (const put of puts) put();
-  const full = Math.max(doc.documentElement.scrollHeight, tall);
+  const scroller = bodyScroller(doc, view);
+  const body = scroller ? copy.querySelector("body") : null;
+  if (scroller && body) unscroll(body, scroller, view);
+  const full = Math.max(heightOf(doc, view), tall);
   // The root as tall as the frame's, so a body at 100% is too, as the picture's own viewport is not.
   // Its box has the root's own zoom in it already, which its zoomed height would add again.
   const root = doc.documentElement.getBoundingClientRect().height / ownZoom(doc, view);
@@ -203,12 +246,18 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
   const onLoad = (event: Event) => {
     try {
       const view = frame.contentWindow;
-      if (!view || band.hidden) return;
-      const span = bandSpan(view.scrollY, view.innerHeight, bandOf(view.innerWidth));
-      if (nearLoad(event.target, view.scrollY, span)) again();
+      const doc = frame.contentDocument;
+      if (!view || !doc || band.hidden) return;
+      const scrolled = scrollOf(doc, view);
+      const span = bandSpan(scrolled, view.innerHeight, bandOf(view.innerWidth));
+      if (nearLoad(event.target, scrolled, span)) again();
     } catch {
       // The frame went to another origin.
     }
+  };
+  /** A body that scrolls moved, which the frame's window does not hear of. */
+  const onScroll = (event: Event) => {
+    if (event.target === watched?.body) move();
   };
   const dropCover = () => {
     if (!cover) return;
@@ -227,11 +276,14 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
         observer?.disconnect();
         watched?.removeEventListener("load", onLoad, true);
         watched?.removeEventListener("loadeddata", onLoad, true);
+        watched?.removeEventListener("scroll", onScroll, true);
         const next = new MutationObserver(again);
         next.observe(doc, { subtree: true, childList: true, attributes: true, characterData: true });
         // Loads go on in the capture, as they do not bubble.
         doc.addEventListener("load", onLoad, true);
         doc.addEventListener("loadeddata", onLoad, true);
+        // A scroll does not bubble either.
+        doc.addEventListener("scroll", onScroll, true);
         observer = next;
         watched = doc;
         changed = true;
@@ -242,7 +294,7 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
         dropCover();
         taken = "";
       }
-      return `${view.innerWidth}|${view.innerHeight}|${doc.documentElement.scrollHeight}`;
+      return `${view.innerWidth}|${view.innerHeight}|${heightOf(doc, view)}`;
     } catch {
       return null;
     }
@@ -252,13 +304,15 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
     if (band.hidden || !image || !picture) return;
     try {
       const view = frame.contentWindow;
-      if (!view) return;
+      const doc = frame.contentDocument;
+      if (!view || !doc) return;
       const scale = wide / picture.width;
-      const shift = bandShift(view.scrollY, view.innerHeight, scale);
+      const scrolled = scrollOf(doc, view);
+      const shift = bandShift(scrolled, view.innerHeight, scale);
       image.style.transform = `translate3d(0, ${shift}px, 0)`;
       if (cover && picture.overlay) cover.style.transform = `translate3d(0, ${shift + picture.overlay.span.top * scale}px, 0)`;
       // Scrolled past the pictures read for the band: read those it meets now.
-      if (picture.span && !inSpan(picture.span, view.scrollY, view.innerHeight, bandOf(picture.width))) again();
+      if (picture.span && !inSpan(picture.span, scrolled, view.innerHeight, bandOf(picture.width))) again();
     } catch {
       // The frame went to another origin.
     }
@@ -366,6 +420,7 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
       observer = null;
       watched?.removeEventListener("load", onLoad, true);
       watched?.removeEventListener("loadeddata", onLoad, true);
+      watched?.removeEventListener("scroll", onScroll, true);
       watched = null;
       dropCover();
       forgetPixels();

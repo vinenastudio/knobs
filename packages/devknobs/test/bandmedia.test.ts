@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { bandSpan, forgetPixels, inSpan, layersOf, readSize, sizedPicture, urlOf } from "../src/engine/bandmedia";
+import { bandSpan, forgetPixels, inSpan, layersOf, readSize, sameOrigin, sizedPicture, urlOf } from "../src/engine/bandmedia";
 import type { Look } from "../src/engine/browserkit";
 import { blankUrl } from "../src/engine/pageshot";
-import { createUnderbar, pictureOf } from "../src/engine/underbar";
+import { bodyScroller, createUnderbar, pictureOf, scrollOf } from "../src/engine/underbar";
 
 /** How the page in the frame lays out: its viewport, its scroll and its device px. */
 const VIEW = { innerWidth: 400, innerHeight: 700, scrollX: 0, scrollY: 0, devicePixelRatio: 3 };
@@ -53,6 +53,10 @@ class Node {
   style = computed();
   /** Does it show, as `checkVisibility` tells: not hidden, nor wholly see-through. */
   shown = true;
+  /** How far it is scrolled, and how tall what it holds is, where it scrolls: a body that does. */
+  scrollTop = 0;
+  scrollHeight = 0;
+  clientTop = 0;
   constructor(
     readonly localName: string,
     attributes: Record<string, string> = {},
@@ -71,7 +75,9 @@ class Node {
   }
   /** Its box in the viewport, as the frame is scrolled now. */
   getBoundingClientRect() {
-    const top = this.box.top - VIEW.scrollY;
+    // What a body holds moves with the body's scroll too.
+    const body = this.parentElement?.closest("body");
+    const top = this.box.top - VIEW.scrollY - (body?.scrollTop ?? 0);
     const { left, width, height } = this.box;
     return { left, top, width, height, right: left + width, bottom: top + height, x: left, y: top };
   }
@@ -175,13 +181,15 @@ class Probe {
   naturalHeight = 0;
   tainted = false;
   currentSrc = "";
+  /** What it tells when it comes, and when it fails to. */
   heard: (() => void)[] = [];
+  failed: (() => void)[] = [];
   constructor(
     readonly ownerDocument: unknown,
     readonly loaded: Map<string, { width: number; height: number; tainted?: boolean }>,
   ) {}
-  addEventListener(_type: string, listener: () => void): void {
-    this.heard.push(listener);
+  addEventListener(type: string, listener: () => void): void {
+    (type === "error" ? this.failed : this.heard).push(listener);
   }
   set src(address: string) {
     this.currentSrc = address;
@@ -316,12 +324,14 @@ function frameOf(body: Node[], loaded = new Map<string, { width: number; height:
     },
     getComputedStyle: (node: Node) => node.style,
     matchMedia: () => ({ matches: false }),
+    location: { origin: "https://site.test" },
   };
   /** The listeners on the document, by the event they hear. */
   const heard = new Map<string, unknown>();
   const doc = {
     documentElement: Object.assign(root, { scrollHeight: 4000 }),
     body: root.children[1],
+    baseURI: "https://site.test/",
     addEventListener: (type: string, listener: unknown) => heard.set(type, listener),
     removeEventListener: (type: string, listener: unknown) => {
       if (heard.get(type) === listener) heard.delete(type);
@@ -561,6 +571,158 @@ describe("pictureOf, with pictures the frame may not read as they are", () => {
   });
 });
 
+describe("pictureOf, of a page whose root or body has an overflow of its own", () => {
+  test("a body at 100% that cuts off its sides, whose overflow the viewport takes, lays out whole in the copy, as the page shows it", () => {
+    const { frame, doc } = frameOf([new Node("p").at(0, 900, 400, 20)]);
+    // Cutting off one way only, it computes as auto the other way: a scroll container in a drawing.
+    doc.body?.styled({ overflowX: "hidden", overflowY: "auto" });
+    pictureOf(frame, BAND);
+    expect(serialized?.querySelector("body")?.getAttribute("style")).toBe(";overflow:visible !important");
+    expect(serialized?.getAttribute("style")).not.toContain("overflow");
+  });
+
+  test("a root that cuts off its sides gives the viewport its overflow, and its copy is visible, its body left as the page has it", () => {
+    const { frame, doc } = frameOf([new Node("p").at(0, 900, 400, 20)]);
+    doc.documentElement.styled({ overflowX: "hidden", overflowY: "auto" });
+    doc.body?.styled({ overflowX: "hidden", overflowY: "auto" });
+    pictureOf(frame, BAND);
+    expect(serialized?.getAttribute("style")).toStartWith(";overflow:visible !important;");
+    // The body keeps its own, as the page's does: a page that scrolls in its body has it laid out whole another way.
+    expect(serialized?.querySelector("body")?.getAttribute("style") ?? "").not.toContain("overflow:visible !important;");
+  });
+
+  test("a page that sets no overflow has a copy with none set", () => {
+    const { frame } = frameOf([new Node("p").at(0, 900, 400, 20)]);
+    pictureOf(frame, BAND);
+    expect(serialized?.querySelector("body")?.hasAttribute("style")).toBe(false);
+    expect(serialized?.getAttribute("style")).not.toContain("overflow");
+  });
+});
+
+describe("pictureOf, of a page that scrolls in its body", () => {
+  /** A page whose root cuts off and whose body, as tall as the viewport, scrolls 600 px down `height` px of content. */
+  function scrolledBody(body: Node[], height = 3000) {
+    const page = frameOf(body);
+    page.doc.documentElement.styled({ overflowX: "hidden", overflowY: "hidden" });
+    page.doc.documentElement.scrollHeight = 700;
+    const scroller = page.doc.body;
+    if (!scroller) throw new Error("no body");
+    scroller.styled({ display: "block", overflowX: "auto", overflowY: "auto" }).at(0, 0, 400, 700);
+    scroller.scrollHeight = height;
+    scroller.scrollTop = 600;
+    return { ...page, scroller };
+  }
+
+  test("is scrolled as far as its body is, which lays out whole in the copy, cut off at its sides only", () => {
+    // A picture far down, so the page has pictures to read as it scrolls.
+    const { frame, doc, scroller } = scrolledBody([new Picture("https://site.test/far.jpg", 800, 400).at(0, 2800, 400, 200)]);
+    expect(bodyScroller(doc as unknown as Document, frame.contentWindow as Window)).toBe(scroller as unknown as HTMLElement);
+    expect(scrollOf(doc as unknown as Document, frame.contentWindow as Window)).toBe(600);
+    const picture = pictureOf(frame, BAND);
+    expect(picture?.span).toEqual(bandSpan(600, 700, BAND));
+    // As tall as what the body holds, not as the document, which does not scroll.
+    expect(picture?.height).toBe(3000);
+    expect(serialized?.querySelector("body")?.getAttribute("style")).toBe(
+      ";overflow-x:clip !important;overflow-y:visible !important;display:flow-root !important",
+    );
+  });
+
+  test("a body whose overflow the viewport takes does not scroll in it: the document does", () => {
+    const { frame, doc } = frameOf([]);
+    doc.body?.styled({ overflowX: "hidden", overflowY: "auto" });
+    expect(bodyScroller(doc as unknown as Document, frame.contentWindow as Window)).toBeNull();
+  });
+
+  test("the pictures read are those near the band in the body as scrolled", () => {
+    const near = new Picture("https://site.test/near.jpg", 800, 400).at(0, 1300, 400, 200);
+    near.setAttribute("id", "near");
+    const { frame } = scrolledBody([near]);
+    pictureOf(frame, BAND);
+    expect(copyOf("near")?.getAttribute("src")).toBe(sizedPicture("data:image/webp;base64,https://site.test/near.jpg@800x400", 800, 400));
+  });
+
+  test("the band follows the body's scroll, which only the document hears of", async () => {
+    const { frame, heard, scroller } = scrolledBody([]);
+    const { image } = await shownBand(frame);
+    // Half the page's px: the band starts 1300 px down the body's content.
+    expect(image()?.style.transform).toBe("translate3d(0, -650px, 0)");
+    scroller.scrollTop = 800;
+    const onScroll = heard.get("scroll") as (event: { target: unknown }) => void;
+    onScroll({ target: new Node("div") });
+    expect(image()?.style.transform).toBe("translate3d(0, -650px, 0)");
+    onScroll({ target: scroller });
+    expect(image()?.style.transform).toBe("translate3d(0, -750px, 0)");
+  });
+});
+
+describe("pictureOf, asking for pictures quietly", () => {
+  test("a same-origin background picture is asked for without CORS, one from another origin with it", () => {
+    const own = new Node("div").at(0, 650, 400, 100).styled({ backgroundImage: 'url("https://site.test/own.png")' });
+    const away = new Node("div").at(0, 760, 400, 100).styled({ backgroundImage: 'url("https://quiet-a.test/away.png")' });
+    const { frame, probes } = frameOf([own, away]);
+    pictureOf(frame, BAND);
+    expect(probes.map((probe) => [probe.currentSrc, probe.crossOrigin])).toEqual([
+      ["https://site.test/own.png", null],
+      ["https://quiet-a.test/away.png", "anonymous"],
+    ]);
+  });
+
+  test("an address that failed to come with CORS is asked for no more, in this document or the next", () => {
+    const away = () => new Picture("https://quiet-b.test/x.jpg", 800, 400, true).at(0, 700, 400, 200);
+    const first = frameOf([away()]);
+    pictureOf(first.frame, BAND);
+    expect(first.probes.length).toBe(1);
+    for (const fail of first.probes[0]?.failed ?? []) fail();
+    pictureOf(first.frame, BAND);
+    expect(first.probes.length).toBe(1);
+    const next = frameOf([away()]);
+    const picture = pictureOf(next.frame, BAND);
+    expect(next.probes.length).toBe(0);
+    // It is still drawn over the copy.
+    expect(picture?.overlay).not.toBeNull();
+  });
+
+  test("an origin is asked for one address at a time till it allows CORS, and for none once two failed", () => {
+    const rows = [1, 2, 3].map((at) =>
+      new Node("div").at(0, 600 + at * 50, 400, 50).styled({ backgroundImage: `url("https://quiet-c.test/${at}.png")` }),
+    );
+    const { frame, probes } = frameOf(rows);
+    pictureOf(frame, BAND);
+    expect(probes.map((probe) => probe.currentSrc)).toEqual(["https://quiet-c.test/1.png"]);
+    for (const fail of probes[0]?.failed ?? []) fail();
+    pictureOf(frame, BAND);
+    expect(probes.map((probe) => probe.currentSrc)).toEqual(["https://quiet-c.test/1.png", "https://quiet-c.test/2.png"]);
+    for (const fail of probes[1]?.failed ?? []) fail();
+    pictureOf(frame, BAND);
+    pictureOf(frameOf(rows.map((row) => row.clone().at(row.box.left, row.box.top, row.box.width, row.box.height).styled(row.style))).frame, BAND);
+    expect(probes.length).toBe(2);
+  });
+
+  test("an origin that allowed CORS has the rest of its addresses asked for at once", () => {
+    const rows = [1, 2, 3].map((at) =>
+      new Node("div").at(0, 600 + at * 50, 400, 50).styled({ backgroundImage: `url("https://quiet-d.test/${at}.png")` }),
+    );
+    let heard = 0;
+    const { frame, probes } = frameOf(rows);
+    pictureOf(frame, BAND, () => heard++);
+    expect(probes.length).toBe(1);
+    for (const come of probes[0]?.heard ?? []) come();
+    expect(heard).toBe(1);
+    pictureOf(frame, BAND);
+    expect(probes.map((probe) => probe.currentSrc)).toEqual([1, 2, 3].map((at) => `https://quiet-d.test/${at}.png`));
+  });
+});
+
+describe("sameOrigin", () => {
+  test("an address of the page's origin, relative or not, a blob of it too; not another's, nor data", () => {
+    expect(sameOrigin("/a.png", "https://site.test/x/", "https://site.test")).toBe(true);
+    expect(sameOrigin("blob:https://site.test/1234", "https://site.test/", "https://site.test")).toBe(true);
+    expect(sameOrigin("https://cdn.site.test/a.png", "https://site.test/", "https://site.test")).toBe(false);
+    expect(sameOrigin("data:image/png;base64,AA", "https://site.test/", "https://site.test")).toBe(false);
+    expect(sameOrigin("http://[bad", "https://site.test/", "https://site.test")).toBe(false);
+  });
+});
+
 /** The page's look, as the band takes its fill from. */
 const LOOK: Look = {
   background: "rgb(255, 255, 255)",
@@ -649,13 +811,13 @@ describe("createUnderbar", () => {
   test("a new document in the frame has the listeners, the old one's are taken off, and removing the band takes off the new one's", async () => {
     const first = frameOf([new Picture("https://site.test/hero.jpg", 800, 400).at(0, 700, 400, 200)]);
     const { underbar } = await shownBand(first.frame);
-    expect([...first.heard.keys()].sort()).toEqual(["load", "loadeddata"]);
+    expect([...first.heard.keys()].sort()).toEqual(["load", "loadeddata", "scroll"]);
     const next = frameOf([new Picture("https://site.test/next.jpg", 800, 400).at(0, 700, 400, 200)]);
     Reflect.set(first.frame, "contentDocument", next.doc);
     underbar.refresh();
     await tick();
     expect(first.heard.size).toBe(0);
-    expect([...next.heard.keys()].sort()).toEqual(["load", "loadeddata"]);
+    expect([...next.heard.keys()].sort()).toEqual(["load", "loadeddata", "scroll"]);
     underbar.remove();
     expect(next.heard.size).toBe(0);
   });

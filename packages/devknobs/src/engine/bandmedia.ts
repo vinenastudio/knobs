@@ -12,7 +12,12 @@ import { drawMedia, type FitStyle, MEDIA, type Media, type MediaNode, mediaOf, s
  * box, cut off where what holds it cuts it off, but only where nothing else
  * of the page shows over it, as the overlay would cover that. A background
  * picture the frame may not read is left out. Only those near the band are
- * read, and each picture once at the size it shows at.
+ * read, and each picture once at the size it shows at. A request the host
+ * refuses shows as an error in the page's console, as any way of asking
+ * with CORS does, so a same-origin picture is asked for without, each
+ * address fails once at most while the page runs, an origin is asked for one
+ * address at a time till it allows CORS, and one that refused `REFUSALS` of
+ * them is asked for no more.
  */
 
 /** How far past the band, up and down the document, its pictures are read, in viewport heights: a scroll as far needs no new picture. */
@@ -25,6 +30,10 @@ const LARGEST = 4e6;
 const SHARPEST = 3;
 /** How many characters of the pictures read, and of their addresses, are kept in all. */
 const KEEP_LENGTH = 48e6;
+/** How many of an origin's addresses fail to come with CORS before none of its others is asked for so. */
+const REFUSALS = 2;
+/** How many addresses that failed to come are kept, past which the oldest are let go of. */
+const MOST_REFUSED = 5000;
 
 /** A stretch of the document, from `top` to `bottom`, in its css px. */
 export interface Span {
@@ -125,24 +134,85 @@ export function forgetPixels(): void {
   kept.clear();
   keptLength = 0;
   probes.clear();
+  asking.clear();
 }
 
 /**
- * A picture in `doc` of what `address` holds, asked for with CORS so one
- * from another origin that allows it can be read, kept in `used`. The page
- * has it already, so the browser mostly has it at once; where not, `loaded`
- * is told when it comes.
+ * The addresses that failed to come, how many of each origin's did with
+ * CORS, the origins that allowed it, and the one probe each other origin is
+ * waiting on, for as long as the page runs, across its documents.
  */
-function probeOf(doc: Document, address: string, loaded: () => void, used: Map<string, HTMLImageElement>): HTMLImageElement {
+const refused = new Set<string>();
+const refusedOrigins = new Map<string, number>();
+const allowed = new Set<string>();
+const asking = new Map<string, HTMLImageElement>();
+
+/** The origin of `address`, or null where it is no url. */
+function originOf(address: string): string | null {
+  try {
+    return new URL(address).origin;
+  } catch {
+    return null;
+  }
+}
+
+/** Is `address`, taken against `base`, of `origin`? A same-origin picture is read as it is, with no CORS to ask for. */
+export function sameOrigin(address: string, base: string, origin: string): boolean {
+  try {
+    return new URL(address, base).origin === origin;
+  } catch {
+    return false;
+  }
+}
+
+/** Remember that `address` failed to come, asked for with CORS of `origin`, or without where that is null. */
+function refuse(address: string, origin: string | null): void {
+  if (origin !== null) asking.delete(origin);
+  if (refused.has(address)) return;
+  refused.add(address);
+  if (refused.size > MOST_REFUSED) {
+    const [oldest] = refused;
+    if (oldest !== undefined) refused.delete(oldest);
+  }
+  if (origin !== null) refusedOrigins.set(origin, (refusedOrigins.get(origin) ?? 0) + 1);
+}
+
+/**
+ * A picture in `doc` of what `address` holds, kept in `used`, asked for with
+ * CORS where `cors` has it, so one from another origin that allows it can be
+ * read. The page has it already, so the browser mostly has it at once; where
+ * not, `loaded` is told when it comes. Null where it is not asked for: it
+ * failed to come before, in this document or another, its origin refused
+ * CORS `REFUSALS` times, or one of its origin's, which has not allowed CORS
+ * yet, is still on the way, whose answer holds for the rest.
+ */
+function probeOf(doc: Document, address: string, cors: boolean, loaded: () => void, used: Map<string, HTMLImageElement>): HTMLImageElement | null {
   const known = used.get(address) ?? probes.get(address);
   if (known && known.ownerDocument === doc) {
     used.set(address, known);
     return known;
   }
+  const origin = cors ? originOf(address) : null;
+  if (refused.has(address) || (origin !== null && (refusedOrigins.get(origin) ?? 0) >= REFUSALS)) return null;
+  const first = origin === null || allowed.has(origin) ? undefined : asking.get(origin);
+  if (first && first.ownerDocument === doc && !first.complete) return null;
   const probe = doc.createElement("img");
-  probe.crossOrigin = "anonymous";
+  if (cors) probe.crossOrigin = "anonymous";
   probe.src = address;
-  if (!probe.complete) probe.addEventListener("load", loaded, { once: true });
+  if (probe.complete) {
+    if (origin !== null && probe.naturalWidth > 0) allowed.add(origin);
+  } else {
+    if (origin !== null && !allowed.has(origin)) asking.set(origin, probe);
+    const come = () => {
+      if (origin !== null) {
+        allowed.add(origin);
+        asking.delete(origin);
+      }
+      loaded();
+    };
+    probe.addEventListener("load", come, { once: true });
+    probe.addEventListener("error", () => refuse(address, origin), { once: true });
+  }
   used.set(address, probe);
   return probe;
 }
@@ -271,16 +341,18 @@ function covered(doc: Document, view: Window, own: string, pending: Pending[]): 
 
 /**
  * The pictures, videos, drawings and background pictures of the page in
- * `doc` that meet `span`, read for its copy. `loaded` is told when a
- * background picture comes that was not there yet.
+ * `doc` that meet `span`, read for its copy, the page scrolled `scrollY`
+ * down the copy. `loaded` is told when a background picture comes that was
+ * not there yet.
  */
-export function bandMedia(doc: Document, view: Window, span: Span, loaded: () => void): BandMedia {
+export function bandMedia(doc: Document, view: Window, span: Span, loaded: () => void, scrollY = view.scrollY): BandMedia {
   const fills = new Map<Element, (copy: Element) => void>();
   const pending: Pending[] = [];
   const used = new Map<string, HTMLImageElement>();
   const ratio = Math.min(SHARPEST, Math.max(1, view.devicePixelRatio || 1));
-  const { scrollX, scrollY } = view;
+  const { scrollX } = view;
   const own = ownSelector();
+  const origin = view.location.origin;
   const boxOf = (rect: DOMRect): Box => ({ left: rect.left + scrollX, top: rect.top + scrollY, width: rect.width, height: rect.height });
   const add = (node: Element, put: (copy: Element) => void) => {
     const before = fills.get(node);
@@ -308,8 +380,8 @@ export function bandMedia(doc: Document, view: Window, span: Span, loaded: () =>
       let data = keptPixels(`${address}|${sized}`, () => readPixels(node, size));
       if (data === null) {
         // From another origin: asked for again with CORS, which reads where its host allows it.
-        const probe = probeOf(doc, address, loaded, used);
-        if (mediaOf(probe)) data = keptPixels(`${address}|cors|${sized}`, () => readPixels(probe, size));
+        const probe = probeOf(doc, address, true, loaded, used);
+        if (probe && mediaOf(probe)) data = keptPixels(`${address}|cors|${sized}`, () => readPixels(probe, size));
       }
       if (data !== null) {
         const read = data;
@@ -378,8 +450,8 @@ export function bandMedia(doc: Document, view: Window, span: Span, loaded: () =>
     const shown = layersOf(value).map((layer) => {
       const address = urlOf(layer);
       if (address === null || address.startsWith("data:")) return layer;
-      const probe = probeOf(doc, address, loaded, used);
-      const media = mediaOf(probe);
+      const probe = probeOf(doc, address, !sameOrigin(address, doc.baseURI, origin), loaded, used);
+      const media = probe && mediaOf(probe);
       if (!media) return layer;
       const size = readSize(media, rect.width, rect.height, ratio);
       const data = keptPixels(`${address}|${size.width}x${size.height}`, () => readPixels(probe, size));

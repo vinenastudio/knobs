@@ -1048,6 +1048,9 @@ class Tag {
     if (holder) holder.children = holder.children.filter((node) => node !== this);
     this.parentElement = null;
   }
+  getAttribute(name: string): string | null {
+    return this.attributes.get(name) ?? null;
+  }
   setAttribute(name: string, value: string): void {
     this.attributes.set(name, value);
   }
@@ -1122,5 +1125,32 @@ describe("copyPage, of a page with pictures and with what devknobs put on it", (
     // And the page's own are untouched.
     expect(live.querySelector("img")?.attributes.get("src")).toBe("cover.jpg");
     expect(live.querySelectorAll("source").length).toBe(1);
+  });
+
+  test("lays out visible the root or body whose overflow the viewport takes, which would cut off or scroll the copy, and only that one", () => {
+    /** The copy of a page whose root and body compute these overflows, across and down. */
+    const copyWith = (root: [string, string], body: [string, string]) => {
+      const live = new Tag("html", {}, [new Tag("head"), new Tag("body", {}, [new Tag("p")])]);
+      const inert = { importNode: (node: Tag) => node.clone(), createElement: (name: string) => new Tag(name) };
+      const overflow = (node: Tag) => {
+        const [overflowX, overflowY] = node === live ? root : body;
+        return { overflowX, overflowY };
+      };
+      const doc = {
+        documentElement: live,
+        body: live.children[1],
+        styleSheets: [],
+        implementation: { createHTMLDocument: () => inert },
+        defaultView: { getComputedStyle: overflow, matchMedia: () => ({ matches: false }) },
+      };
+      const copy = copyPage({ contentDocument: doc } as unknown as HTMLIFrameElement) as unknown as Tag | null;
+      if (!copy) throw new Error("the page was not copied");
+      return [copy.getAttribute("style"), copy.querySelector("body")?.getAttribute("style") ?? null];
+    };
+    // html, body { height: 100% } body { overflow-x: hidden }: the body's goes to the viewport.
+    expect(copyWith(["visible", "visible"], ["hidden", "auto"])).toEqual([null, ";overflow:visible !important"]);
+    // The root's goes there instead, and the body keeps its own.
+    expect(copyWith(["clip", "visible"], ["hidden", "auto"])).toEqual([";overflow:visible !important", null]);
+    expect(copyWith(["visible", "visible"], ["visible", "visible"])).toEqual([null, null]);
   });
 });

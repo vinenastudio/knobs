@@ -5,7 +5,10 @@
 // page one band on and shoots the same document rows in the live frame, just above the band.
 // The two must match: a picture, video, drawing or background the band misses shows as a
 // difference. The strip between the viewport's bottom and the capsule's top, which Safari
-// paints sharp, is checked with the bars on too.
+// paints sharp, is checked with the bars on too. A page that scrolls in its body, not its
+// document, is scrolled there. The console of the page is read throughout, the frame
+// loaded again once, and each address the console tells of a failed CORS request for may
+// show there once at most.
 // Build first, then: pnpm --filter @vinena/knobs underbar-oracle [index.global.js] [screenshot dir] [--url URL] [--scroll PX] [--dark]
 // With --url and no --scroll it puts the page's first large picture across the band.
 // Without --url it serves its own page: a picture in a round clip, a background picture, a
@@ -221,12 +224,14 @@ async function measure(tab: Page) {
     const view = frame?.contentWindow;
     if (!shadow || !frame || !band || band.hidden || !view) return null;
     const box = band.getBoundingClientRect();
+    const body = view.document.body;
+    const inBody = body && view.document.scrollingElement !== body ? body.scrollTop : 0;
     const capsules = [...shadow.querySelectorAll('.capsule')].map((node) => node.getBoundingClientRect().top).filter((top) => top > box.top);
     return {
       band: { x: box.x, y: box.y, width: box.width, height: box.height },
       scale: frame.getBoundingClientRect().width / view.innerWidth,
       innerHeight: view.innerHeight,
-      scrollY: view.scrollY,
+      scrollY: view.scrollY + inBody,
       capsule: capsules.length > 0 ? Math.min(...capsules) : null,
       pictured: band.querySelector('img') !== null,
     };
@@ -236,7 +241,12 @@ async function measure(tab: Page) {
 async function scrollFrame(tab: Page, y: number): Promise<void> {
   await tab.evaluate((to) => {
     const shadow = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot;
-    shadow?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')?.contentWindow?.scrollTo(0, to);
+    const view = shadow?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')?.contentWindow;
+    if (!view) return;
+    // A page whose root does not scroll and whose body does is scrolled in its body.
+    const { body, documentElement: root } = view.document;
+    if (root.scrollHeight <= view.innerHeight && body && body.scrollHeight > body.clientHeight) body.scrollTop = to;
+    else view.scrollTo(0, to);
   }, y);
   // A scroll past the pictures read takes a new picture, a quarter second apart at least.
   await tab.waitForTimeout(1200);
@@ -266,14 +276,16 @@ async function places(tab: Page, least: number): Promise<{ name: string; top: nu
       const shadow = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot;
       const view = shadow?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')?.contentWindow;
       if (!view) return [];
+      const body = view.document.body;
+      const scrolled = view.scrollY + (body && view.document.scrollingElement !== body ? body.scrollTop : 0);
       const at = (name: string, node: Element | null | undefined) => {
         const rect = node?.getBoundingClientRect();
-        return rect ? [{ name, top: rect.top + view.scrollY, height: rect.height }] : [];
+        return rect ? [{ name, top: rect.top + scrolled, height: rect.height }] : [];
       };
       if (fixture) return ['hero', 'paper', 'chart', 'away'].flatMap((id) => at(id, view.document.getElementById(id)));
       const picture = [...view.document.querySelectorAll('img')].find((node) => {
         const rect = node.getBoundingClientRect();
-        return rect.height >= tall && rect.top + view.scrollY > view.innerHeight;
+        return rect.height >= tall && rect.top + scrolled > view.innerHeight;
       });
       return at('picture', picture);
     },
@@ -293,6 +305,11 @@ function check(name: string, ok: boolean, detail: string): void {
 
 try {
   const tab = await browser.newPage({ viewport: { width: 1280, height: 1100 }, deviceScaleFactor: SHOT, colorScheme: dark ? 'dark' : 'light' });
+  // What the page's console shows, the frame's included: errors and warnings.
+  const logged: string[] = [];
+  tab.on('console', (message) => {
+    if (message.type() === 'error' || message.type() === 'warning') logged.push(message.text());
+  });
   // A page that does not load knobs gets it in its top window only: the frame's copy runs without.
   if (target) await tab.addInitScript(`if (window === window.top) {\n${code}\n}`);
   await tab.goto(base);
@@ -366,6 +383,26 @@ try {
       );
     }
   }
+  // The frame loaded again, a new document, which asks for no address the last one was refused.
+  const corsBefore = logged.filter((text) => text.includes('blocked by CORS policy')).length;
+  await tab.evaluate(() => {
+    const shadow = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot;
+    shadow?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')?.contentWindow?.location.reload();
+  });
+  await tab.waitForTimeout(1500);
+  for (const spot of spots) await scrollFrame(tab, spot.scroll);
+  const cors = logged.filter((text) => text.includes('blocked by CORS policy'));
+  const refused = new Map<string, number>();
+  for (const text of cors) {
+    const address = /at '([^']*)'/.exec(text)?.[1] ?? text;
+    refused.set(address, (refused.get(address) ?? 0) + 1);
+  }
+  const most = Math.max(0, ...refused.values());
+  check(
+    'each address refused CORS shows in the console once at most, the frame loaded again too',
+    most <= 1,
+    `${logged.length} errors and warnings in all, ${cors.length} about CORS (${corsBefore} before the reload) for ${refused.size} addresses, ${most} at most for one`,
+  );
   // What each picture of the page cost, as knobs measures it.
   const costs = await tab.evaluate(() => performance.getEntriesByName('devknobs underbar picture').map((entry) => entry.duration));
   const sorted = [...costs].sort((a, b) => a - b);

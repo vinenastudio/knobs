@@ -450,6 +450,26 @@ function blankPictures(live: Element, copy: Element): void {
   });
 }
 
+/** Does an element with `overflow` on one axis, as it computes, cut off what overflows it there? */
+export function cuts(overflow: string): boolean {
+  return overflow === "hidden" || overflow === "auto" || overflow === "scroll" || overflow === "clip";
+}
+
+/**
+ * The element of the page in `doc` whose overflow the viewport takes: the
+ * root, or the body where the root's overflow is visible both ways, or null
+ * where it has no body. The page lays that element out as if its overflow
+ * were visible. Its copy in a drawing is no document's root, so it would
+ * cut off what overflows it, or make a scroll container of it.
+ */
+export function viewportOverflow(doc: Document, view: Window): Element | null {
+  const root = doc.documentElement;
+  const style = view.getComputedStyle(root);
+  if (cuts(style.overflowX) || cuts(style.overflowY)) return root;
+  const { body } = doc;
+  return body?.localName === "body" && body.parentElement === root ? body : null;
+}
+
 /**
  * The page in `frame`, copied as it is now for `paintPage`, or null where it
  * is out of reach. What `leave` picks of the page is left out of the copy.
@@ -514,6 +534,13 @@ export function copyPage(
     }
   }
   blankPictures(doc.documentElement, root);
+  // The overflow the viewport took from the page, visible in the copy, as the page lays it out.
+  const lifted = view ? viewportOverflow(doc, view) : null;
+  const liftedCopy = lifted === doc.documentElement ? root : lifted ? root.querySelector("body") : null;
+  const liftedStyle = lifted && view ? view.getComputedStyle(lifted) : null;
+  if (liftedCopy && liftedStyle && (cuts(liftedStyle.overflowX) || cuts(liftedStyle.overflowY))) {
+    liftedCopy.setAttribute("style", `${liftedCopy.getAttribute("style") ?? ""};overflow:visible !important`);
+  }
   // And nothing devknobs put on the page: what its knobs write is in the rules.
   for (const node of root.querySelectorAll(`script, link, style, noscript, ${ownSelector()}`)) node.remove();
   const style = inert.createElement("style");
