@@ -510,6 +510,18 @@ describe("pictureOf, with pictures the frame may not read as they are", () => {
     expect(picture?.overlay).toBeNull();
   });
 
+  test("an address of another origin shown as a picture and as a background picture at one size is read with CORS for both", () => {
+    const address = "https://cdn.other.test/both.jpg";
+    const away = new Picture(address, 800, 400, true).at(0, 650, 400, 200);
+    const hero = new Node("div", { id: "hero" }).at(0, 850, 400, 200).styled({ backgroundImage: `url("${address}")` });
+    const { frame, probes } = frameOf([away, hero], new Map([[address, { width: 800, height: 400 }]]));
+    pictureOf(frame, BAND);
+    expect(probes.length).toBe(1);
+    const picture = sizedPicture(`data:image/webp;base64,${address}@800x400`, 800, 400);
+    expect(copyOf("hero")?.getAttribute("style")).toBe(`;background-image:url("${picture}") !important`);
+    expect(Canvas.reads.get(address)).toBe(1);
+  });
+
   test("a background picture the frame may not read stays as it is, with nothing drawn over the copy", () => {
     const hero = new Node("div", { id: "hero" }).at(0, 650, 400, 300).styled({ backgroundImage: 'url("https://cdn.other.test/bg.png")' });
     const loaded = new Map([["https://cdn.other.test/bg.png", { width: 400, height: 300, tainted: true }]]);
@@ -682,10 +694,8 @@ describe("pictureOf, asking for pictures quietly", () => {
     expect(picture?.overlay).not.toBeNull();
   });
 
-  test("an origin is asked for one address at a time till it allows CORS, and for none once two failed", () => {
-    const rows = [1, 2, 3].map((at) =>
-      new Node("div").at(0, 600 + at * 50, 400, 50).styled({ backgroundImage: `url("https://quiet-c.test/${at}.png")` }),
-    );
+  test("an origin is asked for one address at a time till it allows CORS, and for none once two of the page's pictures failed", () => {
+    const rows = [1, 2, 3].map((at) => new Picture(`https://quiet-c.test/${at}.png`, 400, 50, true).at(0, 600 + at * 50, 400, 50));
     const { frame, probes } = frameOf(rows);
     pictureOf(frame, BAND);
     expect(probes.map((probe) => probe.currentSrc)).toEqual(["https://quiet-c.test/1.png"]);
@@ -694,8 +704,49 @@ describe("pictureOf, asking for pictures quietly", () => {
     expect(probes.map((probe) => probe.currentSrc)).toEqual(["https://quiet-c.test/1.png", "https://quiet-c.test/2.png"]);
     for (const fail of probes[1]?.failed ?? []) fail();
     pictureOf(frame, BAND);
-    pictureOf(frameOf(rows.map((row) => row.clone().at(row.box.left, row.box.top, row.box.width, row.box.height).styled(row.style))).frame, BAND);
+    const next = frameOf(rows.map((row) => new Picture(row.src, 400, 50, true).at(row.box.left, row.box.top, row.box.width, row.box.height)));
+    pictureOf(next.frame, BAND);
     expect(probes.length).toBe(2);
+    expect(next.probes.length).toBe(0);
+  });
+
+  test("background pictures that failed to come may be missing only: an origin with two such still has its third read", () => {
+    const rows = [1, 2, 3].map((at) =>
+      new Node("div", { id: `row${at}` }).at(0, 600 + at * 50, 400, 50).styled({ backgroundImage: `url("https://quiet-e.test/${at}.png")` }),
+    );
+    const { frame, probes } = frameOf(rows, new Map([["https://quiet-e.test/3.png", { width: 400, height: 50 }]]));
+    let heard = 0;
+    pictureOf(frame, BAND, () => heard++);
+    for (const fail of probes[0]?.failed ?? []) fail();
+    // The next waited on it, so a new picture is taken to ask for it.
+    expect(heard).toBe(1);
+    pictureOf(frame, BAND);
+    for (const fail of probes[1]?.failed ?? []) fail();
+    pictureOf(frame, BAND);
+    expect(probes.map((probe) => probe.currentSrc)).toEqual([1, 2, 3].map((at) => `https://quiet-e.test/${at}.png`));
+    const picture = sizedPicture("data:image/webp;base64,https://quiet-e.test/3.png@400x50", 400, 50);
+    expect(copyOf("row3")?.getAttribute("style")).toBe(`;background-image:url("${picture}") !important`);
+    // Each failed address is asked for once only.
+    pictureOf(frame, BAND);
+    expect(probes.length).toBe(3);
+  });
+
+  test("an origin that allowed CORS is asked for the rest of its pictures, however many of them fail", () => {
+    const page = (at: string, top: number) => new Picture(`https://quiet-f.test/${at}.jpg`, 400, 50, true).at(0, top, 400, 50);
+    const loaded = new Map([
+      ["https://quiet-f.test/a.jpg", { width: 400, height: 50 }],
+      ["https://quiet-f.test/d.jpg", { width: 400, height: 50 }],
+    ]);
+    const first = frameOf([page("a", 650), page("b", 700), page("c", 750)], loaded);
+    pictureOf(first.frame, BAND);
+    expect(first.probes.length).toBe(3);
+    for (const probe of first.probes) for (const fail of probe.failed) fail();
+    const later = page("d", 700);
+    later.setAttribute("id", "later");
+    const next = frameOf([later], loaded);
+    pictureOf(next.frame, BAND);
+    expect(next.probes.map((probe) => probe.currentSrc)).toEqual(["https://quiet-f.test/d.jpg"]);
+    expect(copyOf("later")?.getAttribute("src")).toBe(sizedPicture("data:image/webp;base64,https://quiet-f.test/d.jpg@400x50", 400, 50));
   });
 
   test("an origin that allowed CORS has the rest of its addresses asked for at once", () => {

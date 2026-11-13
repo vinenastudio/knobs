@@ -1129,12 +1129,12 @@ describe("copyPage, of a page with pictures and with what devknobs put on it", (
 
   test("lays out visible the root or body whose overflow the viewport takes, which would cut off or scroll the copy, and only that one", () => {
     /** The copy of a page whose root and body compute these overflows, across and down. */
-    const copyWith = (root: [string, string], body: [string, string]) => {
+    const copyWith = (root: [string, string], body: [string, string], display = "block") => {
       const live = new Tag("html", {}, [new Tag("head"), new Tag("body", {}, [new Tag("p")])]);
       const inert = { importNode: (node: Tag) => node.clone(), createElement: (name: string) => new Tag(name) };
       const overflow = (node: Tag) => {
         const [overflowX, overflowY] = node === live ? root : body;
-        return { overflowX, overflowY };
+        return { overflowX, overflowY, display: node === live ? display : "block" };
       };
       const doc = {
         documentElement: live,
@@ -1150,7 +1150,9 @@ describe("copyPage, of a page with pictures and with what devknobs put on it", (
     // html, body { height: 100% } body { overflow-x: hidden }: the body's goes to the viewport.
     expect(copyWith(["visible", "visible"], ["hidden", "auto"])).toEqual([null, ";overflow:visible !important"]);
     // The root's goes there instead, and the body keeps its own.
-    expect(copyWith(["clip", "visible"], ["hidden", "auto"])).toEqual([";overflow:visible !important", null]);
+    // A block root stays a formatting context, so its first child's top margin does not leave a gap above it in the copy.
+    expect(copyWith(["clip", "visible"], ["hidden", "auto"])).toEqual([";overflow:visible !important;display:flow-root !important", null]);
+    expect(copyWith(["clip", "visible"], ["hidden", "auto"], "flex")).toEqual([";overflow:visible !important", null]);
     expect(copyWith(["visible", "visible"], ["visible", "visible"])).toEqual([null, null]);
   });
 });

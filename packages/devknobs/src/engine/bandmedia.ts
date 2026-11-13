@@ -17,7 +17,8 @@ import { drawMedia, type FitStyle, MEDIA, type Media, type MediaNode, mediaOf, s
  * with CORS does, so a same-origin picture is asked for without, each
  * address fails once at most while the page runs, an origin is asked for one
  * address at a time till it allows CORS, and one that refused `REFUSALS` of
- * them is asked for no more.
+ * its pictures the page has is asked for no more. A background picture that
+ * fails may be missing only, so it counts against no origin.
  */
 
 /** How far past the band, up and down the document, its pictures are read, in viewport heights: a scroll as far needs no new picture. */
@@ -165,8 +166,13 @@ export function sameOrigin(address: string, base: string, origin: string): boole
   }
 }
 
-/** Remember that `address` failed to come, asked for with CORS of `origin`, or without where that is null. */
-function refuse(address: string, origin: string | null): void {
+/**
+ * Remember that `address` failed to come, asked for with CORS of `origin`, or
+ * without where that is null. Where the page's own picture of it came,
+ * `exists`, it failed for CORS, so it counts against an origin that has not
+ * allowed CORS; one that may be missing only is not asked for again.
+ */
+function refuse(address: string, origin: string | null, exists: boolean): void {
   if (origin !== null) asking.delete(origin);
   if (refused.has(address)) return;
   refused.add(address);
@@ -174,26 +180,35 @@ function refuse(address: string, origin: string | null): void {
     const [oldest] = refused;
     if (oldest !== undefined) refused.delete(oldest);
   }
-  if (origin !== null) refusedOrigins.set(origin, (refusedOrigins.get(origin) ?? 0) + 1);
+  if (origin !== null && exists && !allowed.has(origin)) refusedOrigins.set(origin, (refusedOrigins.get(origin) ?? 0) + 1);
 }
 
 /**
  * A picture in `doc` of what `address` holds, kept in `used`, asked for with
  * CORS where `cors` has it, so one from another origin that allows it can be
  * read. The page has it already, so the browser mostly has it at once; where
- * not, `loaded` is told when it comes. Null where it is not asked for: it
- * failed to come before, in this document or another, its origin refused
- * CORS `REFUSALS` times, or one of its origin's, which has not allowed CORS
- * yet, is still on the way, whose answer holds for the rest.
+ * not, `loaded` is told when it comes, or when it fails to come where
+ * another of its origin's waits on it. `exists` where the page's own picture
+ * of it came, so a failure is a refusal. Null where it is not asked for: it
+ * failed to come before, in this document or another, its origin, which has
+ * not allowed CORS, refused it `REFUSALS` times, or one of its origin's, which
+ * has not allowed CORS yet, is still on the way, whose answer holds for the rest.
  */
-function probeOf(doc: Document, address: string, cors: boolean, loaded: () => void, used: Map<string, HTMLImageElement>): HTMLImageElement | null {
+function probeOf(
+  doc: Document,
+  address: string,
+  cors: boolean,
+  loaded: () => void,
+  used: Map<string, HTMLImageElement>,
+  exists = false,
+): HTMLImageElement | null {
   const known = used.get(address) ?? probes.get(address);
   if (known && known.ownerDocument === doc) {
     used.set(address, known);
     return known;
   }
   const origin = cors ? originOf(address) : null;
-  if (refused.has(address) || (origin !== null && (refusedOrigins.get(origin) ?? 0) >= REFUSALS)) return null;
+  if (refused.has(address) || (origin !== null && !allowed.has(origin) && (refusedOrigins.get(origin) ?? 0) >= REFUSALS)) return null;
   const first = origin === null || allowed.has(origin) ? undefined : asking.get(origin);
   if (first && first.ownerDocument === doc && !first.complete) return null;
   const probe = doc.createElement("img");
@@ -211,7 +226,13 @@ function probeOf(doc: Document, address: string, cors: boolean, loaded: () => vo
       loaded();
     };
     probe.addEventListener("load", come, { once: true });
-    probe.addEventListener("error", () => refuse(address, origin), { once: true });
+    const fail = () => {
+      // The next of its origin's waited on it, so it may be asked for now.
+      const waited = origin !== null && asking.get(origin) === probe;
+      refuse(address, origin, exists);
+      if (waited) loaded();
+    };
+    probe.addEventListener("error", fail, { once: true });
   }
   used.set(address, probe);
   return probe;
@@ -380,7 +401,7 @@ export function bandMedia(doc: Document, view: Window, span: Span, loaded: () =>
       let data = keptPixels(`${address}|${sized}`, () => readPixels(node, size));
       if (data === null) {
         // From another origin: asked for again with CORS, which reads where its host allows it.
-        const probe = probeOf(doc, address, true, loaded, used);
+        const probe = probeOf(doc, address, true, loaded, used, true);
         if (probe && mediaOf(probe)) data = keptPixels(`${address}|cors|${sized}`, () => readPixels(probe, size));
       }
       if (data !== null) {
@@ -450,11 +471,13 @@ export function bandMedia(doc: Document, view: Window, span: Span, loaded: () =>
     const shown = layersOf(value).map((layer) => {
       const address = urlOf(layer);
       if (address === null || address.startsWith("data:")) return layer;
-      const probe = probeOf(doc, address, !sameOrigin(address, doc.baseURI, origin), loaded, used);
+      const cors = !sameOrigin(address, doc.baseURI, origin);
+      const probe = probeOf(doc, address, cors, loaded, used);
       const media = probe && mediaOf(probe);
       if (!media) return layer;
       const size = readSize(media, rect.width, rect.height, ratio);
-      const data = keptPixels(`${address}|${size.width}x${size.height}`, () => readPixels(probe, size));
+      // Kept by the same key as a picture of the page read with CORS, not as one read as it is, which may not be read.
+      const data = keptPixels(`${address}|${cors ? "cors|" : ""}${size.width}x${size.height}`, () => readPixels(probe, size));
       if (data === null) return layer;
       read = true;
       return `url("${sizedPicture(data, media.width, media.height, style.imageRendering)}")`;

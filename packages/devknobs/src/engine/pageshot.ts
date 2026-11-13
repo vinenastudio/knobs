@@ -539,7 +539,9 @@ export function copyPage(
   const liftedCopy = lifted === doc.documentElement ? root : lifted ? root.querySelector("body") : null;
   const liftedStyle = lifted && view ? view.getComputedStyle(lifted) : null;
   if (liftedCopy && liftedStyle && (cuts(liftedStyle.overflowX) || cuts(liftedStyle.overflowY))) {
-    liftedCopy.setAttribute("style", `${liftedCopy.getAttribute("style") ?? ""};overflow:visible !important`);
+    // The copy's root is not the drawing's root, so a block one is kept a formatting context of its own: its first child's top margin stays inside it.
+    const own = liftedCopy === root && liftedStyle.display === "block" ? ";display:flow-root !important" : "";
+    liftedCopy.setAttribute("style", `${liftedCopy.getAttribute("style") ?? ""};overflow:visible !important${own}`);
   }
   // And nothing devknobs put on the page: what its knobs write is in the rules.
   for (const node of root.querySelectorAll(`script, link, style, noscript, ${ownSelector()}`)) node.remove();
