@@ -14,6 +14,17 @@ export function canonicalRedirect(url: URL): Response | null {
   return Response.redirect(`${CANONICAL_ORIGIN}${url.pathname}${url.search}`, 301);
 }
 
+/**
+ * `/docs` used to render `/docs/start` under a second address, so search engines
+ * folded the two together. It now moves there for good, query and all.
+ */
+export function docsRedirect(url: URL): Response | null {
+  if (url.pathname !== '/docs' && url.pathname !== '/docs/') {
+    return null;
+  }
+  return new Response(null, { headers: { location: `/docs/start${url.search}` }, status: 301 });
+}
+
 /** The page's one address for search engines: on the apex, with no query. */
 export const canonicalLink = (path: string) => ({
   href: `${CANONICAL_ORIGIN}${path}`,
