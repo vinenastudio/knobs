@@ -154,7 +154,7 @@ not unless you put it there. knobs is for development only, and every way in is 
 
 ### which frameworks does it work with?
 
-any page. it works on the page itself, so it needs no framework: the script tag on a plain page, `mount()` with any bundler (vite, tanstack start, react router, sveltekit), and `<DevKnobs />` in react, next.js included. add the [early script](/docs/start#early-script) where the page reads media queries, the time or the user agent while it boots.
+any page. it works on the page itself, so it needs no framework: the script tag on a plain page, `mount()` with any bundler (vite, tanstack start, react router, sveltekit), and `<Knobs />` in react, next.js included. add the [early script](/docs/start#early-script) where the page reads media queries, the time or the user agent while it boots.
 
 ### does it need react?
 

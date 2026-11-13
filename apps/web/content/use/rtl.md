@@ -49,8 +49,8 @@ Use it with the pseudo knob, which turns the page's text into accented, padded s
 A coding agent can set the knob through any browser tool that runs JavaScript in the page, such as Playwright's `page.evaluate` or the Chrome DevTools MCP's `evaluate_script`:
 
 ```js
-window.devknobs.setState({ locale: { lang: 'ar', dir: 'rtl' } });
-await window.devknobs.ready();
+window.knobs.setState({ locale: { lang: 'ar', dir: 'rtl' } });
+await window.knobs.ready();
 ```
 
 A new tag can reload the page. If it does, the evaluate ends with it: wait for the load, then call `ready()` on the new page. `reset()` sets the knobs back, and can reload the page too. See [agents](/docs/agents).

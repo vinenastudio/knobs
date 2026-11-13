@@ -39,6 +39,7 @@ export function unmountKnobs(): void {
 /** True once a visitor has turned a knob in this tab, so the stored state should apply at once. */
 function hasStoredKnobs(): boolean {
   try {
+    // The old name is the one read while both are written: packages/devknobs/src/engine/storekeys.ts.
     return sessionStorage.getItem('devknobs') !== null;
   } catch {
     return false;

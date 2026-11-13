@@ -82,16 +82,18 @@ did not take it`, `not an edit knobs reads`). anything but a list
 - `setState({ panel: { realPhone } })` with the extension: a change made during a user gesture, such as a click (the panel's switch included), is saved for every tab and site; a change a script makes without one stays in that tab, so a page's script cannot turn it for the others.
 
 ```js
-window.devknobs.setState({ scheme: 'dark', panel: { open: false, handle: false } });
-await window.devknobs.ready();
+window.knobs.setState({ scheme: 'dark', panel: { open: false, handle: false } });
+await window.knobs.ready();
 ```
 
-every way in puts the api on `window.devknobs` while knobs is mounted: the
-script tag, `mount()` and `<DevKnobs />`. so does the copy inside the width
+every way in puts the api on `window.knobs` while knobs is mounted: the
+script tag, `mount()` and `<Knobs />`. so does the copy inside the width
 knob's frame, so `grab` works there too. the script tag build keeps the api
 after `unmount()`, so it can mount again: `ready()` tells whether it is mounted.
-the [chrome extension](/docs/extension) puts the same api on `window.devknobs`
+the [chrome extension](/docs/extension) puts the same api on `window.knobs`
 on any page it runs on.
+the old names, `window.devknobs` and `<DevKnobs />`, still work for now.
+where `window.knobs` is not knobs' api (the page has a `knobs` of its own, or knobs is older than 0.7.1, such as an extension not yet on 0.7.1), use `window.devknobs`, which every copy sets.
 
 ## the agent skill
 

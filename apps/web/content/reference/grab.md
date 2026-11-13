@@ -15,7 +15,7 @@ are on the clipboard, one line per element:
 ```
 
 paste that into the agent and it can find the code. the clipboard also carries
-the same context as json, under `application/x-devknobs-grab` and react-grab's
+the same context as json, under `application/x-knobs-grab` and react-grab's
 own `application/x-react-grab`.
 
 grab turns on with the press, and stays on until a copy, escape or `⇧G` again.
@@ -254,7 +254,7 @@ the page at once, into the same changes as the style edits:
   (`shrink` makes it as it was); both are kept for the next time. `⇧↩`
   (`Shift Enter` off a Mac), its `apply` button, or a click elsewhere puts the
   new html in the element's place and selects it; esc leaves it. html with no element in it, or with knobs' own
-  `data-devknobs` attributes, is refused: applying it with `⇧↩` or the
+  `data-knobs` or `data-devknobs` attributes, is refused: applying it with `⇧↩` or the
   button turns the field red and keeps it open, while a click elsewhere
   closes it without the edit. undo puts the very element back, unless the
   page moved the new nodes since
@@ -368,11 +368,11 @@ to after, a hide, a delete and a move, with the place it went as selectors
 to change the component or template that renders the element, not the DOM,
 as the framework's next render may undo an edit of the DOM. `copy diff` copies the diff lines alone, and `undo all` takes
 every edit back. reset in the footer undoes the edits with the knobs, and so
-does `unmount()`; `devknobs.reset()` leaves them. an edit whose page goes, as
+does `unmount()`; `knobs.reset()` leaves them. an edit whose page goes, as
 a frame's reloads, stays in the list as text, and undo then only takes it
-out. `window.devknobs.edits()` gives the edits in force as json, and
+out. `window.knobs.edits()` gives the edits in force as json, and
 `setEdits()` makes such a list again (see [agents](/docs/agents)). the line
-under the buttons says so: `agents read and apply edits: devknobs.edits() / setEdits()`.
+under the buttons says so: `agents read and apply edits: knobs.edits() / setEdits()`.
 
 ### keep edits after reload
 
@@ -427,7 +427,7 @@ are no edits and are never kept. edits made in knobs' frame, for a
 pinned panel or a device, are kept while the frame shows the same page (its
 origin and path), and made again in the frame after a reload; html and
 attribute edits made there wait for `apply` too, as the page's own do. with the npm package they are in the page's `localStorage`, one item
-per page, `devknobs:edits:` and the path; in fresh mode nothing is kept or
+per page, `devknobs:edits:` and `knobs:edits:` and the path; in fresh mode nothing is kept or
 made again; with the
 extension, in the extension's own storage (see
 [the extension](/docs/extension)). see [privacy](/docs/privacy) for how to
@@ -446,7 +446,7 @@ ancestors too, and a focus makes them match `:focus-within`, as with the
 real state.
 
 a page's script cannot set those states, so knobs emulates them: the
-element and its ancestors carry `data-devknobs-force`, and each rule of the
+element and its ancestors carry `data-knobs-force` and `data-devknobs-force`, and each rule of the
 page with a forced state in its selector is copied into a stylesheet of
 knobs' own, the state written `:is(:hover, [data-devknobs-force~="hover"])`,
 as heavy as before, in the same `@media`, `@supports`, `@container`,
@@ -469,7 +469,7 @@ where that falls short:
   page's rules for `.b .icon` too
 - `:visited` is not forced: browsers hide it from a page
 
-`devknobs.forceState()` does the same for an agent (see
+`knobs.forceState()` does the same for an agent (see
 [agents](/docs/agents)).
 
 ### what inspect cannot show

@@ -17,13 +17,13 @@ knobs README (`node_modules/@vinena/knobs/README.md`).
 Check that knobs is mounted:
 
 ```js
-await window.devknobs.ready();
+await window.knobs.ready();
 ```
 
-Every way of mounting knobs puts the api on `window.devknobs`: the script
-tag, `mount()` and `<DevKnobs />`. Inside the width knob's frame the frame's own
-copy has it too. If `window.devknobs` is undefined, knobs is not on this
-page. The script tag build keeps the api after `unmount()`, so the api alone
+Every way of mounting knobs puts the api on `window.knobs`: the script
+tag, `mount()` and `<Knobs />`. Inside the width knob's frame the frame's own
+copy has it too. If neither `window.knobs` nor `window.devknobs` is set, knobs is not on this
+page. Where `window.knobs` is not knobs' api (the page has a `knobs` of its own, or knobs is older than 0.7.1, such as an extension not yet on 0.7.1), use `window.devknobs`, which every copy sets. The script tag build keeps the api after `unmount()`, so the api alone
 does not prove a mount. `ready()` does: it rejects at once with
 `knobs: not mounted` when nothing is mounted.
 
@@ -31,21 +31,22 @@ Then note the panel as the user left it. Keep the result in your notes, as a
 later evaluate or a reload loses page variables:
 
 ```js
-JSON.stringify(window.devknobs.getState().panel);
+JSON.stringify(window.knobs.getState().panel);
 ```
 
 This note comes from the tab's `sessionStorage`, so it is the user's layout
 only in a fresh tab. In a tab an earlier agent may have used, also read
 `localStorage.getItem("devknobs:place")`. It holds the place the user last
 gave the panel (`side`, `y`, `top`, `edge`, `tab`, `docked`). Use those fields
-over the ones in the note.
+over the ones in the note. knobs 0.7.1 writes `knobs:place` too, with the same value. A later
+release reads `knobs:place` instead.
 
 ## Learn the knobs
 
 Call `describe()` first. Never guess a key or a value.
 
 ```js
-window.devknobs.describe();
+window.knobs.describe();
 ```
 
 It returns one entry per knob:
@@ -74,12 +75,12 @@ as `grabColor` and the panel's place. Do not compare the two key for key.
    without a numeric width and height, and `posture` without a device that
    folds. Compare `getState()` with what you set.
 2. Wait for it to apply:
-   - `reload` is `none` or `frame`: `await window.devknobs.ready()`.
+   - `reload` is `none` or `frame`: `await window.knobs.ready()`.
    - `reload` is `page`: the page may reload, or it may not. knobs skips a
      reload that comes less than 5 seconds after the last one. Call
-     `await window.devknobs.ready()` either way. If the page navigates
+     `await window.knobs.ready()` either way. If the page navigates
      instead, wait for the load in your browser tool and call
-     `await window.devknobs.ready()` on the new page. A `ready()` from the old
+     `await window.knobs.ready()` on the new page. A `ready()` from the old
      page never settles. In Playwright or a DevTools tool, the reload ends the
      evaluate with an error such as `Execution context was destroyed` or
      `Inspected target navigated or closed`. That error is the expected sign
@@ -96,23 +97,23 @@ To leave a device, call `reset()` or set
 stays up.
 
 ```js
-window.devknobs.setState({ scheme: "dark", motion: "reduce" });
-await window.devknobs.ready();
+window.knobs.setState({ scheme: "dark", motion: "reduce" });
+await window.knobs.ready();
 ```
 
 ```js
-window.devknobs.setState({ device: "iphone-17", locale: { lang: "ar", dir: "rtl" } });
-await window.devknobs.ready();
+window.knobs.setState({ device: "iphone-17", locale: { lang: "ar", dir: "rtl" } });
+await window.knobs.ready();
 // If the page navigates, the evaluate ends with it. Wait for the load, then on the new page:
-await window.devknobs.ready();
+await window.knobs.ready();
 ```
 
 ## Check the page
 
 1. Close the panel, hide its handle and unpin it, so it stays out of
    screenshots and out of the page's width, then wait for it to slide away:
-   `window.devknobs.setState({ panel: { open: false, handle: false, docked: false } })`,
-   then `await window.devknobs.ready()`. `reset()` keeps this. Patch only
+   `window.knobs.setState({ panel: { open: false, handle: false, docked: false } })`,
+   then `await window.knobs.ready()`. `reset()` keeps this. Patch only
    `open`, `docked` and `handle`. The other panel fields are the user's
    layout and settings, such as `devIcon`, the DEV ribbon on the tab's icon. `panel.handle` is your layer. The user's own "show handle" setting
    can hide the handle too, and `getState()` does not show that setting.
@@ -126,14 +127,14 @@ await window.devknobs.ready();
 
    ```js
    const frame = document
-     .querySelector('[data-devknobs="viewport"]')
-     ?.shadowRoot?.querySelector("iframe[data-devknobs-frame]");
+     .querySelector('[data-knobs="viewport"]')
+     ?.shadowRoot?.querySelector("iframe[data-knobs-frame]");
    await frame?.contentWindow?.devknobs?.ready();
    frame?.contentDocument;
    ```
 
    Read the DOM there. The page in the frame runs its own knobs, so call
-   `grab` on `frame.contentWindow.devknobs` for elements in the frame. The top
+   `grab` on `frame.contentWindow.knobs` for elements in the frame. The top
    page's `grab` on such an element gives component names with no file or line.
    After `ready()` the frame's knobs is there if the app mounts knobs on
    that page.
@@ -143,7 +144,7 @@ await window.devknobs.ready();
 For an element that looks wrong, call `grab`:
 
 ```js
-const payload = await window.devknobs.grab(document.querySelector("h1"));
+const payload = await window.knobs.grab(document.querySelector("h1"));
 payload?.content;
 ```
 
@@ -166,7 +167,7 @@ such as a `querySelector` that found nothing, and returns `null` when nothing
 is left or the elements give nothing.
 
 After a fix, reload the page. The knobs stay set across reloads. Call
-`await window.devknobs.ready()` and check again.
+`await window.knobs.ready()` and check again.
 
 ## Apply the user's edits
 
@@ -174,7 +175,7 @@ The user can edit styles and the html in inspect's view (`⇧C`) and ask you
 to put them in the code. Read them:
 
 ```js
-window.devknobs.edits();
+window.knobs.edits();
 ```
 
 Each edit is plain json: `kind` (`css-value`, `css-toggle`, `css-add` or
@@ -223,14 +224,14 @@ save the list and make it again:
 
 ```js
 // Read the list into your own context (the result of the evaluate call): a reload clears the page's variables.
-JSON.stringify(window.devknobs.edits());
+JSON.stringify(window.knobs.edits());
 ```
 
 It comes back as a JSON string. Reload the page, then parse it and pass it back in:
 
 ```js
-const { applied, skipped } = await window.devknobs.setEdits(JSON.parse(JSON_YOU_KEPT));
-window.devknobs.undoEdit(); // undoes the last edit in force, returns it or null
+const { applied, skipped } = await window.knobs.setEdits(JSON.parse(JSON_YOU_KEPT));
+window.knobs.undoEdit(); // undoes the last edit in force, returns it or null
 ```
 
 `setEdits` makes each edit only where its element is found by its selector
@@ -251,9 +252,9 @@ wait for the user's click on `apply` in the panel.
 To see or screenshot a state the pointer or the keyboard would give, force it:
 
 ```js
-window.devknobs.forceState(".cta", ["hover"]); // or "focus", "focus-visible", "active", "focus-within"
+window.knobs.forceState(".cta", ["hover"]); // or "focus", "focus-visible", "active", "focus-within"
 // screenshot, then:
-window.devknobs.forceState(null);
+window.knobs.forceState(null);
 ```
 
 It takes an element or a selector, returns the states forced, and is no edit.
@@ -279,8 +280,8 @@ const conditions = [
 
 For each condition:
 
-1. `window.devknobs.reset()`.
-2. `window.devknobs.setState(condition)`. The panel stays as you set it in
+1. `window.knobs.reset()`.
+2. `window.knobs.setState(condition)`. The panel stays as you set it in
    "Check the page".
 3. Wait as in "Set a condition".
 4. Screenshot or read the DOM. Note what breaks.
@@ -296,10 +297,10 @@ changes data values, such as numbers and names. That is not a bug.
 Put the knobs back, and the panel as you noted it at the start:
 
 ```js
-window.devknobs.forceState(null); // a state you forced; reset() leaves it
-window.devknobs.reset();
-window.devknobs.setState({ panel: NOTED_PANEL }); // the panel json you noted
-await window.devknobs.ready();
+window.knobs.forceState(null); // a state you forced; reset() leaves it
+window.knobs.reset();
+window.knobs.setState({ panel: NOTED_PANEL }); // the panel json you noted
+await window.knobs.ready();
 ```
 
 The knobs are kept in `sessionStorage` and stay set across reloads in the tab

@@ -144,7 +144,7 @@ closes an open box, then empties the filter, then leaves the view:
   response's status, a hundred at a time, and a row folds out to the method,
   address, type and size. read only
 - `presets`: named sets of values to put back into the page, see below. they
-  stand last in the tree under `devknobs`, as they are its own and not the
+  stand last in the tree under `knobs`, as they are its own and not the
   page's
 
 a store that can be emptied has clear among its controls, after one question.
@@ -153,7 +153,7 @@ session storage, every cookie the page can delete, every database and every
 cache go in one go. what could not be removed is counted and said, and a
 reload is offered, never done for you.
 
-knobs' own items (the key `devknobs` and every `devknobs:` key) are hidden
+knobs' own items (the key `knobs` and every `knobs:` key, and their old names `devknobs` and `devknobs:`) are hidden
 and kept by every clear. a list that has some ends with a quiet line that
 says how many are hidden, and a press on it shows them.
 
@@ -173,7 +173,7 @@ on every load until it is turned off: the storage row in the panel says
 without deleting any. a preset imported from someone else never applies on
 load until you turn that on.
 
-presets are kept in `localStorage` under `devknobs:storage-presets`, so they
+presets are kept in `localStorage` under `devknobs:storage-presets` and `knobs:storage-presets`, so they
 are per origin and never apply anywhere else. in fresh mode they are neither
 read nor kept.
 

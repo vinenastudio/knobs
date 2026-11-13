@@ -9,19 +9,19 @@ code: a new permission or a new request the extension makes changes the answers 
 **Name** (the manifest's `name`, at most 75 characters)
 
 ```
-knobs: Dark Mode, Responsive and Accessibility Tester for Developers
+knobs: Dark Mode, Mobile Simulator and User Agent Switcher for Developers
 ```
 
 **Summary** (the manifest's `description`, at most 132 characters)
 
 ```
-Test dark mode, mobile view, reduced motion, text size, locale, time zone, geolocation and user agent on any page from one panel.
+Test your site on an iPhone or a Pixel, in dark mode, in another language, time zone or location, or on a fake date, from one panel.
 ```
 
 **Description**
 
 ```
-knobs is a free, open source panel for web developers and designers. Open any page and test how it looks in dark mode, on a phone, with reduced motion, with larger text, in another language or in another time zone. You do not change your system settings or your code.
+knobs is a free, open source panel for web developers and designers. Open any page and see how it looks on an iPhone or a Pixel, in dark mode, with reduced motion, with larger text, in another language, in another time zone, at another location or on another date. You do not change your system settings or your code.
 
 WHAT YOU CAN TEST
 
@@ -30,18 +30,18 @@ Look and accessibility
 - Reduced motion (prefers-reduced-motion), animation speed and replay
 - Higher contrast (prefers-contrast) and reduced transparency
 - Text size and text spacing
-- Color blindness filters: protanopia, deuteranopia, tritanopia, achromatopsia, and blur
+- Color blindness simulator: protanopia, deuteranopia, tritanopia, achromatopsia, and blur
 
-Devices and responsive design
+Mobile simulator and responsive design
 - Any width or height, with touch, so your breakpoints really change
-- Phone, tablet and laptop sizes, with a device frame drawn around the page if you want one
+- Phone, tablet and laptop sizes, such as iPhone, iPad and Pixel, with a device frame drawn around the page if you want one
 - A user agent switcher, so the server sees that browser. The Chromium presets (Chrome, Edge, Googlebot) also set the client hints; Safari, Firefox and a custom string send none
 
-Language, place and time
-- Any locale, with right-to-left (RTL) or left-to-right text direction
+Language, location and time
+- Any locale for i18n testing, with right-to-left (RTL) or left-to-right text direction
 - Pseudolocalization, to find text that does not fit
-- Geolocation from city presets or your own coordinates
-- Time zone and the page clock: a different zone, a time offset, or a stopped clock
+- Fake geolocation from city presets or your own coordinates
+- Timezone and the page clock: a different time zone, a time offset to test a later date, or a stopped clock
 
 Network
 - Offline, to see how the page acts with no connection
@@ -85,6 +85,8 @@ The same panel ships as the npm package @vinena/knobs. Add it to your own app in
 Docs: https://knobs.dev/docs/extension
 Source (MIT license): https://github.com/vinenastudio/knobs
 Made by Vinena Studio.
+
+Chrome is a trademark of Google LLC.
 ```
 
 **Category**: Developer Tools

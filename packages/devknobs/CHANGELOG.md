@@ -1,5 +1,23 @@
 # changelog
 
+## 0.7.1
+
+- new names, beside the old ones, which still work for now:
+  - the api is on `window.knobs` too, beside `window.devknobs`. a page that has a `knobs` of its own keeps it
+  - the react component is `Knobs`, from `@vinena/knobs/react`. `DevKnobs` is the same component
+  - the types are `KnobsState`, `KnobsStatePatch` and `KnobsApi`. `DevknobsState`, `DevknobsStatePatch` and `DevknobsApi` are marked deprecated
+  - "send to server" sends `x-knobs-now` and `x-devknobs-now`, with the same value
+  - `?knobs=fresh` turns on fresh mode, as `?devknobs=fresh` does
+  - a grab puts `application/x-knobs-grab` on the clipboard, beside `application/x-devknobs-grab`
+  - the attributes knobs puts on the page are written as `data-knobs…` and `data-devknobs…`
+  - knobs' own items in web storage are written as `knobs` and `knobs:…` too, beside `devknobs` and `devknobs:…`, which are still the ones read
+- an element with `id="knobs"` or `name="knobs"` does not keep the api off `window.knobs`; a page's `var knobs`, `function knobs` or `window.knobs =` does
+- `npx @vinena/knobs init` writes `Knobs` in the component it makes for next
+- the changes' note says `agents read and apply edits: knobs.edits() / setEdits()`
+- the chrome extension's upload is `knobs-<version>.zip`
+- the chrome extension has a new store name and summary
+- the readme, the skill and the docs use the new names
+
 ## 0.7.0
 
 - `npx @vinena/knobs init` adds the mount line to a Next (App Router and Pages Router) or Vite project, in development only, and prints the install command and the steps. when it is not sure, it changes nothing and prints the step to do by hand

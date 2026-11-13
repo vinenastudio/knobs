@@ -46,8 +46,8 @@ Other knobs next to it: contrast, text size and text spacing. Each one is listed
 A coding agent can set the knob through any browser tool that runs JavaScript in the page, such as Playwright's `page.evaluate` or the Chrome DevTools MCP's `evaluate_script`:
 
 ```js
-window.devknobs.setState({ vision: 'deuteranopia' });
-await window.devknobs.ready();
+window.knobs.setState({ vision: 'deuteranopia' });
+await window.knobs.ready();
 ```
 
 `ready()` resolves with the state once the page has caught up with the knobs, the frame included. Then take a screenshot. `setState()` throws a `TypeError` at a value the state does not take, and then changes nothing. `reset()` sets the knobs back. See [agents](/docs/agents).

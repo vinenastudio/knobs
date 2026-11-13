@@ -66,8 +66,7 @@ turn on "send to server" and `fetch` and `XMLHttpRequest` calls to the page's ow
 
 ```ts
 const now = (request: Request) => {
-  const header =
-    process.env.NODE_ENV === 'development' ? request.headers.get('x-devknobs-now') : null;
+  const header = process.env.NODE_ENV === 'development' ? request.headers.get('x-knobs-now') : null;
   return header ? new Date(header) : new Date();
 };
 ```

@@ -119,8 +119,8 @@ describe("what it writes", () => {
     for (const piece of [
       '"use client"',
       'import dynamic from "next/dynamic"',
-      'const DevKnobs = process.env.NODE_ENV === "development" ? dynamic(() => import("@vinena/knobs/react").then((m) => m.DevKnobs), { ssr: false }) : null;',
-      "{DevKnobs && <DevKnobs />}",
+      'const Knobs = process.env.NODE_ENV === "development" ? dynamic(() => import("@vinena/knobs/react").then((m) => m.Knobs), { ssr: false }) : null;',
+      "{Knobs && <Knobs />}",
     ]) {
       expect(prompt).toContain(piece);
       expect(COMPONENT).toContain(piece);

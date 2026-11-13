@@ -20,13 +20,13 @@ Read https://knobs.dev/llms-full.txt first: it is the full knobs reference. Then
 
 1. Detect the package manager from the lockfile and add @vinena/knobs as a dev dependency (npm i -D @vinena/knobs, or the pnpm, yarn or bun equivalent).
 2. Mount it once, on the client, in development only:
-- Next.js: make a small client component (the file starts with "use client"). In it, import dynamic from "next/dynamic", then const DevKnobs = process.env.NODE_ENV === "development" ? dynamic(() => import("@vinena/knobs/react").then((m) => m.DevKnobs), { ssr: false }) : null; and render {DevKnobs && <DevKnobs />}. Render that component once in app/layout (App Router) or pages/_app (Pages Router).
+- Next.js: make a small client component (the file starts with "use client"). In it, import dynamic from "next/dynamic", then const Knobs = process.env.NODE_ENV === "development" ? dynamic(() => import("@vinena/knobs/react").then((m) => m.Knobs), { ssr: false }) : null; and render {Knobs && <Knobs />}. Render that component once in app/layout (App Router) or pages/_app (Pages Router).
 - Everything else with a bundler (Vite, TanStack Start, React Router, SvelteKit): call if (import.meta.env.DEV) import("@vinena/knobs").then(({ mount }) => mount()); in the client entry, or in a mount effect of the root component in an SSR app. Use the bundler's own dev flag where import.meta.env.DEV does not exist.
 - A plain page with no bundler: skip the npm install and add <script src="//unpkg.com/@vinena/knobs/dist/index.global.js"></script> to the page. It mounts itself. Keep it out of the deployed page.
 3. Keep knobs out of production builds. A static import stays in the bundle even behind a dev check, so gate the import itself as above. If the project has a build script, run it and check that the output has no knobs.
 4. If the app reads media queries, the time or the user agent while it boots, or renders with React, add the early script as the first element in <head>, in development only: <script src="//unpkg.com/@vinena/knobs/dist/early.global.js"></script>
 5. Change nothing else in the project for the setup.
-6. Open the app in your browser tool, such as Playwright or the Chrome DevTools MCP, and drive window.devknobs. For each check, call window.devknobs.reset(), then window.devknobs.setState(), then await window.devknobs.ready(). Check a phone ({ device: "iphone-17" }), dark mode ({ scheme: "dark" }) and a right-to-left language ({ locale: { lang: "ar", dir: "rtl" } }). The locale knob can reload the page, so wait for the load. window.devknobs.grab() what breaks, fix it and check again. Then call window.devknobs.reset().
+6. Open the app in your browser tool, such as Playwright or the Chrome DevTools MCP, and drive window.knobs (or window.devknobs where window.knobs is not knobs' api). For each check, call window.knobs.reset(), then window.knobs.setState(), then await window.knobs.ready(). Check a phone ({ device: "iphone-17" }), dark mode ({ scheme: "dark" }) and a right-to-left language ({ locale: { lang: "ar", dir: "rtl" } }). The locale knob can reload the page, so wait for the load. window.knobs.grab() what breaks, fix it and check again. Then call window.knobs.reset().
 7. Then tell me what you changed, what you fixed and how to open the panel: press Shift+K or click the handle on the right edge of the window. In the open panel, / searches the knobs. Shift+G grabs an element.
 ```
 
@@ -52,7 +52,7 @@ script tag:
 <script src="//unpkg.com/@vinena/knobs/dist/index.global.js"></script>
 ```
 
-the global build mounts itself on load and puts the api on `window.devknobs`.
+the global build mounts itself on load and puts the api on `window.knobs`.
 
 import:
 
@@ -65,19 +65,19 @@ if (import.meta.env.DEV) mount();
 react, one element:
 
 ```jsx
-import { DevKnobs } from '@vinena/knobs/react';
+import { Knobs } from '@vinena/knobs/react';
 
 export function Root({ children }) {
   return (
     <>
-      {process.env.NODE_ENV === 'development' && <DevKnobs />}
+      {process.env.NODE_ENV === 'development' && <Knobs />}
       {children}
     </>
   );
 }
 ```
 
-`DevKnobs` is a client component. it mounts the knobs on the first effect, unmounts them on cleanup, and renders nothing.
+`Knobs` is a client component. it mounts the knobs on the first effect, unmounts them on cleanup, and renders nothing.
 
 a static import stays in the production bundle even behind that check, because the bundler still has to keep the module. in next.js, gate the import itself:
 
@@ -86,15 +86,15 @@ a static import stays in the production bundle even behind that check, because t
 
 import dynamic from 'next/dynamic';
 
-const DevKnobs =
+const Knobs =
   process.env.NODE_ENV === 'development'
-    ? dynamic(() => import('@vinena/knobs/react').then((m) => m.DevKnobs), {
+    ? dynamic(() => import('@vinena/knobs/react').then((m) => m.Knobs), {
         ssr: false,
       })
     : null;
 
 export function DevPanel() {
-  return DevKnobs && <DevKnobs />;
+  return Knobs && <Knobs />;
 }
 
 // render <DevPanel /> once in app/layout or pages/_app
@@ -120,11 +120,11 @@ setState({ locale: { lang: 'ar' } });
 setState({ ua: { preset: 'iphone-safari' } });
 ```
 
-state lives in `sessionStorage` under `devknobs`, so it survives reloads and dies with the tab. pass `mount({ persist: false })` to keep it in memory.
+state lives in `sessionStorage` under `devknobs` and `knobs`, so it survives reloads and dies with the tab. pass `mount({ persist: false })` to keep it in memory.
 
 ## options
 
-`mount()` and `<DevKnobs />` take the same options:
+`mount()` and `<Knobs />` take the same options:
 
 | option      | default                           | what it does                                                                                                                                                                                                                                                                                                                                                                                 |
 | ----------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

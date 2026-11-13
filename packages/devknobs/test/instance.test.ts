@@ -272,12 +272,26 @@ describe("window.knobs", () => {
     expect(scope.knobs).toBe(own);
   });
 
-  test("a knobs the scope inherits stays the page's", () => {
-    const own = {};
-    const scope: object = Object.create({ knobs: own });
-    expose(scope, {});
+  test("an element with id knobs, which the window inherits, does not keep the api off", () => {
+    // Named elements live on the window's prototype chain, not on the window.
+    const element = { id: "knobs" };
+    const scope: object = Object.create({ knobs: element });
+    const api = {};
+    expose(scope, api);
+    expect(Reflect.get(scope, "knobs")).toBe(api);
+    expect(Reflect.get(scope, "devknobs")).toBe(api);
+    withdraw(scope, api);
+    expect(Reflect.get(scope, "knobs")).toBe(element);
+  });
+
+  test("a page's top-level var or function knobs, an own property that cannot be redefined, stays", () => {
+    const own = () => "page";
+    const scope = {};
+    Object.defineProperty(scope, "knobs", { value: own, writable: true, enumerable: true, configurable: false });
+    const api = {};
+    expose(scope, api);
     expect(Reflect.get(scope, "knobs")).toBe(own);
-    expect(Object.hasOwn(scope, "knobs")).toBe(false);
+    expect(Reflect.get(scope, "devknobs")).toBe(api);
   });
 
   test("the page setting knobs after takes the name over", () => {

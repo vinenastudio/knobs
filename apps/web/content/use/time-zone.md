@@ -33,7 +33,7 @@ The clock knob takes a jump from +1 hour to +30 days, or a date and time, in one
 
 A date built from an argument, such as `new Date(ms)` or a string, names its own instant and is left alone. A reload carries on where the clock was.
 
-Turn on "send to server" and `fetch` and `XMLHttpRequest` calls to the page's own origin carry the clock's time, in an `x-devknobs-now` header. Read it on your server behind a dev check, see [the clock and your server](/docs/knobs#the-clock-and-your-server). Never honor the header in production.
+Turn on "send to server" and `fetch` and `XMLHttpRequest` calls to the page's own origin carry the clock's time, in an `x-knobs-now` header. Read it on your server behind a dev check, see [the clock and your server](/docs/knobs#the-clock-and-your-server). Never honor the header in production.
 
 The geolocation knob sets a city and its zone together, see [fake geolocation](/use/fake-geolocation).
 
@@ -51,11 +51,11 @@ Both knobs live in the page. They are not among the knobs the extension hands to
 A coding agent can set the knobs through any browser tool that runs JavaScript in the page, such as Playwright's `page.evaluate` or the Chrome DevTools MCP's `evaluate_script`:
 
 ```js
-window.devknobs.setState({
+window.knobs.setState({
   timeZone: 'Asia/Kathmandu',
   clock: { mode: 'frozen', at: Date.parse('2027-01-01T09:00:00Z') },
 });
-await window.devknobs.ready();
+await window.knobs.ready();
 ```
 
 `at` is epoch ms. Set `mode` and `at` in one patch, as a new mode starts from what the clock reads now. `ready()` resolves with the state once the page has caught up with the knobs. `reset()` sets the knobs back. See [agents](/docs/agents).

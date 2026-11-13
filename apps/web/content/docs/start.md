@@ -40,7 +40,7 @@ with a bundler:
 if (import.meta.env.DEV) import('@vinena/knobs').then(({ mount }) => mount());
 ```
 
-in react, render `<DevKnobs />` from `@vinena/knobs/react` once, in development only. it renders nothing and mounts the knobs on its first effect. a static import stays in the production bundle even behind a dev check, so in next.js load it with `dynamic()` behind the check.
+in react, render `<Knobs />` from `@vinena/knobs/react` once, in development only. it renders nothing and mounts the knobs on its first effect. a static import stays in the production bundle even behind a dev check, so in next.js load it with `dynamic()` behind the check.
 
 ## open it
 
@@ -58,4 +58,4 @@ a page that reads a media query, the time or the user agent while it boots, befo
 
 ## from code
 
-`mount()` and `<DevKnobs />` take options such as `hotkey`, `open` and `persist`. the api sets knobs too: `setState({ scheme: 'dark' })`, `reset()`, `getState()`. agents get `describe()` and `ready()`, see [agents](/docs/agents).
+`mount()` and `<Knobs />` take options such as `hotkey`, `open` and `persist`. the api sets knobs too: `setState({ scheme: 'dark' })`, `reset()`, `getState()`. agents get `describe()` and `ready()`, see [agents](/docs/agents).

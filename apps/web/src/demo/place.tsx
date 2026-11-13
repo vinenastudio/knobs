@@ -531,7 +531,7 @@ async function askServer(): Promise<void> {
   try {
     const response = await fetch(`${API}/echo`);
     const answer = (await response.json()) as { headers?: Record<string, string> };
-    const sent = answer.headers?.['x-devknobs-now'];
+    const sent = answer.headers?.['x-knobs-now'] ?? answer.headers?.['x-devknobs-now'];
     server.set(sent ?? m.time_server_none());
   } catch {
     server.set(m.requests_failed());

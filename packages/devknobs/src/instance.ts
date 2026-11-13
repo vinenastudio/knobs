@@ -111,11 +111,13 @@ function ourKnobs(scope: object): { api: unknown } | null {
 /**
  * Hand the page's agents the api, at `window.knobs` and `window.devknobs`.
  * `knobs` is a common name: where the page has one of its own, it keeps it,
- * and where it sets one later, it takes the name over.
+ * and where it sets one later, it takes the name over. Only the window's own
+ * `knobs` counts: a `var`, a `function` or a `window.knobs =`. An element with
+ * `id="knobs"` sits on the window's prototype chain, so the api goes over it.
  */
 export function expose(scope: object, api: object): void {
   Reflect.set(scope, "devknobs", api);
-  if ("knobs" in scope && ourKnobs(scope) === null) return;
+  if (Object.hasOwn(scope, "knobs") && ourKnobs(scope) === null) return;
   const get = () => api;
   Reflect.set(get, ACCESSOR, true);
   Object.defineProperty(scope, "knobs", {
