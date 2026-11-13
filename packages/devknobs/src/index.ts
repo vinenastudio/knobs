@@ -644,5 +644,6 @@ export type DevknobsStatePatch = KnobsStatePatch;
 declare global {
   interface Window {
     devknobs?: KnobsApi;
+    knobs?: KnobsApi;
   }
 }
