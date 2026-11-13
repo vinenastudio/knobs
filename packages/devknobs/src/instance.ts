@@ -96,9 +96,36 @@ export function free(scope: object, release: () => void): void {
 
 const PINNED = Symbol.for("devknobs.pinned");
 
-/** Hand the page's agents the api, at `window.devknobs`. */
+/**
+ * What marks a getter at `window.knobs` as one a copy of knobs put there, any
+ * copy, so a later copy can tell it from a page's own `knobs`.
+ */
+const ACCESSOR = Symbol.for("devknobs.accessor");
+
+/** The api, if the `knobs` on `scope` is a copy's accessor. */
+function ourKnobs(scope: object): { api: unknown } | null {
+  const get = Object.getOwnPropertyDescriptor(scope, "knobs")?.get;
+  return get !== undefined && Reflect.get(get, ACCESSOR) === true ? { api: get() } : null;
+}
+
+/**
+ * Hand the page's agents the api, at `window.knobs` and `window.devknobs`.
+ * `knobs` is a common name: where the page has one of its own, it keeps it,
+ * and where it sets one later, it takes the name over.
+ */
 export function expose(scope: object, api: object): void {
   Reflect.set(scope, "devknobs", api);
+  if ("knobs" in scope && ourKnobs(scope) === null) return;
+  const get = () => api;
+  Reflect.set(get, ACCESSOR, true);
+  Object.defineProperty(scope, "knobs", {
+    configurable: true,
+    enumerable: true,
+    get,
+    set(value: unknown) {
+      Object.defineProperty(scope, "knobs", { value, writable: true, configurable: true, enumerable: true });
+    },
+  });
 }
 
 /** Keep the api on the page after unmount, as the script tag build does, so it can mount again. */
@@ -110,4 +137,5 @@ export function pin(scope: object): void {
 export function withdraw(scope: object, api: object): void {
   if (Reflect.get(scope, PINNED) === true) return;
   if (Reflect.get(scope, "devknobs") === api) Reflect.deleteProperty(scope, "devknobs");
+  if (ourKnobs(scope)?.api === api) Reflect.deleteProperty(scope, "knobs");
 }

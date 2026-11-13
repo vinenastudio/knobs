@@ -13,7 +13,7 @@ import type {
   BarsValue,
   BrowserValue,
   CustomColor,
-  DevknobsState,
+  KnobsState,
   GrabColorValue,
   VisionValue,
 } from "../types";
@@ -49,12 +49,12 @@ const POSTURE_OPTIONS: readonly Option[] = DEVICES.flatMap((device) =>
 );
 
 /** The screen in use, a foldable's in its posture. */
-function screenNow(state: DevknobsState): string {
+function screenNow(state: KnobsState): string {
   return formId(state.device, state.posture);
 }
 
 /** The frame's size as the device knob reads it, such as `390x844` or `fullx700`. */
-function sizeValue(state: DevknobsState): string {
+function sizeValue(state: KnobsState): string {
   return typeof state.height === "number" ? `${state.width}x${state.height}` : "none";
 }
 
@@ -110,7 +110,7 @@ export const DEVICE: Knob = {
 };
 
 /** Does the device in use have a mock to draw? */
-export function hasMock(state: DevknobsState): boolean {
+export function hasMock(state: KnobsState): boolean {
   return mockOf(screenNow(state), state.orientation) !== null;
 }
 
@@ -146,7 +146,7 @@ export const TOUCH_POINTER: Knob = {
 };
 
 /** The layout of the phone's browser in use, or off for a device without one. */
-function layoutNow(state: DevknobsState): string {
+function layoutNow(state: KnobsState): string {
   return layoutOf(screenNow(state), state.browser) ?? "off";
 }
 
@@ -173,7 +173,7 @@ export const BROWSER: Knob = {
 };
 
 /** Are the browser's bars drawn, so they can be minimized? */
-function barsShown(state: DevknobsState): boolean {
+function barsShown(state: KnobsState): boolean {
   return layoutNow(state) !== "off";
 }
 
@@ -195,7 +195,7 @@ export const BARS: Knob = {
 };
 
 /** Is Safari drawn, so its page can run under its bars? */
-function safariShown(state: DevknobsState): boolean {
+function safariShown(state: KnobsState): boolean {
   return platformOf(screenNow(state)) === "safari" && barsShown(state);
 }
 
@@ -204,7 +204,7 @@ function safariShown(state: DevknobsState): boolean {
  * change the frame: upright, the page is always Safari's real viewport, and
  * the Duo's page is never under its bars.
  */
-function safariSideways(state: DevknobsState): boolean {
+function safariSideways(state: KnobsState): boolean {
   return safariShown(state) && state.orientation === "landscape" && runsUnderBars(screenNow(state));
 }
 

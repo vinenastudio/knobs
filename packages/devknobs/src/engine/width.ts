@@ -1,4 +1,4 @@
-import type { DevknobsState, DprValue, SideValue, ZoomValue } from "../types";
+import type { KnobsState, DprValue, SideValue, ZoomValue } from "../types";
 import { hushOnce } from "../requests/quiet";
 import * as address from "./address";
 import { bezelMock, bezelUrl, bodyOf, loadBezel } from "./bezels";
@@ -88,7 +88,7 @@ const NAME = "width";
 /** What the frame takes from the knobs. */
 export type ViewportValue = FrameKnobs &
   Pick<
-    DevknobsState,
+    KnobsState,
     | "scheme"
     | "device"
     | "orientation"
@@ -246,7 +246,7 @@ let readyPage: Document | null = null;
 let frameUrl = "";
 /** Where the page underneath was scrolled to, which hiding it loses. */
 let scroll = { x: 0, y: 0 };
-let latest: DevknobsState | null = null;
+let latest: KnobsState | null = null;
 /** Where the frame is drawn, or on its way to, from `shapeOf`. */
 let heading = "closed";
 /** The knobs were applied once, so what comes next is a change, not the first paint. */
@@ -273,7 +273,7 @@ function touching(): boolean {
 }
 
 /** Keep the knobs and hand them to the frame, which applies them to its own page. */
-export function sync(state: DevknobsState): void {
+export function sync(state: KnobsState): void {
   latest = state;
   touchDot?.apply(touching());
   share();

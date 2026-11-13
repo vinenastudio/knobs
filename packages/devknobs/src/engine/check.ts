@@ -1,4 +1,4 @@
-import type { DevknobsState, DevknobsStatePatch } from "../types";
+import type { KnobsState, KnobsStatePatch } from "../types";
 import { isCustomColor } from "./color";
 import { ROWS } from "../ui/catalog";
 import { describe, type KnobShape } from "./describe";
@@ -17,10 +17,10 @@ const STRINGS: Record<string, (value: string) => boolean> = {
 
 /** A knob or a field by its path in a patch: `scheme`, `panel.open`. */
 type StatePath = {
-  [K in keyof DevknobsState & string]:
+  [K in keyof KnobsState & string]:
     | K
-    | (DevknobsState[K] extends object ? `${K}.${keyof DevknobsState[K] & string}` : never);
-}[keyof DevknobsState & string];
+    | (KnobsState[K] extends object ? `${K}.${keyof KnobsState[K] & string}` : never);
+}[keyof KnobsState & string];
 
 const finite = (value: unknown): boolean => typeof value === "number" && Number.isFinite(value);
 const among =
@@ -81,7 +81,7 @@ function fits(path: string, shape: KnobShape, value: unknown): boolean {
  * takes, or for a field it leaves out, what the stored state reads.
  * The whole patch is checked before any of it is applied.
  */
-export function checkPatch(patch: unknown): asserts patch is DevknobsStatePatch {
+export function checkPatch(patch: unknown): asserts patch is KnobsStatePatch {
   if (!isRecord(patch)) throw new TypeError("knobs: setState takes an object");
   const shapes = new Map<string, KnobShape>(describe().map((knob) => [knob.key, knob.value]));
   for (const [key, value] of Object.entries(patch)) {

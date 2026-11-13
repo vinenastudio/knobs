@@ -1,4 +1,4 @@
-import type { DevknobsState } from "../types";
+import type { KnobsState } from "../types";
 import { deviceOf, formOf, turn } from "./devices";
 
 /**
@@ -21,7 +21,7 @@ export interface ScreenSize {
 
 const KEYS = ["width", "height", "availWidth", "availHeight"] as const;
 
-type ScreenKnobs = Pick<DevknobsState, "device" | "posture" | "orientation">;
+type ScreenKnobs = Pick<KnobsState, "device" | "posture" | "orientation">;
 
 /** The screen a page in the frame reads for these knobs, null for the window's own. */
 export function screenSizeOf(state: ScreenKnobs): ScreenSize | null {

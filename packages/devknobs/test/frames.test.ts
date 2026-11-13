@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { needsFrame } from "../src/engine/frame";
 import { DEFAULT_STATE } from "../src/engine/store";
-import type { DevknobsState } from "../src/types";
+import type { KnobsState } from "../src/types";
 
 type Frames = typeof import("../src/engine/frames");
 type Kit = Awaited<ReturnType<Parameters<Frames["loadKitWith"]>[0]>>;
@@ -18,8 +18,8 @@ function fakeKit() {
   const hinge = new Set<(open: number, hand: boolean) => void>();
   const kit = {
     width: {
-      apply: (state: DevknobsState) => calls.push(`apply ${state.device}`),
-      sync: (state: DevknobsState) => calls.push(`sync ${state.device}`),
+      apply: (state: KnobsState) => calls.push(`apply ${state.device}`),
+      sync: (state: KnobsState) => calls.push(`sync ${state.device}`),
       reset: () => calls.push("reset"),
       onExit() {},
       onZoom() {},
@@ -49,8 +49,8 @@ function fakeKit() {
   return { kit: kit as unknown as Kit, calls, fold, hinge };
 }
 
-const PLAIN: DevknobsState = { ...DEFAULT_STATE };
-const DEVICE: DevknobsState = { ...DEFAULT_STATE, device: "iphone-duo", frame: true };
+const PLAIN: KnobsState = { ...DEFAULT_STATE };
+const DEVICE: KnobsState = { ...DEFAULT_STATE, device: "iphone-duo", frame: true };
 
 let dropped = 0;
 let before: unknown;

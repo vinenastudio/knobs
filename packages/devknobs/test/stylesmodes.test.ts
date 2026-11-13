@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import { DEFAULT_STATE } from "../src/engine/store";
 import type { Inspection, RuleBlock, StyleBlock, StyleDeclaration } from "../src/styles/types";
-import type { DevknobsState } from "../src/types";
+import type { KnobsState } from "../src/types";
 import { createPrefs, PREFS_KEY, PREFS_VERSION, type StylesMode } from "../src/ui/prefs";
 import { NO_STYLES } from "../src/ui/stylesapplied";
 import {
@@ -72,7 +72,7 @@ let app: FakeElement;
 let save: FakeElement;
 let asked: { element: Element; pseudo: string | undefined }[];
 let answer: (element: Element, pseudo?: string) => Inspection;
-let knobs: ((state: DevknobsState) => void)[];
+let knobs: ((state: KnobsState) => void)[];
 let tipped: FakeNode[];
 /** The mode that is kept, and each one the view asked to keep. */
 let stored: StylesMode;

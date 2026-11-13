@@ -1,5 +1,5 @@
 import * as engine from "../engine";
-import type { DevknobsState, DevknobsStatePatch } from "../types";
+import type { KnobsState, KnobsStatePatch } from "../types";
 import type { Action } from "./catalog";
 import { comboLabel, type Keys } from "./keys";
 import { pinPatch } from "./list";
@@ -12,8 +12,8 @@ import { pinPatch } from "./list";
 
 /** Where the knobs are kept, as far as running an action goes. */
 export interface Store {
-  getState(): DevknobsState;
-  setState(patch: DevknobsStatePatch): unknown;
+  getState(): KnobsState;
+  setState(patch: KnobsStatePatch): unknown;
 }
 
 /**

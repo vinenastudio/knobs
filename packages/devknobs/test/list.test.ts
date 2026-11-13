@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { DEFAULT_PINNED, DEFAULT_STATE, merge, resetState } from "../src/engine/store";
-import type { DevknobsState, DevknobsStatePatch } from "../src/types";
+import type { KnobsState, KnobsStatePatch } from "../src/types";
 import { knobOf, type Live, ROWS, type Row, type RowId } from "../src/ui/catalog";
 import {
   arrange,
@@ -19,7 +19,7 @@ import {
 const LIVE: Live = { now: 0, real: 0, overflow: null };
 
 /** The defaults with every row taken off the list. */
-const BARE: DevknobsState = merge(DEFAULT_STATE, { panel: { pinned: [] } });
+const BARE: KnobsState = merge(DEFAULT_STATE, { panel: { pinned: [] } });
 
 function row(id: RowId): Row {
   const found = ROWS.find((entry) => entry.id === id);
@@ -28,11 +28,11 @@ function row(id: RowId): Row {
 }
 
 /** Set knobs the way the panel does, pinning their row. */
-function use(state: DevknobsState, id: RowId, patch: DevknobsStatePatch): DevknobsState {
+function use(state: KnobsState, id: RowId, patch: KnobsStatePatch): KnobsState {
   return merge(state, pinPatch(state, id, patch));
 }
 
-function listed(state: DevknobsState): RowId[] {
+function listed(state: KnobsState): RowId[] {
   return ROWS.filter((entry) => isListed(entry, state)).map((entry) => entry.id);
 }
 

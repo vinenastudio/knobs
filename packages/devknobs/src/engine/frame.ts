@@ -1,5 +1,5 @@
 import { type BoxRing, RINGS } from "../grab/boxmodel";
-import type { DevknobsState, DevknobsStatePatch, PanelValue, SchemeValue } from "../types";
+import type { KnobsState, KnobsStatePatch, PanelValue, SchemeValue } from "../types";
 import { parse } from "./store";
 
 /** Marks the iframe the width knob renders the page in. */
@@ -54,7 +54,7 @@ const KEY_ACTIONS: readonly KeyAction[] = [
 /** Everything the page and its frame say to each other. */
 export type DevknobsMessage =
   /** `native`: whether the host's driver is on above, so the frame emulates its knobs while it is off. */
-  | { source: "devknobs"; type: "state"; state: DevknobsState; native?: boolean }
+  | { source: "devknobs"; type: "state"; state: KnobsState; native?: boolean }
   | { source: "devknobs"; type: "key"; action: KeyAction }
   | { source: "devknobs"; type: "overflow"; count: number }
   | { source: "devknobs"; type: "grab" | "inspect"; on: boolean; scheme?: "light" | "dark" }
@@ -127,7 +127,7 @@ export function handsSchemeDown(root: Node): boolean {
 }
 
 /** The knobs that bring the frame up. */
-export type FrameKnobs = Pick<DevknobsState, "width" | "height" | "frame" | "dpr" | "vision">;
+export type FrameKnobs = Pick<KnobsState, "width" | "height" | "frame" | "dpr" | "vision">;
 
 /** Each of those knobs at the value that leaves the frame down. */
 export const UNFRAMED: FrameKnobs = {
@@ -142,7 +142,7 @@ export const UNFRAMED: FrameKnobs = {
  * The frame leaving on its own: every knob that keeps it up off and the panel
  * unpinned. No device as well, so the browser it brought goes as picking none does.
  */
-export const EXITED: DevknobsStatePatch = { ...UNFRAMED, device: "none", panel: { docked: false } };
+export const EXITED: KnobsStatePatch = { ...UNFRAMED, device: "none", panel: { docked: false } };
 
 function positive(value: number | string): boolean {
   return typeof value === "number" && value > 0;
@@ -195,7 +195,7 @@ export function frameForced(knobs: Framing): boolean {
  * The knobs a framed page runs with. It is the viewport already, so it never
  * frames itself, for a knob or for a pinned panel.
  */
-export function framed(state: DevknobsState): DevknobsState {
+export function framed(state: KnobsState): KnobsState {
   if (!needsFrame(state)) return state;
   return { ...state, ...UNFRAMED, panel: { ...state.panel, docked: false } };
 }

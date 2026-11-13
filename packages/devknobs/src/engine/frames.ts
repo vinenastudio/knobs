@@ -1,4 +1,4 @@
-import type { DevknobsState, ZoomValue } from "../types";
+import type { KnobsState, ZoomValue } from "../types";
 import { needsFrame, type ZoomAction } from "./frame";
 import type { FrameRefusal } from "./native";
 import type * as Kit from "./framekit";
@@ -25,9 +25,9 @@ let down = false;
 /** Calls to make once the kit is in, before it draws. */
 const waiting: ((kit: FrameKit) => void)[] = [];
 /** The last knobs that needed no frame, before the ones that load it. */
-let before: DevknobsState | null = null;
+let before: KnobsState | null = null;
 /** The last knobs applied while the kit loads. */
-let latest: DevknobsState | null = null;
+let latest: KnobsState | null = null;
 let exit: (() => void) | null = null;
 let zoomTo: ((zoom: ZoomValue) => void) | null = null;
 let askWhy: ((url: string) => Promise<FrameRefusal | null>) | null = null;
@@ -87,7 +87,7 @@ function whenIn(watch: (kit: FrameKit) => () => void): () => void {
   };
 }
 
-export function apply(state: DevknobsState): void {
+export function apply(state: KnobsState): void {
   if (kit) {
     kit.width.apply(state);
     return;
@@ -107,7 +107,7 @@ export function apply(state: DevknobsState): void {
   if (!loading) loadFrames().catch(failed);
 }
 
-export function sync(state: DevknobsState): void {
+export function sync(state: KnobsState): void {
   kit?.width.sync(state);
 }
 
@@ -168,7 +168,7 @@ export function landSplash(): void {
   kit?.landSplash();
 }
 
-export function takeHinge(state: DevknobsState): boolean {
+export function takeHinge(state: KnobsState): boolean {
   return kit?.takeHinge(state) ?? false;
 }
 

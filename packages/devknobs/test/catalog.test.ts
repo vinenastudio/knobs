@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { DEFAULT_STATE, merge } from "../src/engine/store";
-import type { DevknobsState, DevknobsStatePatch } from "../src/types";
+import type { KnobsState, KnobsStatePatch } from "../src/types";
 import {
   browse,
   CATEGORIES,
@@ -34,11 +34,11 @@ function row(id: RowId): Row {
   return found;
 }
 
-function state(patch: DevknobsStatePatch): DevknobsState {
+function state(patch: KnobsStatePatch): KnobsState {
   return merge(DEFAULT_STATE, patch);
 }
 
-function says(id: RowId, patch: DevknobsStatePatch, live: Live = LIVE): string {
+function says(id: RowId, patch: KnobsStatePatch, live: Live = LIVE): string {
   return summary(row(id), state(patch), live);
 }
 
@@ -353,7 +353,7 @@ describe("summary", () => {
 });
 
 describe("shown", () => {
-  const shown = (id: KnobId, patch: DevknobsStatePatch) =>
+  const shown = (id: KnobId, patch: KnobsStatePatch) =>
     knobOf(id).shown?.(state(patch)) ?? true;
   const running = { mode: "offset" as const, at: 1_000, since: 0 };
   const frozen = { mode: "frozen" as const, at: 1_000, since: 0 };
@@ -684,7 +684,7 @@ describe("resetPatch", () => {
 
 describe("combine", () => {
   test("merges object knobs a level deep, later patches winning", () => {
-    const patches: DevknobsStatePatch[] = [
+    const patches: KnobsStatePatch[] = [
       { clock: { mode: "system" } },
       { clock: { speed: 1 } },
       { scheme: "dark" },

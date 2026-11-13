@@ -1,5 +1,5 @@
 // The Chrome Web Store upload: builds devknobs, then dist/, then zips it with manifest.json at the
-// root, as devknobs-<version>.zip beside this package's package.json.
+// root, as knobs-<version>.zip beside this package's package.json.
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { $ } from 'bun';
@@ -26,7 +26,7 @@ await $`bun ${join(root, 'scripts/build.ts')}`.env({ ...process.env, KNOBS_RELEA
 const { version } = JSON.parse(await readFile(join(dist, 'manifest.json'), 'utf8')) as {
   version: string;
 };
-const zip = join(root, `devknobs-${version}.zip`);
+const zip = join(root, `knobs-${version}.zip`);
 await rm(zip, { force: true });
 await $`zip -r -X -q ${zip} . -x '*.DS_Store' '*.map'`.cwd(dist);
 

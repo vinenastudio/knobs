@@ -1,7 +1,7 @@
 import * as engine from "../engine";
 import { deviceOf, openOf } from "../engine/devices";
 import { foldRest, holdingHinge, letGo, moveHinge, takeHinge, watchFold, watchHinge } from "../engine/frames";
-import type { DevknobsState, PostureValue } from "../types";
+import type { KnobsState, PostureValue } from "../types";
 import { icon } from "./icons";
 
 /**
@@ -83,7 +83,7 @@ export function foldChip(posture: PostureValue): { label: string; posture: Postu
 
 export interface FoldSlider {
   node: HTMLElement;
-  update(state: DevknobsState): void;
+  update(state: KnobsState): void;
   /** Stop listening to the fold and the hinge. */
   destroy(): void;
 }
