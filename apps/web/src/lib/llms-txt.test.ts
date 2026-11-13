@@ -246,5 +246,5 @@ test('the use pages are listed, under their own section', async () => {
     llmsTxtConfig,
     slugs.map((slug) => page(`/use/${slug}`, slug)),
   );
-  expect(index).toContain(`## Use cases\n\n- [dark-mode](${url('/use/dark-mode')})`);
+  expect(index).toContain(`## Use cases\n\n- [${slugs[0]}](${url(`/use/${slugs[0]}`)})`);
 });

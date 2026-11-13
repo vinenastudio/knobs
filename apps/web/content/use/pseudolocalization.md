@@ -51,4 +51,4 @@ await window.devknobs.ready();
 
 `ready()` resolves with the state once the page has caught up with the knobs. The agent skill that ships with the package uses `{ pseudo: true }` to find text that is cut off or not translated. Then the agent can `grab()` the broken elements, fix the code and check again. `reset()` sets the knobs back. See [agents](/docs/agents).
 
-Next: run a [dark mode test](/use/dark-mode) on the same page.
+Next: run an [RTL layout test](/use/rtl) on the same page.

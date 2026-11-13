@@ -57,4 +57,4 @@ await window.devknobs.ready();
 
 `ready()` resolves with the state once the page has caught up with the knobs. `setState()` throws a `TypeError` at a value the state does not take, and then changes nothing. `reset()` sets the knobs back. See [agents](/docs/agents).
 
-Next: test the page's text with [pseudolocalization](/use/pseudolocalization).
+Next: put the page in another [time zone and clock](/use/time-zone).
