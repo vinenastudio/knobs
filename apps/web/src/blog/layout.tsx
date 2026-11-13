@@ -9,7 +9,8 @@ import { usePanel } from '../lib/panel.ts';
 import { m } from '../paraglide/messages.js';
 import { findPost, posts } from './posts.ts';
 
-const styles = create({
+/** The blog's styles, which the use pages share. */
+export const styles = create({
   codeBlock: {
     marginBlock: '1rem',
   },

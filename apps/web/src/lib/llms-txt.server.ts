@@ -12,7 +12,8 @@ export const llms = createLlmsTxt(llmsTxtConfig, {
   },
   routePaths: async (): Promise<Array<string>> => {
     const { getRouter } = await import('../router.tsx');
-    // `/docs` shows `/docs/start`, which `extraPaths` lists, and points its canonical there.
+    // `/docs` 301s to `/docs/start` in the worker, but this calls the handler directly and skips
+    // the worker, so `/docs` is dropped here; `extraPaths` lists `/docs/start`.
     return Object.keys(getRouter().routesByPath).filter(
       (path) => path.replace(/\/$/, '') !== '/docs',
     );

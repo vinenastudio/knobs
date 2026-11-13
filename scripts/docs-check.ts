@@ -13,15 +13,21 @@
  * and no "Notes for the editor". A post's title, its `<title>`, is 50 to 60
  * characters, and its share image, `public/og/blog/<slug>.png` from
  * `scripts/og.ts --posts`, is a 1200 by 630 PNG.
+ *
+ * The use pages in `content/use` have the docs pages' frontmatter and rules,
+ * plus `terms`, the search terms each is written for, and a description of
+ * at most 155 characters.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { postFrontmatter } from '../apps/web/src/blog/frontmatter.ts';
 import { docFrontmatter } from '../apps/web/src/docs/frontmatter.ts';
+import { pageTerms } from '../apps/web/src/use/frontmatter.ts';
 
 const docs = path.resolve(import.meta.dirname, '../apps/web/content/docs');
 const blog = path.resolve(import.meta.dirname, '../apps/web/content/blog');
 const og = path.resolve(import.meta.dirname, '../apps/web/public/og/blog');
+const use = path.resolve(import.meta.dirname, '../apps/web/content/use');
 
 let bad = 0;
 function fail(message: string) {
@@ -91,9 +97,25 @@ for (const name of postFiles) {
   }
 }
 
+const useFiles = readdirSync(use).filter((name) => name.endsWith('.md'));
+for (const name of useFiles) {
+  try {
+    const slug = name.slice(0, -'.md'.length);
+    const source = readFileSync(path.join(use, name), 'utf8');
+    const { description, metaTitle } = docFrontmatter(slug, source);
+    pageTerms(slug, source);
+    checkTitle(name, metaTitle);
+    if (description.length < 120 || description.length > 155) {
+      fail(`${name} description is ${description.length} characters, needs 120 to 155`);
+    }
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+  }
+}
+
 if (bad > 0) {
   process.exit(1);
 }
 process.stdout.write(
-  `docs-check: ${files.length} docs pages and ${postFiles.length} blog posts have valid frontmatter.\n`,
+  `docs-check: ${files.length} docs pages, ${postFiles.length} blog posts and ${useFiles.length} use pages have valid frontmatter.\n`,
 );

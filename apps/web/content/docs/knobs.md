@@ -3,35 +3,35 @@ title: knobs
 meta_title: Every knobs knob: dark mode, locale, time zone and more
 description: Every knob knobs has and what it does to the page: color scheme, reduced motion, text size, locale, time zone, clock, geolocation, user agent and viewport.
 order: 3
-updated: 2026-10-29
+updated: 2026-11-13
 ---
 
 every knob and what it does. search finds them by name or value, see [the panel](/docs/panel).
 
 ## look and motion
 
-| knob                 | what it does                                   |
-| -------------------- | ---------------------------------------------- |
-| color scheme         | light or dark, in your css and in `matchMedia` |
-| reduced motion       | `prefers-reduced-motion: reduce`               |
-| animation speed      | runs animations at 0.25 or 0.1, or pauses them |
-| contrast             | `prefers-contrast: more`                       |
-| reduced transparency | `prefers-reduced-transparency: reduce`         |
-| text size            | the browser's default font size                |
-| text spacing         | the wcag 1.4.12 text spacing values            |
-| vision               | a color blindness filter or a blur             |
-| replay animations    | `⇧R` runs every animation again                |
+| knob                           | what it does                                   |
+| ------------------------------ | ---------------------------------------------- |
+| [color scheme](/use/dark-mode) | light or dark, in your css and in `matchMedia` |
+| reduced motion                 | `prefers-reduced-motion: reduce`               |
+| animation speed                | runs animations at 0.25 or 0.1, or pauses them |
+| contrast                       | `prefers-contrast: more`                       |
+| reduced transparency           | `prefers-reduced-transparency: reduce`         |
+| text size                      | the browser's default font size                |
+| text spacing                   | the wcag 1.4.12 text spacing values            |
+| vision                         | a color blindness filter or a blur             |
+| replay animations              | `⇧R` runs every animation again                |
 
 ## locale, place and time
 
-| knob        | what it does                                       |
-| ----------- | -------------------------------------------------- |
-| locale      | any language tag and a direction, `Intl` included  |
-| pseudo      | turns the page's text into `[Ŝéţţîñĝš ···]`        |
-| geolocation | a city, your own coordinates, or a route           |
-| geo error   | denied, unavailable or timeout                     |
-| time zone   | any iana zone, or the geo city's zone              |
-| clock       | jump ahead, pick a date, freeze it, or speed it up |
+| knob                              | what it does                                       |
+| --------------------------------- | -------------------------------------------------- |
+| locale                            | any language tag and a direction, `Intl` included  |
+| [pseudo](/use/pseudolocalization) | turns the page's text into `[Ŝéţţîñĝš ···]`        |
+| geolocation                       | a city, your own coordinates, or a route           |
+| geo error                         | denied, unavailable or timeout                     |
+| time zone                         | any iana zone, or the geo city's zone              |
+| clock                             | jump ahead, pick a date, freeze it, or speed it up |
 
 ## browser and debug
 
