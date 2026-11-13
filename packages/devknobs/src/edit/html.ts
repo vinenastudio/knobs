@@ -19,7 +19,11 @@ import { ATTRIBUTES, isMarked, isOwnName, ownSelector, removeMark, setMark } fro
 /** The html edits, by their kind. */
 export type HtmlKind = Extract<EditKind, "text" | "attr" | "html" | "hide" | "delete" | "move">;
 
-/** The attribute a hidden element carries. devknobs' own, so the tree and a copy leave it out. */
+/**
+ * The attribute a hidden element carries. knobs' own, so the tree and a copy leave it out.
+ * Both names are written, but hide is matched and read by the old name only, so an older
+ * copy that takes off only `data-devknobs-hide` shows the element again.
+ */
 export const HIDE_ATTRIBUTE = ATTRIBUTES.hide;
 
 /** What hides an element and all in it, as the browsers' tools hide one: its box keeps its place. */

@@ -3,7 +3,8 @@
  * `data-knobs…`, and the old one, `data-devknobs…`, until 1.0. A copy of an
  * older version on the same page (the extension's, the page's own, the one in
  * the frame) writes and reads only the old names, so every copy writes both
- * and reads either. Each attribute goes by its old name here.
+ * and reads either. Each attribute goes by its old name here. Hide is the one
+ * exception: it is matched and read by the old name only (see `HIDE_ATTRIBUTE`).
  */
 
 /** Every attribute knobs puts on the page, by its old name. */
