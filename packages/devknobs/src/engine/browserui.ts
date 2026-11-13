@@ -325,9 +325,10 @@ export interface Shape extends Rect {
   marks: Mark[];
   /**
    * Where the shape shows the domain: its center in Safari, its start in
-   * Chrome. A pill's width is the domain's advance and `pad`.
+   * Chrome. A pill's width is the domain's advance and `pad`. An address's
+   * text keeps `clear` from the center of each glyph at its ends.
    */
-  text?: { x: number; y: number; size: number; pad?: number };
+  text?: { x: number; y: number; size: number; pad?: number; clear?: number };
 }
 
 /** A shape with fully round ends. */
@@ -468,15 +469,15 @@ function domainPill(x: number, top: number, look: { height: number; size: number
   };
 }
 
-/** The address field: page menu, domain, reload, `page` and `reload` px in from its ends. */
-function address(kind: Shape["kind"], box: Rect, page: number, reload: number): Shape {
+/** The address field: page menu, domain, reload, `page` and `reload` px in from its ends, the text `clear` from them. */
+function address(kind: Shape["kind"], box: Rect, page: number, reload: number, clear?: number): Shape {
   const y = box.y + box.height / 2;
   return {
     ...capsule(kind, box, [
       mark("page", box.x + page, y),
       mark("reload", box.x + box.width - reload, y),
     ]),
-    text: { x: box.x + box.width / 2, y, size: SAFARI_TEXT.field },
+    text: { x: box.x + box.width / 2, y, size: SAFARI_TEXT.field, ...(clear === undefined ? {} : { clear }) },
   };
 }
 
@@ -548,7 +549,8 @@ function duoCover(bars: Bars, W: number, H: number, orientation: OrientationValu
   const [back = 0, reader = 0] = c.buttons;
   const low = H - c.gap - c.capsule;
   bars.shapes = [
-    address("glass", rect(c.inset, H - c.gap - 48, page - 2 * c.inset, 48), 24, 24),
+    // Its text keeps 25 from the glyphs, measured on the iOS 27.1 simulator.
+    address("glass", rect(c.inset, H - c.gap - 48, page - 2 * c.inset, 48), 24, 24, 25),
     // Reader's glyph is the open book, as Bookmarks' is on the iPhone.
     button(back, "back"),
     button(reader, "bookmarks"),

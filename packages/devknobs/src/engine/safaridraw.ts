@@ -25,6 +25,9 @@ import type { Rect } from "./mock";
 /** The domain's weight, medium and untracked as on the iOS 26.5 simulator. */
 const DOMAIN_WEIGHT = 500;
 
+/** The domain's padding above and below, in em: its box then holds the system font's ascent and descent, 1.23 em at most. */
+export const DOMAIN_PAD = 0.15;
+
 export const SAFARI_CSS = `
 .safari {
   color: #000;
@@ -100,6 +103,8 @@ export const SAFARI_CSS = `
   overflow: hidden;
   font-size: ${SAFARI_TEXT.field}px;
   font-weight: ${DOMAIN_WEIGHT};
+  /* Its box is one line high, less than the font's ascent and descent: padded the same above and below, a g's tail is drawn whole and the baseline stays. */
+  padding-block: ${DOMAIN_PAD}em;
   transform: translate(-50%, -50%);
   /* Its start fades over 9 px where it is cut; where it fits, the fade slides out past the start. */
   -webkit-mask-image: linear-gradient(to right, transparent, #000 9px);
@@ -527,11 +532,15 @@ export function domainOf(host: string): string {
 /** How far the minimized pill keeps in from the screen's sides, as Top's address does. */
 const PILL_MARGIN = 16;
 
-/** How far an address's text keeps from the center of each glyph at its ends, measured on the iOS 26.5 simulator. */
+/** How far an address's text keeps from the center of each glyph at its ends unless its shape says, measured on the iOS 26.5 simulator. */
 const MARK_CLEAR = 21;
 
 /** The smallest an address shrinks its domain to before it cuts its start, measured on the iOS 26.5 simulator. */
 const FIELD_LEAST = 13;
+
+/** How many sizes an address tries on its way down, and how far past its room a fitted domain may reach, in px. */
+const FIT_STEPS = 6;
+const FIT_SLACK = 0.5;
 
 /**
  * The room the domain has in `shape`, in px, on a screen `width` wide: in
@@ -548,7 +557,7 @@ export function domainRoom(shape: Shape, host: string, width: number): number {
   }
   let half = shape.width / 2;
   for (const { x } of shape.marks) {
-    half = Math.min(half, Math.abs(x - middle) - MARK_CLEAR);
+    half = Math.min(half, Math.abs(x - middle) - (shape.text?.clear ?? MARK_CLEAR));
   }
   return Math.max(0, 2 * half);
 }
@@ -572,10 +581,14 @@ export function domainFit(shape: Shape, host: string, width: number): DomainFit 
     const size = shape.text?.size ?? SAFARI_TEXT.pill;
     return { size, room, cut: room < textWidth(text, size, DOMAIN_WEIGHT) };
   }
-  const most = shape.text?.size ?? SAFARI_TEXT.field;
-  const advance = textWidth(text, most, DOMAIN_WEIGHT);
-  const want = advance > 0 ? (most * room) / advance : most;
-  return { size: Math.min(most, Math.max(FIELD_LEAST, want)), room, cut: want < FIELD_LEAST };
+  // The system font sets smaller sizes looser, so each size tried is measured, not scaled.
+  let size = shape.text?.size ?? SAFARI_TEXT.field;
+  for (let step = 0; step < FIT_STEPS && size > FIELD_LEAST; step++) {
+    const advance = textWidth(text, size, DOMAIN_WEIGHT);
+    if (advance <= room + FIT_SLACK) break;
+    size = Math.max(FIELD_LEAST, (size * room) / advance);
+  }
+  return { size, room, cut: textWidth(text, size, DOMAIN_WEIGHT) > room + FIT_SLACK };
 }
 
 /** The minimized domain pill's box on a screen `width` wide: its domain's room and the pill's either side. */
@@ -908,9 +921,9 @@ export function buildSafari(full: Bars, mini: Bars, look: Look, actions: Actions
           const host = domainOf(sight.host);
           const advance = textWidth(host, was, DOMAIN_WEIGHT) / textWidth(host, size, DOMAIN_WEIGHT);
           const scale = drawnScale(domain) * (advance || was / size);
-          // It starts drawn as it was, cut where it was, and only its scale and cut jump there:
-          // its top and height go on gliding.
-          domain.style.transitionProperty = "top, height";
+          // It starts drawn as it was, cut where it was, and only its scale and width jump there:
+          // its top, height and fade go on gliding.
+          domain.style.transitionProperty = "top, height, -webkit-mask-position, mask-position";
           domain.style.fontSize = `${size}px`;
           domain.style.transform = `translate(-50%, -50%) scale(${scale})`;
           domain.style.maxWidth = `${seen / scale}px`;

@@ -10,6 +10,7 @@ import {
   buildSafari,
   domainFit,
   domainOf,
+  DOMAIN_PAD,
   domainRoom,
   glassTint,
   pillBox,
@@ -157,19 +158,33 @@ class FakeElement {
   }
 }
 
+/** While on, the fake canvas sets smaller sizes looser, as the system font does; off, it measures as having no canvas does. */
+let loose = false;
+
+/** A canvas whose text widens at small sizes: each 1 px under 17 adds 0.06 px a character. */
+const LOOSE_PEN = {
+  font: "",
+  measureText(text: string): { width: number } {
+    const size = Number.parseFloat(/([\d.]+)px/.exec(LOOSE_PEN.font)?.[1] ?? "0");
+    return { width: text.length * (size * 0.55 + (loose ? 0.06 * (17 - size) : 0)) };
+  },
+};
+
 describe("Safari's domain has room for its text", () => {
   const saved = Object.getOwnPropertyDescriptor(globalThis, "document");
   beforeEach(() => {
+    loose = true;
     Object.defineProperty(globalThis, "document", {
       configurable: true,
       value: {
-        // No canvas: the text is measured by its length, the same for the bars and the test.
-        createElement: (tag: string) => (tag === "canvas" ? { getContext: () => null } : new FakeElement()),
+        // The text is measured by its length, wider than scaled at small sizes, the same for the bars and the test.
+        createElement: (tag: string) => (tag === "canvas" ? { getContext: () => LOOSE_PEN } : new FakeElement()),
         createElementNS: () => new FakeElement(),
       },
     });
   });
   afterEach(() => {
+    loose = false;
     if (saved) Object.defineProperty(globalThis, "document", saved);
     else Reflect.deleteProperty(globalThis, "document");
   });
@@ -268,7 +283,7 @@ describe("Safari's domain has room for its text", () => {
     expect(fitted).toBe(17);
     const scale = 1.1 * (textWidth(host, pill.text?.size ?? 0, 500) / textWidth(host, fitted, 500));
     expect(writes).toEqual([
-      "transitionProperty top, height",
+      "transitionProperty top, height, -webkit-mask-position, mask-position",
       `transform translate(-50%, -50%) scale(${scale})`,
       `maxWidth ${150 / scale}px`,
       "transitionProperty ",
@@ -286,7 +301,7 @@ describe("Safari's domain has room for its text", () => {
     expect(SAFARI_CSS).toContain('.safari .domain[data-cut="true"] { -webkit-mask-position: 0 0; mask-position: 0 0; }');
   });
 
-  test("the address's room is 21 in from each glyph's center: 132, 170 and 105 on the Pro, Pro Max and SE", () => {
+  test("the address's room is 21 in from each glyph's center: 132, 170 and 105 on the Pro, Pro Max and SE, 236 on the Duo's cover at 25", () => {
     const room = (id: string) => {
       const screen = SCREENS.find((each) => each.id === id);
       const full = screen && barsOf(screen, "portrait", "compact", false);
@@ -297,6 +312,35 @@ describe("Safari's domain has room for its text", () => {
     expect(room("iphone-17-pro")).toBeCloseTo(132, 0);
     expect(room("iphone-17-pro-max")).toBeCloseTo(170, 0);
     expect(room("iphone-se")).toBeCloseTo(105, 0);
+    expect(room("iphone-duo-closed")).toBeCloseTo(236, 0);
+  });
+
+  test("a size that scaled would still overflow is measured again, smaller, until it fits", () => {
+    // Pro Max and claudemarketplaces.com: scaled from 17 alone, it reaches past its room.
+    const screen = SCREENS.find((each) => each.id === "iphone-17-pro-max");
+    const full = screen && barsOf(screen, "portrait", "compact", false);
+    const address = full?.shapes.find((shape) => shape.text !== undefined);
+    if (!screen || !address) throw new Error("no address");
+    const host = "claudemarketplaces.com";
+    const fit = domainFit(address, host, turn(screen, "portrait").width);
+    const scaled = (17 * fit.room) / textWidth(host, 17, 500);
+    expect(textWidth(host, scaled, 500)).toBeGreaterThan(fit.room + 0.5);
+    expect(fit.cut).toBe(false);
+    expect(fit.size).toBeLessThan(scaled);
+    expect(fit.size).toBeGreaterThan(13);
+    expect(textWidth(host, fit.size, 500)).toBeLessThanOrEqual(fit.room + 0.5);
+  });
+
+  test("the domain's box holds the font's ascent and descent at 13 and 17, so a g's tail is not cut", () => {
+    expect(SAFARI_CSS).toContain(`padding-block: ${DOMAIN_PAD}em;`);
+    // The system font's ascent and descent in Chromium on macOS, in px: 13 and 3 at 13, 16 and 4 at 17.
+    for (const [size, ascent, descent] of [
+      [13, 13, 3],
+      [17, 16, 4],
+    ] as const) {
+      // One line high, line-height 1, and padded the same above and below.
+      expect(size * (1 + 2 * DOMAIN_PAD)).toBeGreaterThanOrEqual(ascent + descent);
+    }
   });
 
   test("mertduzgun.com fits the SE's address whole, shrunk", () => {
@@ -308,7 +352,7 @@ describe("Safari's domain has room for its text", () => {
     expect(fit.size).toBeLessThan(17);
     expect(fit.size).toBeGreaterThanOrEqual(13);
     expect(fit.cut).toBe(false);
-    expect(textWidth("mertduzgun.com", fit.size, 500)).toBeLessThanOrEqual(fit.room + 1e-9);
+    expect(textWidth("mertduzgun.com", fit.size, 500)).toBeLessThanOrEqual(fit.room + 0.5);
   });
 
   test("a new host in the same state shows at its size at once, with no glide", () => {
@@ -372,14 +416,19 @@ describe("Safari's domain has room for its text", () => {
               expect(fit.room).toBe(room);
               if (minimized) {
                 expect(size).toBe(shown.text?.size ?? 0);
+                expect(fit.cut).toBe(text > room + 1e-9);
               } else {
-                // An address shrinks its domain to its room, from 17 down to 13.
-                const want = (17 * room) / textWidth(host, 17, 500);
-                expect(size).toBe(Math.min(17, Math.max(13, want)));
+                // An address shrinks its domain to its room, from 17 down to 13, measured at each size.
+                expect(size).toBe(fit.size);
+                expect(size).toBeLessThanOrEqual(17);
+                expect(size).toBeGreaterThanOrEqual(13);
+                if (textWidth(host, 17, 500) <= room) expect(size).toBe(17);
+                // Too wide even at its least, the start is cut and fades; else it fits whole, unfaded.
+                if (fit.cut) expect(size).toBe(13);
+                else expect(text).toBeLessThanOrEqual(room + 0.5);
+                expect(fit.cut).toBe(text > room + 0.5);
               }
-              // Too wide even at its least, the start is cut and fades; else it fits whole, unfaded.
               expect(domain.dataset.cut).toBe(String(fit.cut));
-              expect(fit.cut).toBe(text > room + 1e-9);
               if (minimized) {
                 const box = pillBox(pill, host, W);
                 expect(Number.parseFloat(surface.style.width ?? "")).toBe(box.width);
@@ -391,12 +440,11 @@ describe("Safari's domain has room for its text", () => {
                 const fits = textWidth(host, SAFARI_TEXT.pill, 500) + (pill.text?.pad ?? 0) <= most;
                 if (fits && room < text) cut.push(host);
               } else {
-                // Centered, the text keeps 21 clear of the glyphs' centers at the address's ends.
+                // Centered, the text keeps 21 clear of the glyphs' centers at the address's ends, or its shape's own.
                 const middle = shown.text?.x ?? 0;
                 for (const mark of shown.marks) {
-                  expect(Math.abs(mark.x - middle) - 21).toBeGreaterThanOrEqual(room / 2 - 1e-9);
+                  expect(Math.abs(mark.x - middle) - (shown.text?.clear ?? 21)).toBeGreaterThanOrEqual(room / 2 - 1e-9);
                 }
-                if (fit.cut) expect(size).toBe(13);
               }
             }
             expect(cut).toEqual([]);
