@@ -3,6 +3,8 @@
  * goes first, and where the page may not use it, a selection copied the old
  * way. Says whether it went.
  */
+
+import { markOwn } from "../mark";
 export async function copyText(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
@@ -12,7 +14,7 @@ export async function copyText(text: string): Promise<boolean> {
   }
   const holder = document.createElement("textarea");
   holder.value = text;
-  holder.setAttribute("data-devknobs", "copy");
+  markOwn(holder, "copy");
   holder.setAttribute("aria-hidden", "true");
   holder.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0";
   try {

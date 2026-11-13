@@ -1,6 +1,7 @@
 import { realNow } from "./clock";
 import { FRAME_NAME, isDevknobsFrame } from "./frame";
 import { newer, stamped } from "./stored";
+import { hasMark } from "../mark";
 
 /**
  * Fresh mode, and the one way to web storage. With `knobs=fresh` (or the old
@@ -120,7 +121,7 @@ function settle(): void {
 function framedFresh(): boolean {
   try {
     const owner = window.frameElement;
-    if (owner) return owner.hasAttribute(FRESH_ATTRIBUTE);
+    if (owner) return hasMark(owner, FRESH_ATTRIBUTE);
   } catch {
     // A parent on another origin. The frame loaded at the address of the page above.
   }

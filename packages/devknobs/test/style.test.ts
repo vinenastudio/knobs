@@ -22,9 +22,11 @@ function frameRealm() {
     defaultView: { CSSStyleSheet: vm.runInContext("CSSStyleSheet", realm) },
   };
   Reflect.set(realm, "document", doc);
-  const source = new Bun.Transpiler({ loader: "ts" }).transformSync(
-    readFileSync(new URL("../src/engine/style.ts", import.meta.url), "utf8"),
-  );
+  // style.ts and the one module it imports, as one script.
+  const source = ["../src/mark.ts", "../src/engine/style.ts"]
+    .map((path) => new Bun.Transpiler({ loader: "ts" }).transformSync(readFileSync(new URL(path, import.meta.url), "utf8")))
+    .join("\n")
+    .replace(/^import .*$/gm, "");
   vm.runInContext(`${source.replace(/^export /gm, "")}\nglobalThis.copy = { ensureStyle, findStyle, removeStyle };`, realm);
   const copy: Copy = Reflect.get(realm, "copy");
   // The page above passes the frame's document in, as it does to scrollbars.

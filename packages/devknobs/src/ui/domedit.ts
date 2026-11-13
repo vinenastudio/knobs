@@ -48,6 +48,7 @@ import { type Entry, isElement, markupOf, parentOf, type Row } from "./domtree";
 import { htmlEditor } from "./htmledit";
 import { comboLabel, letterMatches, typesInField, withShift } from "./keys";
 import type { HtmlSize } from "./prefs";
+import { hasMark, ownSelector } from "../mark";
 
 /** What a key on the selected line does. */
 export type TreeEditAction = "text" | "attr" | "html" | "hide" | "delete" | "up" | "down";
@@ -179,7 +180,7 @@ function isFrame(element: Element): boolean {
 
 /** Whether an element holds devknobs' own nodes, as the body holds the panel and the head its styles. */
 export function holdsOwn(element: Element): boolean {
-  return element.querySelector("[data-devknobs]") !== null;
+  return element.querySelector(ownSelector()) !== null;
 }
 
 /** The actions a line can take. */
@@ -496,7 +497,7 @@ export function createDomEditor(hooks: TreeHooks, options: DomEditorOptions): Do
     bar.hidden = actions.length === 0;
     bar.replaceChildren(
       ...actions.map((action) => {
-        const hidden = action === "hide" && row !== null && isElement(row.node) && row.node.hasAttribute(HIDE_ATTRIBUTE);
+        const hidden = action === "hide" && row !== null && isElement(row.node) && hasMark(row.node, HIDE_ATTRIBUTE);
         const control = button("chip dom-act", hidden ? "show" : ACTIONS[action]);
         // Pressed, not clicked, so the tree keeps the focus its keys need.
         control.addEventListener("pointerdown", (event: Event) => event.preventDefault());

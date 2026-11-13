@@ -1,4 +1,6 @@
 /** `showModal` as the page had it, while the page underneath gets plain dialogs. */
+
+import { isMarked, ownSelector } from "../mark";
 let showModal: HTMLDialogElement["showModal"] | null = null;
 /** What a page node had before it was hidden here, so it gets exactly that back. */
 interface Hidden {
@@ -20,7 +22,7 @@ let bodyObserver: MutationObserver | null = null;
  */
 function hide(node: Node): void {
   if (!(node instanceof HTMLElement || node instanceof SVGElement)) return;
-  if (node.hasAttribute("data-devknobs") || hidden.has(node)) return;
+  if (isMarked(node) || hidden.has(node)) return;
   const style = node.style;
   hidden.set(node, {
     inert: !node.hasAttribute("inert"),
@@ -52,7 +54,7 @@ function holdModals(): void {
   const native = HTMLDialogElement.prototype.showModal;
   showModal = native;
   HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement): void {
-    if (this.closest("[data-devknobs]")) native.call(this);
+    if (this.closest(ownSelector())) native.call(this);
     else this.show();
   };
   let modals: HTMLDialogElement[] = [];
@@ -62,7 +64,7 @@ function holdModals(): void {
     // A browser without `:modal`.
   }
   for (const dialog of modals) {
-    if (dialog.closest("[data-devknobs]")) continue;
+    if (dialog.closest(ownSelector())) continue;
     dialog.close();
     dialog.show();
   }

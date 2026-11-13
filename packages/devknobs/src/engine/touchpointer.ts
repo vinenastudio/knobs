@@ -2,6 +2,7 @@ import { composedParent, isDevknobs } from "../grab/hit";
 import { addStyle, ensureStyle, removeStyle } from "./style";
 import { holdInTopLayer, LAYER, type TopLayerHold } from "./toplayer";
 import { DOT_LOOK, MARK_EVENT, type Mark } from "./touchmark";
+import { markOwn, ownSelector } from "../mark";
 
 /**
  * The mouse as a finger, the way the device toolbar in chrome devtools has it:
@@ -75,7 +76,7 @@ const EVENTS = [
 ] as const;
 
 const CURSOR_CSS =
-  "*:not([data-devknobs]){cursor:none!important}:where([data-devknobs]){cursor:auto}";
+  `*:not(${ownSelector()}){cursor:none!important}:where(${ownSelector()}){cursor:auto}`;
 
 const DRAG_CSS = "*{-webkit-user-select:none!important;user-select:none!important}";
 
@@ -343,7 +344,7 @@ function pressDot(pressed: boolean): void {
 function mountDot(): void {
   if (host) return;
   host = document.createElement("div");
-  host.setAttribute("data-devknobs", "touch-pointer");
+  markOwn(host, "touch-pointer");
   const root = host.attachShadow({ mode: "open" });
   addStyle(root, DOT_CSS);
   dot = document.createElement("div");

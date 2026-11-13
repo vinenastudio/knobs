@@ -1,5 +1,7 @@
 // adapted from react-grab (MIT, Copyright (c) 2025 Aiden Bai)
 
+import { hasMark } from "../mark";
+
 export interface Selector {
   selector: string;
   /** Built from an attribute that means something, as a test id or a label. */
@@ -144,7 +146,7 @@ function frameOf(element: Element): Element | null {
   try {
     const frame = element.ownerDocument.defaultView?.frameElement ?? null;
     // `FRAME_ATTRIBUTE` spelled out, as an import from the engine would split off a chunk.
-    return frame?.hasAttribute("data-devknobs-frame") ? null : frame;
+    return frame && hasMark(frame, "data-devknobs-frame") ? null : frame;
   } catch {
     return null;
   }

@@ -149,6 +149,16 @@ describe("the tree's lines", () => {
     expect(tree.reveal(as(panel.childNodes[0] as PageNode))).toBe(false);
   });
 
+  test("leaves out a newer copy's nodes and attributes too, and keeps another tool's data-knobs-…", () => {
+    const panel = elem("div", { "data-knobs": "panel" }, elem("span"));
+    const doc = page(() => [
+      elem("head", {}, elem("style", { "data-knobs": "scheme" })),
+      elem("body", { "data-knobs-replay": "before", "data-knobs-theme": "dark" }, elem("main", { "data-knobs-font": "serif" }), panel),
+    ]);
+    const tree = model(doc);
+    expect(lines(tree)).toEqual(["<!DOCTYPE html>", '<html lang="en">', "  <head></head>", '  <body data-knobs-theme="dark">', '    <main data-knobs-font="serif"></main>', "  </body>", "</html>"]);
+  });
+
   test("a closed element opens and closes, with its end tag on a line of its own while open", () => {
     const list = elem("ul", {}, elem("li"), elem("li"));
     const doc = page(() => [elem("body", {}, list)]);

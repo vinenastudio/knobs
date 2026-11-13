@@ -2,6 +2,7 @@ import { blurWidths } from "./fold";
 import { objectPlace } from "./objectfit";
 import { embedFonts, forgetFonts } from "./pagefonts";
 import { freezeMedia, frameMedia, pinScheme, prefixedNamespace, schemePins } from "./shotmedia";
+import { isMarked, markOwn, ownSelector } from "../mark";
 
 /**
  * A rough picture of the page in the frame, for the copies of a foldable's
@@ -221,7 +222,7 @@ export function shootPage(
   const draw = (node: Element, alpha: number, lifted: boolean): void => {
     if (seen++ > MOST || (seen % 50 === 0 && performance.now() > deadline)) return;
     // Only the page: nothing devknobs put on it.
-    if (node.hasAttribute("data-devknobs")) return;
+    if (isMarked(node)) return;
     const style = view.getComputedStyle(node);
     if (style.display === "none") return;
     if (!lifted && (style.position === "fixed" || style.position === "sticky")) {
@@ -473,13 +474,13 @@ export function copyPage(frame: HTMLIFrameElement, leave?: (node: Element) => bo
       const node = live[index];
       const copy = copied[index];
       if (!node || !copy) continue;
-      if (leave?.(node)) copy.setAttribute("data-devknobs", "");
+      if (leave?.(node)) markOwn(copy);
       pin(node, copy);
     }
   }
   blankPictures(doc.documentElement, root);
   // And nothing devknobs put on the page: what its knobs write is in the rules.
-  for (const node of root.querySelectorAll("script, link, style, noscript, [data-devknobs]")) node.remove();
+  for (const node of root.querySelectorAll(`script, link, style, noscript, ${ownSelector()}`)) node.remove();
   const style = inert.createElement("style");
   style.textContent = frozen.rules.join("\n");
   (root.querySelector("head") ?? root).append(style);
@@ -581,7 +582,7 @@ export async function paintPage(
   // other pictures in other boxes.
   let over: { canvas: HTMLCanvasElement; pen: CanvasRenderingContext2D } | null = null;
   for (const node of doc.querySelectorAll<MediaNode>(MEDIA)) {
-    const media = node.closest("[data-devknobs]") ? null : mediaOf(node);
+    const media = node.closest(ownSelector()) ? null : mediaOf(node);
     const rect = node.getBoundingClientRect();
     if (!media || rect.bottom <= 0 || rect.top >= height || rect.width <= 0) continue;
     if (!over) {

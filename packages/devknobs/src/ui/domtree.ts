@@ -27,6 +27,7 @@ import { icon } from "./icons";
 import { typesInField } from "./keys";
 import { actButton } from "./kit";
 import { middle } from "./stylesformat";
+import { hasMark, isMarked, isOwnName, newName, ownSelector } from "../mark";
 
 const ELEMENT = 1;
 const TEXT = 3;
@@ -122,12 +123,12 @@ function isDocument(node: Node): node is Document {
 
 /** devknobs' own: its panel, its boxes, its frame's letterbox, the styles it puts on the page. */
 export function isOwnNode(node: Node): boolean {
-  return isElement(node) && node.hasAttribute("data-devknobs");
+  return isElement(node) && isMarked(node);
 }
 
 /** An attribute devknobs puts on a node of the page. */
 export function isOwnAttribute(name: string): boolean {
-  return name.startsWith("data-devknobs");
+  return isOwnName(name);
 }
 
 /** The node above in the tree: the element or document above, and for a shadow root its host. */
@@ -509,7 +510,7 @@ export function markupOf(node: Node): string {
   if (isElement(node)) {
     const copy = node.cloneNode(true);
     if (!isElement(copy)) return "";
-    for (const own of Array.from(copy.querySelectorAll("[data-devknobs]"))) own.remove();
+    for (const own of Array.from(copy.querySelectorAll(ownSelector()))) own.remove();
     for (const one of [copy, ...Array.from(copy.querySelectorAll("*"))]) {
       for (const attr of Array.from(one.attributes)) if (isOwnAttribute(attr.name)) one.removeAttribute(attr.name);
     }
@@ -676,7 +677,7 @@ export function createDomTree(context: DomTreeContext, model: TreeModel = create
       if (opens) line.setAttribute("aria-expanded", open ? "true" : "false");
     }
     const one: Built = { node: line, turn, code, row, open, marks: [] };
-    if (row.kind === "open" && isElement(row.node) && row.node.hasAttribute(HIDE_ATTRIBUTE)) line.classList.add("dom-hid");
+    if (row.kind === "open" && isElement(row.node) && hasMark(row.node, HIDE_ATTRIBUTE)) line.classList.add("dom-hid");
     mark(one, isSelected(row));
     if (lit.has(row.node) && lit.get(row.node) === null) line.classList.add("dom-flash");
     const element = elementOf(row.node);
@@ -992,7 +993,7 @@ export function createDomTree(context: DomTreeContext, model: TreeModel = create
         any = true;
       } else if (record.type === "attributes") {
         const name = record.attributeName ?? "";
-        if (name === HIDE_ATTRIBUTE) {
+        if (name === HIDE_ATTRIBUTE || name === newName(HIDE_ATTRIBUTE)) {
           // A hide shows on the line, which is built again, unlit.
           drop(target);
           any = true;

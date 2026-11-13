@@ -1,8 +1,9 @@
 import { ensureStyle, removeStyle } from "./style";
+import { OWN_AND_IN } from "../mark";
 
 const NAME = "spacing";
 
-const NOT_OURS = ":not([data-devknobs],[data-devknobs] *)";
+const NOT_OURS = `:not(${OWN_AND_IN})`;
 
 /** WCAG 1.4.12 text spacing, at the values its test bookmarklet uses. */
 const CSS =

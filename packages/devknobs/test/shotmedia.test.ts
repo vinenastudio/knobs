@@ -292,9 +292,9 @@ class El {
     return this.all();
   }
   querySelectorAll(selector: string): El[] {
-    const names = selector.split(", ");
-    return this.all().filter(
-      (node) => names.includes(node.localName) || (names.includes("[data-devknobs]") && node.attributes.has("data-devknobs")),
+    const names = selector.split(/,\s*/);
+    return this.all().filter((node) =>
+      names.some((name) => (name.startsWith("[") ? node.attributes.has(name.slice(1, -1)) : name === node.localName)),
     );
   }
   querySelector(selector: string): El | null {

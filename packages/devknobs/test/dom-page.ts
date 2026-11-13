@@ -15,6 +15,11 @@ function escapeText(text: string): string {
 }
 const SVG = "http://www.w3.org/2000/svg";
 
+/** The attribute names of a selector list such as `[one],[other]`. */
+function attributeNames(selector: string): string[] {
+  return selector.split(",").map((one) => one.trim().slice(1, -1));
+}
+
 export class PageNode {
   childNodes: PageNode[] = [];
   parentNode: PageNode | null = null;
@@ -94,10 +99,10 @@ export class PageNode {
     return this;
   }
 
-  /** Every element under this one, for `*`, or with the attribute, for `[name]`. */
+  /** Every element under this one, for `*`, or with one of the attributes, for `[name]` or `[one],[other]`. */
   querySelectorAll(selector: string): PageNode[] {
-    const name = selector === "*" ? null : selector.slice(1, -1);
-    return this.childNodes.flatMap((child) => [...(child.nodeType === 1 && (name === null || child.hasAttribute(name)) ? [child] : []), ...child.querySelectorAll(selector)]);
+    const names = selector === "*" ? null : attributeNames(selector);
+    return this.childNodes.flatMap((child) => [...(child.nodeType === 1 && (names === null || names.some((name) => child.hasAttribute(name))) ? [child] : []), ...child.querySelectorAll(selector)]);
   }
 
   cloneNode(deep = false): PageNode {
@@ -119,11 +124,11 @@ export class PageNode {
     return `<${this.localName}${attrs}>${this.childNodes.map((child) => child.outerHTML).join("")}</${this.localName}>`;
   }
 
-  /** The first node under this one with the attribute, for `[name]` alone. */
+  /** The first node under this one with one of the attributes, for `[name]` or `[one],[other]` alone. */
   querySelector(selector: string): PageNode | null {
-    const name = selector.slice(1, -1);
+    const names = attributeNames(selector);
     for (const child of this.childNodes) {
-      if (child.hasAttribute(name)) return child;
+      if (names.some((name) => child.hasAttribute(name))) return child;
       const found = child.querySelector(selector);
       if (found) return found;
     }

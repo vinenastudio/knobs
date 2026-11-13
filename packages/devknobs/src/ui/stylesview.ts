@@ -77,6 +77,7 @@ import {
   variableTip,
 } from "./stylesformat";
 import type { Tips } from "./tooltip";
+import { isMarked } from "../mark";
 
 /** How long the page is left to settle after a change before its styles are read again, in ms. */
 export const SETTLE = 120;
@@ -276,7 +277,7 @@ function isOwn(record: MutationRecord): boolean {
   if (record.type !== "childList") return false;
   const nodes = [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)];
   return (
-    nodes.length > 0 && nodes.every((node) => isElement(node) && node.hasAttribute("data-devknobs"))
+    nodes.length > 0 && nodes.every((node) => isElement(node) && isMarked(node))
   );
 }
 

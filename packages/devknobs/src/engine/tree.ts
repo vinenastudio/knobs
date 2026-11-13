@@ -1,8 +1,10 @@
 /** Is this node devknobs' own, or inside one of its shadow roots? */
+
+import { isMarked, ownSelector } from "../mark";
 export function isOwn(node: Node | null): boolean {
   let current = node;
   while (current) {
-    if (current instanceof Element && current.closest("[data-devknobs]")) return true;
+    if (current instanceof Element && current.closest(ownSelector())) return true;
     const root = current.getRootNode();
     current = root instanceof ShadowRoot ? root.host : null;
   }
@@ -17,7 +19,7 @@ export function walk(visit: (element: Element) => void): void {
   const pending: (Document | ShadowRoot)[] = [document];
   for (let root = pending.pop(); root; root = pending.pop()) {
     for (const element of Array.from(root.querySelectorAll("*"))) {
-      if (element.hasAttribute("data-devknobs")) continue;
+      if (isMarked(element)) continue;
       visit(element);
       if (element.shadowRoot) pending.push(element.shadowRoot);
     }

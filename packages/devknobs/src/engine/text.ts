@@ -1,6 +1,7 @@
 import type { TextValue } from "../types";
 import { addLayer, removeLayer } from "./matchmedia";
 import { markInline } from "./owninline";
+import { isMarked } from "../mark";
 
 /**
  * The browser's default font size setting, emulated. That setting is the size
@@ -439,11 +440,11 @@ function watchSheets(): void {
     for (const record of records) {
       // A dev server swaps a stylesheet's text in place on a hot update.
       const target = record.target as Element;
-      if (target.nodeName === "STYLE" && !target.hasAttribute("data-devknobs")) schedule();
+      if (target.nodeName === "STYLE" && !isMarked(target)) schedule();
       for (const node of Array.from(record.addedNodes)) {
         const name = node.nodeName;
         if (name !== "STYLE" && name !== "LINK") continue;
-        if ((node as Element).hasAttribute?.("data-devknobs")) continue;
+        if (isMarked(node as Element)) continue;
         if (name === "LINK") node.addEventListener("load", schedule, { once: true });
         schedule();
       }

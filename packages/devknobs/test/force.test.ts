@@ -57,6 +57,7 @@ describe("forcing a state", () => {
     const { doc, section, cta } = hero();
     expect(forceState(asElement(cta), [":hover", "focus-visible", "nope"])).toEqual(["hover", "focus-visible"]);
     expect(cta.getAttribute(FORCE_ATTRIBUTE)).toBe("hover focus focus-visible focus-within");
+    expect(cta.getAttribute("data-knobs-force")).toBe("hover focus focus-visible focus-within");
     expect(section.getAttribute(FORCE_ATTRIBUTE)).toBe("hover focus-within");
     expect(doc.documentElement.getAttribute(FORCE_ATTRIBUTE)).toBe("hover focus-within");
     expect(forcedState()).toEqual({ element: asElement(cta), states: ["hover", "focus-visible"] });

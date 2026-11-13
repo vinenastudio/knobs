@@ -42,6 +42,16 @@ describe("hit testing", () => {
     expect(grabTargetAt(rootAt(panel), 1, 1)).toBeNull();
   });
 
+  test("passes over a newer copy's nodes, never over another tool's data-knobs-…", () => {
+    const row = node("button");
+    const panel = node("div", [], { "data-knobs": "panel" });
+    shadow(panel, [row], row);
+    const other = node("div", [], { "data-knobs-theme": "dark", "data-knobs-font": "serif" });
+    node("body", [panel, other]);
+    expect(isDevknobs(as(row))).toBe(true);
+    expect(isDevknobs(as(other))).toBe(false);
+  });
+
   test("never takes the page's root, and takes what is on it", () => {
     const button = node("button");
     const body = node("body", [button]);

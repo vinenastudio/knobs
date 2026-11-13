@@ -8,6 +8,8 @@
  * states is copied into a stylesheet of devknobs' own, with each such
  * pseudo-class `:hover` written `:is(:hover, [data-devknobs-force~="hover"])`:
  * as heavy as before, and true where the page has the state for real too.
+ * The element carries `data-knobs-force` too, which the copied rules leave
+ * out: every copy writes the old name, an older one on the page only that.
  * The copy keeps the `@media`, `@supports`, `@container`, `@layer` and
  * `@scope` around a rule, and nested rules come out whole. One element at a
  * time. Forcing is no edit: the log never sees it. To use it:
@@ -34,6 +36,7 @@ import { isNewRuleSheet } from "../edit/rule";
 import { isDevknobs } from "../grab/hit";
 import { resolveNesting, splitList } from "./selector";
 import { flatParent, isShadowRoot, type Scope, scopeOf } from "./tree";
+import { getMark, removeMark, setMark } from "../mark";
 
 /** The states that can be forced, in the order the view shows them. */
 export const FORCED_STATES = ["hover", "focus", "focus-visible", "active", "focus-within"] as const;
@@ -293,7 +296,7 @@ export function syncForced(): void {
   const wanted = new Set<ForcedState>();
   const scopes = new Set<Scope>();
   for (const { element } of forced.marked) {
-    for (const state of (element.getAttribute(FORCE_ATTRIBUTE) ?? "").split(" ")) if (isState(state)) wanted.add(state);
+    for (const state of (getMark(element, FORCE_ATTRIBUTE) ?? "").split(" ")) if (isState(state)) wanted.add(state);
     scopes.add(scopeOf(element));
     // A host's own shadow root holds its `:host(:hover)` rules.
     if (element.shadowRoot) scopes.add(element.shadowRoot);
@@ -313,8 +316,8 @@ export function clearForced(): void {
   written.clear();
   for (const { element, before } of forced.marked) {
     try {
-      if (before === null) element.removeAttribute(FORCE_ATTRIBUTE);
-      else element.setAttribute(FORCE_ATTRIBUTE, before);
+      if (before === null) removeMark(element, FORCE_ATTRIBUTE);
+      else setMark(element, FORCE_ATTRIBUTE, before);
     } catch {
       // An element of a page that went.
     }
@@ -342,8 +345,8 @@ export function forceState(element: Element | null, states: readonly string[]): 
   const forced: Forced = { element, states: chosen, marked: [], sheets: new Map() };
   for (const [one, own] of marks(element, chosen)) {
     if (own.length === 0) continue;
-    forced.marked.push({ element: one, before: one.getAttribute(FORCE_ATTRIBUTE) });
-    one.setAttribute(FORCE_ATTRIBUTE, own.join(" "));
+    forced.marked.push({ element: one, before: getMark(one, FORCE_ATTRIBUTE) });
+    setMark(one, FORCE_ATTRIBUTE, own.join(" "));
   }
   current = forced;
   syncForced();

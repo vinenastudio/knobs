@@ -1,4 +1,5 @@
 import { type KeyAction, post, type ZoomAction } from "../engine/frame";
+import { hasMark } from "../mark";
 
 /** The parts of a keydown that decide what it asks of the panel. */
 export type KeyLike = Pick<
@@ -221,7 +222,8 @@ export function inField(event: Pick<KeyLike, "target" | "composedPath">): boolea
 export function typesInField(event: Pick<KeyLike, "target" | "composedPath">): boolean {
   const target = event.composedPath?.()[0] ?? event.target;
   if (!isEditable(target)) return false;
-  return (target as HTMLElement | null)?.hasAttribute?.(KEYS_FIELD) !== true;
+  const element = target as Element | null;
+  return typeof element?.hasAttribute !== "function" || !hasMark(element, KEYS_FIELD);
 }
 
 /**
