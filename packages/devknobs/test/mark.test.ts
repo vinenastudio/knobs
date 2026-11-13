@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { either, findOwn, getMark, hasMark, isMarked, isOwnName, markOwn, OWN_AND_IN, ownSelector, removeMark, setMark } from "../src/mark";
+import { ATTRIBUTES, either, findOwn, getMark, hasMark, isMarked, isOwnName, markOwn, newName, OWN_AND_IN, ownSelector, removeMark, setMark } from "../src/mark";
 import { as, elem } from "./dom-page";
 
 /** The attributes of another tool, `@kitlangton/knobs`, that can sit on the same page. */
@@ -53,7 +53,11 @@ describe("knobs' marks, under the new name and the old one", () => {
 
   test("are knobs' own names: any of the old prefix, only knobs' own of the new", () => {
     for (const name of ["data-devknobs", "data-devknobs-hide", "data-devknobs-anything", "DATA-DEVKNOBS-FORCE"]) expect(isOwnName(name)).toBe(true);
-    for (const end of ["", "-frame", "-force", "-hide", "-replay", "-href", "-icon", "-keys", "-fresh", "-early"]) expect(isOwnName(`data-knobs${end}`)).toBe(true);
+    for (const old of Object.values(ATTRIBUTES)) {
+      expect(old.startsWith("data-devknobs")).toBe(true);
+      expect(isOwnName(newName(old))).toBe(true);
+    }
+    expect(newName(ATTRIBUTES.hide)).toBe("data-knobs-hide");
     for (const name of [...OTHER_TOOL, "data-knobs-anything", "data-knob", "class"]) expect(isOwnName(name)).toBe(false);
   });
 });

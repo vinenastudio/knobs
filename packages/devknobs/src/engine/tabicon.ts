@@ -1,6 +1,6 @@
 import type { DevIconValue } from "../types";
 import { drawDevIcon, type IconSource } from "./devicon";
-import { removeMark, setMark } from "../mark";
+import { ATTRIBUTES, removeMark, setMark } from "../mark";
 
 /**
  * The dev ribbon on the page's own icons, so a dev tab tells itself apart
@@ -12,10 +12,10 @@ import { removeMark, setMark } from "../mark";
  */
 
 /** Where a link keeps the address it had before the ribbon. */
-export const ORIGINAL_HREF = "data-devknobs-href";
+export const ORIGINAL_HREF = ATTRIBUTES.href;
 
 /** Marks the icon link devknobs added, on a page with none, for its `/favicon.ico`. */
-export const ADDED_ICON = "data-devknobs-icon";
+export const ADDED_ICON = ATTRIBUTES.icon;
 
 /** The icon a page with no icon link has, where the browser looks for one. */
 const FALLBACK = "/favicon.ico";

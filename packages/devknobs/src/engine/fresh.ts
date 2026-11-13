@@ -1,7 +1,7 @@
 import { realNow } from "./clock";
 import { FRAME_NAME, isDevknobsFrame } from "./frame";
 import { newer, stamped } from "./stored";
-import { hasMark } from "../mark";
+import { ATTRIBUTES, hasMark } from "../mark";
 
 /**
  * Fresh mode, and the one way to web storage. With `knobs=fresh` (or the old
@@ -25,7 +25,7 @@ export const FRESH_VALUE = "fresh";
 export const KNOBS_FRESH_PARAM = "knobs";
 
 /** On the width knob's frame while the page above is in fresh mode. */
-export const FRESH_ATTRIBUTE = "data-devknobs-fresh";
+export const FRESH_ATTRIBUTE = ATTRIBUTES.fresh;
 
 /** Where a reload devknobs is about to ask for is timed, in `sessionStorage`. */
 export const FRESH_RELOAD_KEY = "devknobs:fresh-reload";

@@ -27,7 +27,7 @@ import { icon } from "./icons";
 import { typesInField } from "./keys";
 import { actButton } from "./kit";
 import { middle } from "./stylesformat";
-import { hasMark, isMarked, isOwnName, newName, ownSelector } from "../mark";
+import { isMarked, isOwnName, newName, ownSelector } from "../mark";
 
 const ELEMENT = 1;
 const TEXT = 3;
@@ -677,7 +677,7 @@ export function createDomTree(context: DomTreeContext, model: TreeModel = create
       if (opens) line.setAttribute("aria-expanded", open ? "true" : "false");
     }
     const one: Built = { node: line, turn, code, row, open, marks: [] };
-    if (row.kind === "open" && isElement(row.node) && hasMark(row.node, HIDE_ATTRIBUTE)) line.classList.add("dom-hid");
+    if (row.kind === "open" && isElement(row.node) && row.node.hasAttribute(HIDE_ATTRIBUTE)) line.classList.add("dom-hid");
     mark(one, isSelected(row));
     if (lit.has(row.node) && lit.get(row.node) === null) line.classList.add("dom-flash");
     const element = elementOf(row.node);

@@ -1,10 +1,10 @@
 import { collect, onDocumentTimeline, targetOf } from "./animations";
 import { walk } from "./tree";
 import { addStyle } from "./style";
-import { removeMark, setMark } from "../mark";
+import { ATTRIBUTES, removeMark, setMark } from "../mark";
 
 /** Marks the boxes whose finished CSS animations replay restarts. */
-const MARK = "data-devknobs-replay";
+const MARK = ATTRIBUTES.replay;
 
 /** The boxes a CSS animation can run on, and the token each one goes by in the mark. */
 const BOXES: [pseudo: string, token: string][] = [

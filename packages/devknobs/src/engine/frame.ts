@@ -1,10 +1,10 @@
 import { type BoxRing, RINGS } from "../grab/boxmodel";
 import type { KnobsState, KnobsStatePatch, PanelValue, SchemeValue } from "../types";
 import { parse } from "./store";
-import { hasMark } from "../mark";
+import { ATTRIBUTES, hasMark } from "../mark";
 
 /** Marks the iframe the width knob renders the page in. */
-export const FRAME_ATTRIBUTE = "data-devknobs-frame";
+export const FRAME_ATTRIBUTE = ATTRIBUTES.frame;
 
 /**
  * The same frame by window name. A page that cannot reach its frame element,

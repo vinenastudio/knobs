@@ -6,22 +6,37 @@
  * and reads either. Each attribute goes by its old name here.
  */
 
-/** The mark on every node knobs adds to the page, its value what the node is. */
-export const OLD_MARK = "data-devknobs";
+/** Every attribute knobs puts on the page, by its old name. */
+export const ATTRIBUTES = {
+  /** The mark on every node knobs adds to the page, its value what the node is. */
+  mark: "data-devknobs",
+  frame: "data-devknobs-frame",
+  force: "data-devknobs-force",
+  hide: "data-devknobs-hide",
+  replay: "data-devknobs-replay",
+  href: "data-devknobs-href",
+  icon: "data-devknobs-icon",
+  keys: "data-devknobs-keys",
+  fresh: "data-devknobs-fresh",
+  early: "data-devknobs-early",
+} as const;
+
+/** One of knobs' attributes, by its old name. */
+export type OwnName = (typeof ATTRIBUTES)[keyof typeof ATTRIBUTES];
+
+export const OLD_MARK = ATTRIBUTES.mark;
 export const MARK = "data-knobs";
+
+/** The new name of an attribute, from its old one. */
+export function newName(old: OwnName): string {
+  return `${MARK}${old.slice(OLD_MARK.length)}`;
+}
 
 /**
  * knobs' new names. Matched as a whole, never by their start: other tools on
  * a page, such as `@kitlangton/knobs`, put `data-knobs-…` attributes of their own.
  */
-const NAMES = new Set(
-  ["", "-frame", "-force", "-hide", "-replay", "-href", "-icon", "-keys", "-fresh", "-early"].map((end) => `${MARK}${end}`),
-);
-
-/** The new name of an attribute, from its old one. */
-export function newName(old: string): string {
-  return `${MARK}${old.slice(OLD_MARK.length)}`;
-}
+const NAMES = new Set(Object.values(ATTRIBUTES).map(newName));
 
 /** Whether an attribute is one knobs puts on the page: any of the old prefix, only knobs' own of the new. */
 export function isOwnName(name: string): boolean {
@@ -30,29 +45,29 @@ export function isOwnName(name: string): boolean {
 }
 
 /** Sets the attribute under both names. */
-export function setMark(element: Element, old: string, value = ""): void {
+export function setMark(element: Element, old: OwnName, value = ""): void {
   element.setAttribute(newName(old), value);
   element.setAttribute(old, value);
 }
 
 /** Takes the attribute off under both names. */
-export function removeMark(element: Element, old: string): void {
+export function removeMark(element: Element, old: OwnName): void {
   element.removeAttribute(newName(old));
   element.removeAttribute(old);
 }
 
 /** Whether the element has the attribute under either name. */
-export function hasMark(element: Element, old: string): boolean {
+export function hasMark(element: Element, old: OwnName): boolean {
   return element.hasAttribute(newName(old)) || element.hasAttribute(old);
 }
 
 /** The attribute's value under the new name, else under the old one. */
-export function getMark(element: Element, old: string): string | null {
+export function getMark(element: Element, old: OwnName): string | null {
   return element.getAttribute(newName(old)) ?? element.getAttribute(old);
 }
 
 /** A selector list for the attribute under either name, `rest` after each, as `="panel"]` or `] *`. */
-export function either(old: string, rest = "]"): string {
+export function either(old: OwnName, rest = "]"): string {
   return `[${newName(old)}${rest},[${old}${rest}`;
 }
 

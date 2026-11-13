@@ -36,14 +36,14 @@ import { isNewRuleSheet } from "../edit/rule";
 import { isDevknobs } from "../grab/hit";
 import { resolveNesting, splitList } from "./selector";
 import { flatParent, isShadowRoot, type Scope, scopeOf } from "./tree";
-import { getMark, removeMark, setMark } from "../mark";
+import { ATTRIBUTES, getMark, removeMark, setMark } from "../mark";
 
 /** The states that can be forced, in the order the view shows them. */
 export const FORCED_STATES = ["hover", "focus", "focus-visible", "active", "focus-within"] as const;
 export type ForcedState = (typeof FORCED_STATES)[number];
 
 /** The attribute that carries the states forced, on the element and on its ancestors. */
-export const FORCE_ATTRIBUTE = "data-devknobs-force";
+export const FORCE_ATTRIBUTE = ATTRIBUTES.force;
 
 /** The name of the document's stylesheet of copied rules. */
 const SHEET = "force";

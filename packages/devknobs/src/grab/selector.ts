@@ -1,6 +1,6 @@
 // adapted from react-grab (MIT, Copyright (c) 2025 Aiden Bai)
 
-import { hasMark } from "../mark";
+import { ATTRIBUTES, hasMark } from "../mark";
 
 export interface Selector {
   selector: string;
@@ -145,8 +145,8 @@ function nthChildSelector(element: Element): string {
 function frameOf(element: Element): Element | null {
   try {
     const frame = element.ownerDocument.defaultView?.frameElement ?? null;
-    // `FRAME_ATTRIBUTE` spelled out, as an import from the engine would split off a chunk.
-    return frame && hasMark(frame, "data-devknobs-frame") ? null : frame;
+    // From `ATTRIBUTES`, not the engine's `FRAME_ATTRIBUTE`: an import from the engine would split off a chunk.
+    return frame && hasMark(frame, ATTRIBUTES.frame) ? null : frame;
   } catch {
     return null;
   }

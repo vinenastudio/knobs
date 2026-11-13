@@ -235,6 +235,15 @@ describe("a hide", () => {
     expect(log.record(hideEdit(AT, el(ad), () => undefined))).toMatchObject({ before: "hidden", after: null });
     expect(ad.hasAttribute(HIDE_ATTRIBUTE)).toBe(false);
   });
+
+  test("an older copy that shows it again takes off only the old name: the element is not hidden", () => {
+    const ad = elem("p", { "data-devknobs-hide": "", "data-knobs-hide": "" });
+    page(() => [elem("body", {}, ad)]);
+    ad.removeAttribute(HIDE_ATTRIBUTE);
+    const log = createEditLog();
+    expect(log.record(hideEdit(AT, el(ad), () => undefined))).toMatchObject({ before: null, after: "hidden" });
+    expect(ad.hasAttribute(HIDE_ATTRIBUTE)).toBe(true);
+  });
 });
 
 describe("a delete", () => {
@@ -485,6 +494,6 @@ describe("the tree's edit keys", () => {
     expect(textOf(line(loose, "text"))).toBeNull();
     expect(actionsFor(line((host.shadowRoot as PageNode).childNodes[1] as PageNode, "comment"))).toEqual([]);
     expect(HIDE_CSS).toContain(`[${HIDE_ATTRIBUTE}] *`);
-    expect(HIDE_CSS).toContain("[data-knobs-hide] *");
+    expect(HIDE_CSS).not.toContain("data-knobs-hide");
   });
 });

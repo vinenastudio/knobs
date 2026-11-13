@@ -472,6 +472,13 @@ describe("the tree as built", () => {
     const hid = rows(node).find((row) => said(row).startsWith('<button id="save">')) as FakeNode;
     expect(hid.classList.contains("dom-hid")).toBe(true);
     expect(hid.find("dom-flash")).toEqual([]);
+    // An older copy shows it again by the old name only: the new one left on it hides nothing.
+    save.setAttribute("data-knobs-hide", "");
+    save.removeAttribute(HIDE_ATTRIBUTE);
+    observer.callback([{ type: "attributes", target: as(save), attributeName: HIDE_ATTRIBUTE } as unknown as MutationRecord]);
+    jest.advanceTimersByTime(SETTLE);
+    const shown = rows(node).find((row) => said(row).startsWith('<button id="save"')) as FakeNode;
+    expect(shown.classList.contains("dom-hid")).toBe(false);
     // The editor selects a line as a click does.
     lent.hooks?.select(as(app));
     expect(selected).toEqual([[as(app), null]]);

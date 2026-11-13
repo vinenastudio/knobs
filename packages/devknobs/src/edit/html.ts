@@ -14,16 +14,16 @@
 import { addStyle, ensureStyle, isDocument, type OwnStyle } from "../engine/style";
 import type { Change, EditKind, EditPlace, EditTarget } from "./log";
 import { riskyElement } from "./risk";
-import { either, hasMark, isMarked, isOwnName, ownSelector, removeMark, setMark } from "../mark";
+import { ATTRIBUTES, isMarked, isOwnName, ownSelector, removeMark, setMark } from "../mark";
 
 /** The html edits, by their kind. */
 export type HtmlKind = Extract<EditKind, "text" | "attr" | "html" | "hide" | "delete" | "move">;
 
 /** The attribute a hidden element carries. devknobs' own, so the tree and a copy leave it out. */
-export const HIDE_ATTRIBUTE = "data-devknobs-hide";
+export const HIDE_ATTRIBUTE = ATTRIBUTES.hide;
 
 /** What hides an element and all in it, as the browsers' tools hide one: its box keeps its place. */
-export const HIDE_CSS = `${either(HIDE_ATTRIBUTE)},${either(HIDE_ATTRIBUTE, "] *")} { visibility: hidden !important; }`;
+export const HIDE_CSS = `[${HIDE_ATTRIBUTE}], [${HIDE_ATTRIBUTE}] * { visibility: hidden !important; }`;
 
 const HTML = "http://www.w3.org/1999/xhtml";
 
@@ -193,7 +193,7 @@ export function hideStyle(element: Element): void {
 
 /** An element hidden, or shown again where a hide is on it. `style` brings in the rule that hides. */
 export function hideEdit(target: EditTarget, element: Element, style: (element: Element) => void = hideStyle): Change {
-  const hidden = hasMark(element, HIDE_ATTRIBUTE);
+  const hidden = element.hasAttribute(HIDE_ATTRIBUTE);
   const set = (on: boolean): void => {
     if (on) setMark(element, HIDE_ATTRIBUTE);
     else removeMark(element, HIDE_ATTRIBUTE);
@@ -201,13 +201,13 @@ export function hideEdit(target: EditTarget, element: Element, style: (element: 
   return {
     edit: { kind: "hide", target: { ...target }, property: "hidden", before: hidden ? "hidden" : null, after: hidden ? null : "hidden" },
     apply() {
-      if (hasMark(element, HIDE_ATTRIBUTE) !== hidden) return false;
+      if (element.hasAttribute(HIDE_ATTRIBUTE) !== hidden) return false;
       if (!hidden) style(element);
       set(!hidden);
       return true;
     },
     revert() {
-      if (hasMark(element, HIDE_ATTRIBUTE) !== hidden) set(hidden);
+      if (element.hasAttribute(HIDE_ATTRIBUTE) !== hidden) set(hidden);
     },
     view: viewOf(element),
   };
