@@ -18,9 +18,12 @@ import { drawMedia, type FitStyle, MEDIA, type Media, type MediaNode, mediaOf, s
  * address fails once at most while the page runs, an origin is asked for one
  * address at a time till it allows CORS, and one that refused `REFUSALS` of
  * its pictures is asked for no more. A failed CORS request does not tell a
- * missing file from a refusal, so the address is asked for again without
- * CORS: where it comes, the host refused CORS; where not, it is missing only
- * and counts against no origin.
+ * missing file from a refusal, so an origin that has not allowed CORS yet has
+ * each address asked for without it first, which the page mostly has already:
+ * one that does not come is missing only, counts against no origin and is not
+ * asked for with CORS at all; one that comes is asked for with CORS then, and
+ * where that fails the host refused CORS, which counts against its origin. An
+ * origin that allowed CORS has its addresses asked for with it at once.
  */
 
 /** How far past the band, up and down the document, its pictures are read, in viewport heights: a scroll as far needs no new picture. */
@@ -169,10 +172,10 @@ export function sameOrigin(address: string, base: string, origin: string): boole
 }
 
 /**
- * Remember that `address` failed to come, asked for with CORS of `origin`, or
- * without where that is null. Where it was `found` without CORS, the host
- * refused CORS, so it counts against an origin that has not allowed it; one
- * missing only is not asked for again.
+ * Remember that `address`, of `origin` where it is asked for with CORS, failed
+ * to come. Where it was `found` without CORS, the host refused CORS, so it
+ * counts against an origin that has not allowed it; one missing only counts
+ * against none. Neither is asked for again.
  */
 function refuse(address: string, origin: string | null, found: boolean): void {
   if (refused.has(address)) return;
@@ -188,11 +191,13 @@ function refuse(address: string, origin: string | null, found: boolean): void {
  * A picture in `doc` of what `address` holds, kept in `used`, asked for with
  * CORS where `cors` has it, so one from another origin that allows it can be
  * read. The page has it already, so the browser mostly has it at once; where
- * not, `loaded` is told when it comes, or when it fails to come where
- * another of its origin's waits on it. Null where it is not asked for: it
- * failed to come before, in this document or another, its origin, which has
- * not allowed CORS, refused it `REFUSALS` times, or one of its origin's, which
- * has not allowed CORS yet, is still on the way, whose answer holds for the rest.
+ * not, `loaded` is told when it comes, or when it fails to come where another
+ * of its origin's waits on it. One of an origin that has not allowed CORS yet
+ * is asked for without it first, and with it only once that comes. Null where
+ * it is not asked for: it failed to come before, in this document or another,
+ * its origin, which has not allowed CORS, refused it `REFUSALS` times, or one
+ * of its origin's, which has not allowed CORS yet, is still on the way, whose
+ * answer holds for the rest; null too while it is asked for without CORS.
  */
 function probeOf(doc: Document, address: string, cors: boolean, loaded: () => void, used: Map<string, HTMLImageElement>): HTMLImageElement | null {
   const known = used.get(address) ?? probes.get(address);
@@ -201,46 +206,87 @@ function probeOf(doc: Document, address: string, cors: boolean, loaded: () => vo
     return known;
   }
   const origin = cors ? originOf(address) : null;
-  if (refused.has(address) || (origin !== null && !allowed.has(origin) && (refusedOrigins.get(origin) ?? 0) >= REFUSALS)) return null;
-  const first = origin === null || allowed.has(origin) ? undefined : asking.get(origin);
-  if (first && first.ownerDocument === doc && !first.complete) return null;
-  const probe = doc.createElement("img");
-  if (cors) probe.crossOrigin = "anonymous";
-  probe.src = address;
-  if (probe.complete) {
-    if (origin !== null && probe.naturalWidth > 0) allowed.add(origin);
-  } else {
-    if (origin !== null && !allowed.has(origin)) asking.set(origin, probe);
-    const come = () => {
-      if (origin !== null) {
-        allowed.add(origin);
-        asking.delete(origin);
-      }
-      loaded();
-    };
-    probe.addEventListener("load", come, { once: true });
-    const fail = () => {
-      const waited = origin !== null && asking.get(origin) === probe;
-      const settle = (found: boolean) => {
-        refuse(address, origin, found);
-        // The next of its origin's waited on it, so it may be asked for now.
-        if (waited) {
-          asking.delete(origin);
-          loaded();
-        }
-      };
-      if (origin === null || allowed.has(origin)) return settle(false);
-      // The rule for every failed CORS request: asked for again without CORS, a file that comes was refused CORS, one that does not is missing. Its origin's others wait till that is known.
-      const plain = doc.createElement("img");
-      if (waited) asking.set(origin, plain);
-      plain.addEventListener("load", () => settle(true), { once: true });
-      plain.addEventListener("error", () => settle(false), { once: true });
-      plain.src = address;
-    };
-    probe.addEventListener("error", fail, { once: true });
+  const shut = () => refused.has(address) || (origin !== null && !allowed.has(origin) && (refusedOrigins.get(origin) ?? 0) >= REFUSALS);
+  if (shut()) return null;
+  const ask = (withCors: boolean) => {
+    const image = doc.createElement("img");
+    if (withCors) image.crossOrigin = "anonymous";
+    image.src = address;
+    return image;
+  };
+  if (origin === null || allowed.has(origin)) {
+    const probe = ask(cors);
+    if (!probe.complete) {
+      probe.addEventListener("load", loaded, { once: true });
+      probe.addEventListener("error", () => refuse(address, origin, false), { once: true });
+    }
+    used.set(address, probe);
+    return probe;
   }
-  used.set(address, probe);
-  return probe;
+  const first = asking.get(origin);
+  if (first && first.ownerDocument === doc && !first.complete) return null;
+  // Asked for with CORS once it came without: where that fails, the host refused CORS.
+  const withCors = () => {
+    const probe = ask(true);
+    if (probe.complete) {
+      if (probe.naturalWidth > 0) allowed.add(origin);
+      else refuse(address, origin, true);
+      return probe;
+    }
+    asking.set(origin, probe);
+    const settle = (came: boolean) => {
+      if (came) allowed.add(origin);
+      else refuse(address, origin, true);
+      // The next of its origin's waited on it, so it may be asked for now, unless the queue moved on to another request.
+      if (asking.get(origin) === probe) {
+        asking.delete(origin);
+        loaded();
+      }
+    };
+    probe.addEventListener("load", () => settle(true), { once: true });
+    probe.addEventListener("error", () => settle(false), { once: true });
+    return probe;
+  };
+  const plain = ask(false);
+  if (plain.complete) {
+    if (plain.naturalWidth === 0) {
+      refuse(address, origin, false);
+      return null;
+    }
+    const probe = withCors();
+    used.set(address, probe);
+    return probe;
+  }
+  asking.set(origin, plain);
+  plain.addEventListener(
+    "load",
+    () => {
+      if (asking.get(origin) !== plain) return;
+      asking.delete(origin);
+      // Refused meanwhile, by a request of another document's.
+      if (shut()) {
+        loaded();
+        return;
+      }
+      const probe = withCors();
+      probes.set(address, probe);
+      if (probe.complete) loaded();
+    },
+    { once: true },
+  );
+  plain.addEventListener(
+    "error",
+    () => {
+      // Missing only: not asked for with CORS, nor again.
+      refuse(address, origin, false);
+      if (asking.get(origin) === plain) {
+        asking.delete(origin);
+        loaded();
+      }
+    },
+    { once: true },
+  );
+  return null;
 }
 
 /** `value`, a list such as computed backgrounds are, cut at the commas outside its brackets. */

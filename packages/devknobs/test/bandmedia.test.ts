@@ -173,7 +173,10 @@ class Drawing extends Node {
   }
 }
 
-/** A picture the frame makes to read a background picture by: it has the page's at once, where the page has loaded it. */
+/** A picture the page has loaded: its size, whether the frame may read it, and whether the browser has it for a request with CORS too. */
+type Loaded = { width: number; height: number; tainted?: boolean; cors?: false };
+
+/** A picture the frame makes to read a background picture by: it has the page's at once, where the page has loaded it, but asked for with CORS not where the page loaded it without (`cors: false`). */
 class Probe {
   complete = false;
   crossOrigin: string | null = null;
@@ -186,7 +189,7 @@ class Probe {
   failed: (() => void)[] = [];
   constructor(
     readonly ownerDocument: unknown,
-    readonly loaded: Map<string, { width: number; height: number; tainted?: boolean }>,
+    readonly loaded: Map<string, Loaded>,
   ) {}
   addEventListener(type: string, listener: () => void): void {
     (type === "error" ? this.failed : this.heard).push(listener);
@@ -194,7 +197,7 @@ class Probe {
   set src(address: string) {
     this.currentSrc = address;
     const has = this.loaded.get(address);
-    if (!has) return;
+    if (!has || (this.crossOrigin !== null && has.cors === false)) return;
     this.complete = true;
     this.naturalWidth = has.width;
     this.naturalHeight = has.height;
@@ -312,7 +315,7 @@ afterEach(() => {
 });
 
 /** The frame, with `body` for its page, `loaded` for the pictures its css has loaded, and `rules` for its css. */
-function frameOf(body: Node[], loaded = new Map<string, { width: number; height: number; tainted?: boolean }>(), rules: string[] = []) {
+function frameOf(body: Node[], loaded = new Map<string, Loaded>(), rules: string[] = []) {
   const root = new Node("html", {}, [new Node("head"), new Node("body", {}, body)]);
   root.box = { left: 0, top: 0, width: VIEW.innerWidth, height: 4000 };
   const probes: Probe[] = [];
@@ -359,12 +362,19 @@ function copyOf(id: string): Node | undefined {
 /** The band in these tests: 100 css px of the document under the viewport. */
 const BAND = 100;
 
-/** `probe` fails to come with CORS, and the plain request for it that follows, the last of `probes`, comes where the file is `found`, or fails too. */
-function failCors(probes: Probe[], probe: Probe | undefined, found: boolean): void {
+/** The plain request `plain` comes, and the request with CORS that follows, the last of `probes`, fails: its host refused CORS. */
+function refuseCors(probes: Probe[], plain: Probe | undefined): void {
+  expect(plain?.crossOrigin).toBeNull();
+  for (const come of plain?.heard ?? []) come();
+  const probe = probes.at(-1);
+  expect([probe?.currentSrc, probe?.crossOrigin]).toEqual([plain?.currentSrc, "anonymous"]);
   for (const fail of probe?.failed ?? []) fail();
-  const plain = probes.at(-1);
-  expect([plain?.currentSrc, plain?.crossOrigin]).toEqual([probe?.currentSrc, null]);
-  for (const tell of (found ? plain?.heard : plain?.failed) ?? []) tell();
+}
+
+/** The plain request `plain` fails: the file is missing. */
+function failPlain(plain: Probe | undefined): void {
+  expect(plain?.crossOrigin).toBeNull();
+  for (const fail of plain?.failed ?? []) fail();
 }
 
 /** The addresses asked for with CORS. */
@@ -518,7 +528,8 @@ describe("pictureOf, with pictures the frame may not read as they are", () => {
     away.setAttribute("id", "away");
     const { frame, probes } = frameOf([away], new Map([["https://cdn.other.test/x.jpg", { width: 800, height: 400 }]]));
     const picture = pictureOf(frame, BAND);
-    expect(probes.map((probe) => probe.crossOrigin)).toEqual(["anonymous"]);
+    // Its origin has not allowed CORS yet, so it is asked for without first, which the browser has at once.
+    expect(probes.map((probe) => probe.crossOrigin)).toEqual([null, "anonymous"]);
     expect(copyOf("away")?.getAttribute("src")).toBe(sizedPicture("data:image/webp;base64,https://cdn.other.test/x.jpg@800x400", 800, 400));
     expect(picture?.overlay).toBeNull();
   });
@@ -681,15 +692,65 @@ describe("pictureOf, of a page that scrolls in its body", () => {
 });
 
 describe("pictureOf, asking for pictures quietly", () => {
-  test("a same-origin background picture is asked for without CORS, one from another origin with it", () => {
+  test("a same-origin background picture is asked for without CORS, one from another origin without it first, then with it once it came", () => {
     const own = new Node("div").at(0, 650, 400, 100).styled({ backgroundImage: 'url("https://site.test/own.png")' });
     const away = new Node("div").at(0, 760, 400, 100).styled({ backgroundImage: 'url("https://quiet-a.test/away.png")' });
     const { frame, probes } = frameOf([own, away]);
     pictureOf(frame, BAND);
     expect(probes.map((probe) => [probe.currentSrc, probe.crossOrigin])).toEqual([
       ["https://site.test/own.png", null],
+      ["https://quiet-a.test/away.png", null],
+    ]);
+    for (const come of probes[1]?.heard ?? []) come();
+    expect(probes.map((probe) => [probe.currentSrc, probe.crossOrigin])).toEqual([
+      ["https://site.test/own.png", null],
+      ["https://quiet-a.test/away.png", null],
       ["https://quiet-a.test/away.png", "anonymous"],
     ]);
+  });
+
+  test("a missing file is asked for once only, without CORS, in this document or the next", () => {
+    const row = () => new Node("div").at(0, 650, 400, 100).styled({ backgroundImage: 'url("https://quiet-j.test/gone.png")' });
+    const first = frameOf([row()]);
+    let heard = 0;
+    pictureOf(first.frame, BAND, () => heard++);
+    failPlain(first.probes[0]);
+    // Its origin's others may be asked for now, so a new picture is taken.
+    expect(heard).toBe(1);
+    pictureOf(first.frame, BAND);
+    const next = frameOf([row()]);
+    pictureOf(next.frame, BAND);
+    expect(first.probes.map((probe) => [probe.currentSrc, probe.crossOrigin])).toEqual([["https://quiet-j.test/gone.png", null]]);
+    expect(next.probes.length).toBe(0);
+  });
+
+  test("a file the page has, whose host refuses CORS, is asked for without it, then with it, and counts against its host, which two such stop", () => {
+    const rows = () => [1, 2, 3].map((at) => new Node("div").at(0, 600 + at * 50, 400, 50).styled({ backgroundImage: `url("https://quiet-k.test/${at}.png")` }));
+    const loaded = new Map<string, Loaded>([1, 2, 3].map((at) => [`https://quiet-k.test/${at}.png`, { width: 400, height: 50, cors: false }]));
+    const { frame, probes } = frameOf(rows(), loaded);
+    let heard = 0;
+    pictureOf(frame, BAND, () => heard++);
+    // Without CORS the browser has it at once, from the page; with CORS it goes to the host, and the origin's others wait on it.
+    expect(probes.map((probe) => [probe.currentSrc, probe.crossOrigin])).toEqual([
+      ["https://quiet-k.test/1.png", null],
+      ["https://quiet-k.test/1.png", "anonymous"],
+    ]);
+    pictureOf(frame, BAND);
+    expect(probes.length).toBe(2);
+    for (const fail of probes[1]?.failed ?? []) fail();
+    expect(heard).toBe(1);
+    pictureOf(frame, BAND);
+    expect(probes.slice(2).map((probe) => [probe.currentSrc, probe.crossOrigin])).toEqual([
+      ["https://quiet-k.test/2.png", null],
+      ["https://quiet-k.test/2.png", "anonymous"],
+    ]);
+    for (const fail of probes[3]?.failed ?? []) fail();
+    pictureOf(frame, BAND);
+    // Two refused, so the third is asked for neither way, in this document or the next.
+    expect(probes.length).toBe(4);
+    const next = frameOf(rows(), loaded);
+    pictureOf(next.frame, BAND);
+    expect(next.probes.length).toBe(0);
   });
 
   test("an address that failed to come with CORS is asked for no more, in this document or the next", () => {
@@ -697,8 +758,9 @@ describe("pictureOf, asking for pictures quietly", () => {
     const first = frameOf([away()]);
     pictureOf(first.frame, BAND);
     expect(first.probes.length).toBe(1);
-    failCors(first.probes, first.probes[0], true);
+    refuseCors(first.probes, first.probes[0]);
     pictureOf(first.frame, BAND);
+    expect(first.probes.length).toBe(2);
     expect(corsAsked(first.probes)).toEqual(["https://quiet-b.test/x.jpg"]);
     const next = frameOf([away()]);
     const picture = pictureOf(next.frame, BAND);
@@ -712,18 +774,22 @@ describe("pictureOf, asking for pictures quietly", () => {
     const { frame, probes } = frameOf(rows);
     pictureOf(frame, BAND);
     expect(probes.map((probe) => probe.currentSrc)).toEqual(["https://quiet-c.test/1.png"]);
-    for (const fail of probes[0]?.failed ?? []) fail();
-    // Till its plain request tells whether the file is there, the origin's others wait.
+    for (const come of probes[0]?.heard ?? []) come();
+    // Till its request with CORS tells whether the host allows it, the origin's others wait.
     pictureOf(frame, BAND);
-    expect(corsAsked(probes)).toEqual(["https://quiet-c.test/1.png"]);
-    for (const come of probes.at(-1)?.heard ?? []) come();
+    expect(probes.map((probe) => [probe.currentSrc, probe.crossOrigin])).toEqual([
+      ["https://quiet-c.test/1.png", null],
+      ["https://quiet-c.test/1.png", "anonymous"],
+    ]);
+    for (const fail of probes[1]?.failed ?? []) fail();
     pictureOf(frame, BAND);
-    expect(corsAsked(probes)).toEqual(["https://quiet-c.test/1.png", "https://quiet-c.test/2.png"]);
-    failCors(probes, probes.at(-1), true);
+    expect(probes.at(-1)?.currentSrc).toBe("https://quiet-c.test/2.png");
+    refuseCors(probes, probes.at(-1));
     pictureOf(frame, BAND);
     const next = frameOf(rows.map((row) => new Picture(row.src, 400, 50, true).at(row.box.left, row.box.top, row.box.width, row.box.height)));
     pictureOf(next.frame, BAND);
-    expect(corsAsked(probes).length).toBe(2);
+    expect(probes.length).toBe(4);
+    expect(corsAsked(probes)).toEqual(["https://quiet-c.test/1.png", "https://quiet-c.test/2.png"]);
     expect(next.probes.length).toBe(0);
   });
 
@@ -734,30 +800,36 @@ describe("pictureOf, asking for pictures quietly", () => {
     const { frame, probes } = frameOf(rows, new Map([["https://quiet-e.test/3.png", { width: 400, height: 50 }]]));
     let heard = 0;
     pictureOf(frame, BAND, () => heard++);
-    for (const fail of probes[0]?.failed ?? []) fail();
-    expect(heard).toBe(0);
-    for (const fail of probes.at(-1)?.failed ?? []) fail();
+    failPlain(probes[0]);
     // The next waited on it, so a new picture is taken to ask for it.
     expect(heard).toBe(1);
     pictureOf(frame, BAND);
-    failCors(probes, probes.at(-1), false);
+    failPlain(probes.at(-1));
     pictureOf(frame, BAND);
-    expect(corsAsked(probes)).toEqual([1, 2, 3].map((at) => `https://quiet-e.test/${at}.png`));
+    // Only the file that is there is asked for with CORS.
+    expect(probes.map((probe) => [probe.currentSrc, probe.crossOrigin])).toEqual([
+      ["https://quiet-e.test/1.png", null],
+      ["https://quiet-e.test/2.png", null],
+      ["https://quiet-e.test/3.png", null],
+      ["https://quiet-e.test/3.png", "anonymous"],
+    ]);
     const picture = sizedPicture("data:image/webp;base64,https://quiet-e.test/3.png@400x50", 400, 50);
     expect(copyOf("row3")?.getAttribute("style")).toBe(`;background-image:url("${picture}") !important`);
     // Each failed address is asked for once only.
     pictureOf(frame, BAND);
-    expect(corsAsked(probes).length).toBe(3);
+    expect(probes.length).toBe(4);
   });
 
   test("two background pictures that are there but fail CORS stop requests to their host, in this document and the next", () => {
     const rows = () => [1, 2, 3].map((at) => new Node("div").at(0, 600 + at * 50, 400, 50).styled({ backgroundImage: `url("https://quiet-g.test/${at}.png")` }));
     const { frame, probes } = frameOf(rows());
     pictureOf(frame, BAND);
-    failCors(probes, probes[0], true);
+    refuseCors(probes, probes[0]);
     pictureOf(frame, BAND);
-    failCors(probes, probes.at(-1), true);
+    refuseCors(probes, probes.at(-1));
     pictureOf(frame, BAND);
+    // The third is asked for neither way.
+    expect(probes.length).toBe(4);
     expect(corsAsked(probes)).toEqual(["https://quiet-g.test/1.png", "https://quiet-g.test/2.png"]);
     const next = frameOf(rows());
     pictureOf(next.frame, BAND);
@@ -771,9 +843,15 @@ describe("pictureOf, asking for pictures quietly", () => {
     const loaded = new Map([2, 3].map((at) => [`https://quiet-h.test/${at}.png`, { width: 400, height: 50 }]));
     const { frame, probes } = frameOf(rows, loaded);
     pictureOf(frame, BAND);
-    failCors(probes, probes[0], false);
+    failPlain(probes[0]);
     pictureOf(frame, BAND);
-    expect(corsAsked(probes)).toEqual([1, 2, 3].map((at) => `https://quiet-h.test/${at}.png`));
+    // 2.png comes at once both ways, so its origin allowed CORS, and 3.png is asked for with it only.
+    expect(probes.map((probe) => [probe.currentSrc, probe.crossOrigin])).toEqual([
+      ["https://quiet-h.test/1.png", null],
+      ["https://quiet-h.test/2.png", null],
+      ["https://quiet-h.test/2.png", "anonymous"],
+      ["https://quiet-h.test/3.png", "anonymous"],
+    ]);
     const picture = sizedPicture("data:image/webp;base64,https://quiet-h.test/3.png@400x50", 400, 50);
     expect(copyOf("row3")?.getAttribute("style")).toBe(`;background-image:url("${picture}") !important`);
   });
@@ -783,15 +861,16 @@ describe("pictureOf, asking for pictures quietly", () => {
     rows[2]?.setAttribute("id", "third");
     const { frame, probes } = frameOf(rows, new Map([["https://quiet-i.test/3.png", { width: 400, height: 50 }]]));
     pictureOf(frame, BAND);
-    failCors(probes, probes[0], false);
+    failPlain(probes[0]);
     pictureOf(frame, BAND);
-    failCors(probes, probes.at(-1), false);
+    failPlain(probes.at(-1));
     pictureOf(frame, BAND);
-    expect(corsAsked(probes)).toEqual([1, 2, 3].map((at) => `https://quiet-i.test/${at}.png`));
+    expect(probes.length).toBe(4);
+    expect(corsAsked(probes)).toEqual(["https://quiet-i.test/3.png"]);
     expect(copyOf("third")?.getAttribute("src")).toBe(sizedPicture("data:image/webp;base64,https://quiet-i.test/3.png@400x50", 400, 50));
   });
 
-  test("an origin that allowed CORS is asked for the rest of its pictures, however many of them fail", () => {
+  test("an origin that allowed CORS is asked for the rest of its pictures with it only, however many of them fail", () => {
     const page = (at: string, top: number) => new Picture(`https://quiet-f.test/${at}.jpg`, 400, 50, true).at(0, top, 400, 50);
     const loaded = new Map([
       ["https://quiet-f.test/a.jpg", { width: 400, height: 50 }],
@@ -799,13 +878,19 @@ describe("pictureOf, asking for pictures quietly", () => {
     ]);
     const first = frameOf([page("a", 650), page("b", 700), page("c", 750)], loaded);
     pictureOf(first.frame, BAND);
-    expect(first.probes.length).toBe(3);
+    // Only the first is asked for without CORS: it came with CORS at once, so the rest are asked for with it alone.
+    expect(first.probes.map((probe) => [probe.currentSrc, probe.crossOrigin])).toEqual([
+      ["https://quiet-f.test/a.jpg", null],
+      ["https://quiet-f.test/a.jpg", "anonymous"],
+      ["https://quiet-f.test/b.jpg", "anonymous"],
+      ["https://quiet-f.test/c.jpg", "anonymous"],
+    ]);
     for (const probe of first.probes) for (const fail of probe.failed) fail();
     const later = page("d", 700);
     later.setAttribute("id", "later");
     const next = frameOf([later], loaded);
     pictureOf(next.frame, BAND);
-    expect(next.probes.map((probe) => probe.currentSrc)).toEqual(["https://quiet-f.test/d.jpg"]);
+    expect(next.probes.map((probe) => [probe.currentSrc, probe.crossOrigin])).toEqual([["https://quiet-f.test/d.jpg", "anonymous"]]);
     expect(copyOf("later")?.getAttribute("src")).toBe(sizedPicture("data:image/webp;base64,https://quiet-f.test/d.jpg@400x50", 400, 50));
   });
 
@@ -818,9 +903,75 @@ describe("pictureOf, asking for pictures quietly", () => {
     pictureOf(frame, BAND, () => heard++);
     expect(probes.length).toBe(1);
     for (const come of probes[0]?.heard ?? []) come();
+    expect(heard).toBe(0);
+    for (const come of probes[1]?.heard ?? []) come();
     expect(heard).toBe(1);
     pictureOf(frame, BAND);
-    expect(probes.map((probe) => probe.currentSrc)).toEqual([1, 2, 3].map((at) => `https://quiet-d.test/${at}.png`));
+    expect(probes.map((probe) => [probe.currentSrc, probe.crossOrigin])).toEqual([
+      ["https://quiet-d.test/1.png", null],
+      ["https://quiet-d.test/1.png", "anonymous"],
+      ["https://quiet-d.test/2.png", "anonymous"],
+      ["https://quiet-d.test/3.png", "anonymous"],
+    ]);
+  });
+
+  test("a request of an old document that comes leaves alone the queue a new document's request holds", () => {
+    const rows = () => [1, 2, 3].map((at) => new Node("div").at(0, 600 + at * 50, 400, 50).styled({ backgroundImage: `url("https://quiet-z.test/${at}.png")` }));
+    const first = frameOf(rows());
+    let heard = 0;
+    pictureOf(first.frame, BAND, () => heard++);
+    const next = frameOf(rows());
+    pictureOf(next.frame, BAND);
+    expect(next.probes.map((probe) => probe.currentSrc)).toEqual(["https://quiet-z.test/1.png"]);
+    for (const come of first.probes[0]?.heard ?? []) come();
+    pictureOf(next.frame, BAND);
+    // The old document asks for nothing more and is told nothing; the new one's 2.png still waits on its 1.png.
+    expect(first.probes.length).toBe(1);
+    expect(heard).toBe(0);
+    expect(next.probes.map((probe) => probe.currentSrc)).toEqual(["https://quiet-z.test/1.png"]);
+    for (const come of next.probes[0]?.heard ?? []) come();
+    expect(corsAsked(next.probes)).toEqual(["https://quiet-z.test/1.png"]);
+  });
+
+  test("a request with CORS of an old document that fails counts at once, but leaves alone the queue a new document's request holds", () => {
+    const rows = () => [1, 2, 3].map((at) => new Node("div").at(0, 600 + at * 50, 400, 50).styled({ backgroundImage: `url("https://quiet-y.test/${at}.png")` }));
+    const first = frameOf(rows());
+    let heard = 0;
+    pictureOf(first.frame, BAND, () => heard++);
+    for (const come of first.probes[0]?.heard ?? []) come();
+    expect(corsAsked(first.probes)).toEqual(["https://quiet-y.test/1.png"]);
+    const next = frameOf(rows());
+    let told = 0;
+    pictureOf(next.frame, BAND, () => told++);
+    for (const fail of first.probes[1]?.failed ?? []) fail();
+    expect(heard).toBe(0);
+    pictureOf(next.frame, BAND);
+    expect(next.probes.map((probe) => probe.currentSrc)).toEqual(["https://quiet-y.test/1.png"]);
+    // The new one's request comes, but its address was refused meanwhile, so it is not asked for with CORS, and the next may be asked for.
+    for (const come of next.probes[0]?.heard ?? []) come();
+    expect(told).toBe(1);
+    pictureOf(next.frame, BAND);
+    expect(next.probes.map((probe) => [probe.currentSrc, probe.crossOrigin])).toEqual([
+      ["https://quiet-y.test/1.png", null],
+      ["https://quiet-y.test/2.png", null],
+    ]);
+  });
+
+  test("a request let go of by forgetPixels that comes leaves alone the queue of the requests after", () => {
+    const rows = [1, 2, 3].map((at) => new Node("div").at(0, 600 + at * 50, 400, 50).styled({ backgroundImage: `url("https://quiet-x.test/${at}.png")` }));
+    const { frame, probes } = frameOf(rows);
+    let heard = 0;
+    pictureOf(frame, BAND, () => heard++);
+    forgetPixels();
+    pictureOf(frame, BAND, () => heard++);
+    expect(probes.map((probe) => probe.currentSrc)).toEqual(["https://quiet-x.test/1.png", "https://quiet-x.test/1.png"]);
+    for (const come of probes[0]?.heard ?? []) come();
+    // The old request asks for nothing with CORS and tells nothing; 2.png still waits on the new one.
+    expect(heard).toBe(0);
+    pictureOf(frame, BAND);
+    expect(probes.length).toBe(2);
+    for (const come of probes[1]?.heard ?? []) come();
+    expect(corsAsked(probes)).toEqual(["https://quiet-x.test/1.png"]);
   });
 });
 
