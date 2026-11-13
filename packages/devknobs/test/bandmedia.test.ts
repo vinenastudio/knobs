@@ -637,6 +637,27 @@ describe("pictureOf, with pictures the frame may not read as they are", () => {
     expect(raised(new Node("section", {}, [away(), new Node("button").at(10, 660, 50, 50).styled({ position: "absolute" })]).styled({ position: "relative" }))).toBe(1);
   });
 
+  test("sticky and fixed holders, display: contents and the other stacking contexts stack as the browser does", () => {
+    const away = () => new Picture("https://cdn.other.test/x.jpg", 800, 600, true).at(0, 650, 400, 300);
+    const raised = (holder: Node) => pictureOf(frameOf([holder.at(0, 650, 400, 300)]).frame, BAND)?.overlay?.above?.parts.length ?? 0;
+    const caption = (style: Record<string, string>) => new Node("p").at(0, 650, 200, 100).styled(style);
+    // A sticky header makes a stacking context: its caption at 50 stays under a positioned picture after it.
+    const header = new Node("div", {}, [caption({ position: "absolute", zIndex: "50" })]).at(0, 650, 400, 100).styled({ position: "sticky" });
+    expect(raised(new Node("section", {}, [header, away().styled({ position: "relative" })]))).toBe(0);
+    // A picture at 3 in a sticky holder stacks at its holder's level: a caption at 1 after it shows over it.
+    const holder = new Node("div", {}, [away().styled({ position: "absolute", zIndex: "3" })]).at(0, 650, 400, 300).styled({ position: "sticky" });
+    expect(raised(new Node("section", {}, [holder, caption({ position: "relative", zIndex: "1" })]))).toBe(1);
+    // A flex item through a `display: contents` wrapper is stacked by its `z-index`.
+    const wrapped = new Node("div", {}, [caption({ zIndex: "5" })]).styled({ display: "contents" });
+    expect(raised(new Node("section", {}, [wrapped, away().styled({ position: "relative" })]).styled({ display: "flex" }))).toBe(1);
+    // An earlier caption that makes a stacking context paints over a picture in the flow.
+    const contexts: Record<string, string>[] = [{ willChange: "transform" }, { mixBlendMode: "multiply" }, { contain: "paint" }, { backdropFilter: "blur(2px)" }, { clipPath: "inset(0px)" }];
+    for (const style of contexts) {
+      expect(raised(new Node("section", {}, [caption(style), away()]))).toBe(1);
+    }
+    expect(raised(new Node("section", {}, [caption({ willChange: "scroll-position" }), away()]))).toBe(0);
+  });
+
   test("drawn back, the drawing goes over each covered picture only, cut off as the picture is", () => {
     const away = new Picture("https://cdn.other.test/x.jpg", 800, 400, true).at(-6, 694, 412, 212);
     const holder = new Node("span", {}, [away, new Node("b").at(300, 860, 40, 40).styled({ position: "absolute" })])

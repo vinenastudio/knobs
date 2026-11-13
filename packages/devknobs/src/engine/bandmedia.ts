@@ -429,37 +429,74 @@ interface Pending {
 /** A `display` whose children a `z-index` stacks without a `position`. */
 const STACKS_CHILDREN = new Set(["flex", "inline-flex", "grid", "inline-grid"]);
 
-/** Is `value`, a computed property that is `none` where it does nothing, set? */
-const inEffect = (value: string | undefined) => (value || "none") !== "none";
+/** Is `value`, a computed property that is `initial` where it does nothing, set? */
+const inEffect = (value: string | undefined, initial = "none") => (value || initial) !== initial;
+
+/** Does the space-separated `value` name one of `words`? */
+const names = (value: string | undefined, words: Set<string>) => (value ?? "").split(/[\s,]+/).some((word) => words.has(word));
+
+/** The `contain` values that make a stacking context. */
+const CONTAINS = new Set(["paint", "layout", "strict", "content"]);
+
+/** The `container-type` values that make one. */
+const CONTAINERS = new Set(["size", "inline-size"]);
+
+/** What a `will-change` may name that makes one. */
+const CHANGES = new Set(["transform", "opacity", "filter", "scale", "rotate", "translate", "isolation", "mix-blend-mode", "perspective", "clip-path", "mask", "contain"]);
+
+/** The box that lays `node` out: what holds it, past any `display: contents` that makes no box. */
+function boxOf(node: Element, view: Window): CSSStyleDeclaration | null {
+  for (let at = node.parentElement; at; at = at.parentElement) {
+    const style = view.getComputedStyle(at);
+    if (style.display !== "contents") return style;
+  }
+  return null;
+}
+
+/** Does `style`, besides a `z-index`, make a stacking context? */
+function contextOf(style: CSSStyleDeclaration): boolean {
+  return (
+    style.position === "fixed" ||
+    style.position === "sticky" ||
+    inEffect(style.transform) ||
+    inEffect(style.scale) ||
+    inEffect(style.rotate) ||
+    inEffect(style.translate) ||
+    inEffect(style.filter) ||
+    inEffect(style.backdropFilter) ||
+    inEffect(style.perspective) ||
+    inEffect(style.clipPath) ||
+    inEffect(style.maskImage) ||
+    inEffect(style.webkitMaskImage) ||
+    inEffect(style.mixBlendMode, "normal") ||
+    Number.parseFloat(style.opacity) < 1 ||
+    style.isolation === "isolate" ||
+    names(style.contain, CONTAINS) ||
+    names(style.containerType, CONTAINERS) ||
+    names(style.willChange, CHANGES)
+  );
+}
 
 /**
  * How high `node` stacks among what else `top` holds, as near as its own
  * style and that of what holds it under `top` tell: 0 in the flow, below it
- * for a negative `z-index`, above it where it or what holds it is positioned,
- * turned, faded, filtered or isolated, and higher for a higher `z-index`. A
+ * for a negative `z-index`, above it where it or what holds it is positioned
+ * or makes a stacking context, and higher for a higher `z-index`. A
  * `z-index` counts only on one positioned or laid out by a flex or grid, as
  * a browser computes it on any. The outermost that makes a stacking context
  * sets it, as the rest paints in that; one positioned that makes none lifts
- * only what nothing in it lifted yet.
+ * only what nothing in it lifted yet. A `display: contents` makes no box, so
+ * its own style does nothing.
  */
 function rankOf(node: Element, top: Element, view: Window): number {
   let rank = 0;
   for (let at: Element | null = node; at && at !== top; at = at.parentElement) {
     const style = view.getComputedStyle(at);
+    if (style.display === "contents") continue;
     const positioned = style.position !== "static";
-    const holder = at.parentElement && view.getComputedStyle(at.parentElement).display;
+    const holder = boxOf(at, view)?.display;
     const z = positioned || (holder && STACKS_CHILDREN.has(holder)) ? Number.parseInt(style.zIndex, 10) : Number.NaN;
-    const opacity = Number.parseFloat(style.opacity);
-    const context =
-      Number.isFinite(z) ||
-      inEffect(style.transform) ||
-      inEffect(style.scale) ||
-      inEffect(style.rotate) ||
-      inEffect(style.translate) ||
-      inEffect(style.filter) ||
-      opacity < 1 ||
-      style.isolation === "isolate";
-    if (context) rank = !Number.isFinite(z) || z === 0 ? 1 : z < 0 ? z : 1 + z;
+    if (Number.isFinite(z) || contextOf(style)) rank = !Number.isFinite(z) || z === 0 ? 1 : z < 0 ? z : 1 + z;
     else if (positioned && rank === 0) rank = 1;
   }
   return rank;

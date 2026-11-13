@@ -16,7 +16,7 @@
 // clip the browser records first, whose frames are all the same, so one that plays shows the
 // same in the band and in the frame: one that loops under a sound button, one from another
 // origin the frame may not read, one that shows only its poster, one scaled in a round clip,
-// and four of another origin, paused, with a caption that paints over or under them as the
+// and six of another origin, paused, with a caption that paints over or under them as the
 // browser stacks it. The looping one is watched for some turns: it takes no picture at each.
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
@@ -120,6 +120,8 @@ canvas { display: block; width: 100%; height: 200px; margin: 0 0 40px; }
 <section class="case" id="paint-b" style="position: relative"><video style="position: absolute; z-index: 2" src="${away}/clip.webm" muted playsinline preload="auto"></video><div style="position: relative"><p style="position: absolute; z-index: 5; top: 50px">over</p></div></section>
 <section class="case" id="paint-c"><video style="position: relative" src="${away}/clip.webm" muted playsinline preload="auto"></video><p style="opacity: 0.9; margin-top: -110px">over</p></section>
 <section class="case" id="paint-e"><p style="z-index: 5; margin-top: 50px">under</p><video style="position: relative; margin-top: -110px" src="${away}/clip.webm" muted playsinline preload="auto"></video></section>
+<section class="case" id="paint-h"><div style="position: sticky; top: 0; height: 0"><p style="position: absolute; z-index: 50; top: 50px">under</p></div><video style="position: relative" src="${away}/clip.webm" muted playsinline preload="auto"></video></section>
+<section class="case" id="paint-s"><div style="position: sticky; top: 0; height: 0"><video style="position: absolute; z-index: 3" src="${away}/clip.webm" muted playsinline preload="auto"></video></div><p style="position: relative; z-index: 1; margin-top: 50px">over</p></section>
 <div class="tail"></div>
 </div><script>
 const pen = document.getElementById('chart').getContext('2d');
@@ -366,7 +368,7 @@ async function places(tab: Page, least: number): Promise<{ name: string; top: nu
         return rect ? [{ name, top: rect.top + scrolled, height: rect.height }] : [];
       };
       if (fixture) {
-        const ids = ['hero', 'paper', 'chart', 'away', 'loop', 'cors', 'wait', 'scaled', 'paint-a', 'paint-b', 'paint-c', 'paint-e'];
+        const ids = ['hero', 'paper', 'chart', 'away', 'loop', 'cors', 'wait', 'scaled', 'paint-a', 'paint-b', 'paint-c', 'paint-e', 'paint-h', 'paint-s'];
         return ids.flatMap((id) => at(id, view.document.getElementById(id)));
       }
       const picture = [...view.document.querySelectorAll('img')].find((node) => {
