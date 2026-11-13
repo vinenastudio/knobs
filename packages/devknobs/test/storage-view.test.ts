@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { oldKey } from "../src/engine/storekeys";
 import { HTTP_ONLY_NOTE } from "../src/storage/cookies";
 import { RENDER_LIMIT } from "../src/storage/format";
 import { NO_LIST } from "../src/storage/idb";
@@ -1839,7 +1840,7 @@ describe("presets", () => {
     toggle(preset);
     preset.find("seg-item")[1]?.fire("click");
     chip(preset, "apply").fire("click");
-    expect(Object.keys(shown.site.localStorage.all()).sort()).toEqual(["devknobs", PRESETS_KEY, "token"].sort());
+    expect(Object.keys(shown.site.localStorage.all()).sort()).toEqual(["devknobs", PRESETS_KEY, oldKey(PRESETS_KEY), "token"].sort());
     expect(shown.site.sessionStorage.all()).toEqual({ step: "9" });
     expect(notes(shown.body)).toContain("replaced with logged in: 3 values set");
   });

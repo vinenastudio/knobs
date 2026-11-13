@@ -2,6 +2,7 @@ import { realNow } from "./clock";
 import { isDevknobsFrame } from "./frame";
 import { webStorage } from "./fresh";
 import { newer, stamped } from "./stored";
+import { readItem, removeItem, writeItem } from "./storekeys";
 
 /**
  * The scroll position, carried across a load devknobs asks for: a reload for
@@ -14,7 +15,7 @@ import { newer, stamped } from "./stored";
  */
 
 /** Where the positions are kept for the next page, in `sessionStorage`. */
-export const SCROLL_KEY = "devknobs:scroll";
+export const SCROLL_KEY = "knobs:scroll";
 
 /** The version of the record `SCROLL_KEY` keeps. Bump it with a change of shape, see stored.ts. */
 export const SCROLL_VERSION = 1;
@@ -243,9 +244,9 @@ export function keep(view: Window | null, role: Role): void {
   try {
     const session = webStorage("session");
     if (!session) return;
-    const kept = keptWith(parseKept(session.getItem(SCROLL_KEY)), role, placeIn(view), realNow());
-    if (kept) session.setItem(SCROLL_KEY, JSON.stringify(stamped(kept, SCROLL_VERSION)));
-    else session.removeItem(SCROLL_KEY);
+    const kept = keptWith(parseKept(readItem(session, SCROLL_KEY)), role, placeIn(view), realNow());
+    if (kept) writeItem(session, SCROLL_KEY, JSON.stringify(stamped(kept, SCROLL_VERSION)));
+    else removeItem(session, SCROLL_KEY);
   } catch {
     // Private mode, disabled storage: the next page starts where the host leaves it.
   }
@@ -275,12 +276,12 @@ export function resume(): void {
   let target: Point | null = null;
   try {
     const session = webStorage("session");
-    const text = session?.getItem(SCROLL_KEY) ?? null;
+    const text = readItem(session, SCROLL_KEY);
     if (!session || text === null) return;
     const role: Role = isDevknobsFrame() ? "frame" : "page";
     const { place, rest } = take(parseKept(text), role, window.location.pathname, realNow());
-    if (rest) session.setItem(SCROLL_KEY, JSON.stringify(stamped(rest, SCROLL_VERSION)));
-    else session.removeItem(SCROLL_KEY);
+    if (rest) writeItem(session, SCROLL_KEY, JSON.stringify(stamped(rest, SCROLL_VERSION)));
+    else removeItem(session, SCROLL_KEY);
     target = place;
   } catch {
     // Private mode, disabled storage: nothing is kept there.

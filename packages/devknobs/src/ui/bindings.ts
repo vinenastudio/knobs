@@ -1,5 +1,6 @@
 import { fresh, webStorage } from "../engine/fresh";
 import { newer, stamped } from "../engine/stored";
+import { readItem, removeItem, sameItem, writeItem } from "../engine/storekeys";
 import {
   type BaseKeys,
   type Binding,
@@ -18,7 +19,7 @@ import {
  * hold across reloads and in new tabs of the origin. Reset all leaves them. A
  * mount with a `keysStore` keeps them there instead.
  */
-export const KEYS_KEY = "devknobs:keys";
+export const KEYS_KEY = "knobs:keys";
 
 /** The version of the keys `KEYS_KEY` keeps. Bump it with a new shape, see stored.ts. */
 export const KEYS_VERSION = 1;
@@ -254,7 +255,7 @@ export function resolveKeys(base: BaseKeys, stored: StoredKeys, grab = true): Ke
 
 function loadKeys(): StoredKeys {
   try {
-    return readKeys(webStorage("local")?.getItem(KEYS_KEY));
+    return readKeys(readItem(webStorage("local"), KEYS_KEY));
   } catch {
     return {};
   }
@@ -262,8 +263,8 @@ function loadKeys(): StoredKeys {
 
 function keepKeys(keys: StoredKeys): void {
   try {
-    if (Object.keys(keys).length === 0) webStorage("local")?.removeItem(KEYS_KEY);
-    else webStorage("local")?.setItem(KEYS_KEY, JSON.stringify(stamped(keys, KEYS_VERSION)));
+    if (Object.keys(keys).length === 0) removeItem(webStorage("local"), KEYS_KEY);
+    else writeItem(webStorage("local"), KEYS_KEY, JSON.stringify(stamped(keys, KEYS_VERSION)));
   } catch {
     // Private mode, disabled storage: the key holds until the page goes.
   }
@@ -356,7 +357,7 @@ export function createKeys(
   }
 
   function onStorage(event: StorageEvent): void {
-    if (event.key !== KEYS_KEY && event.key !== null) return;
+    if (event.key !== null && !sameItem(event.key, KEYS_KEY)) return;
     heard();
   }
 

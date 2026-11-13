@@ -22,6 +22,7 @@ import {
 import { type Change, createEditLog, type Edit, type EditLog } from "../src/edit/log";
 import { AFTER_MISSED, replayEdits } from "../src/edit/replay";
 import { RISK } from "../src/edit/risk";
+import { itemKeys } from "../src/engine/storekeys";
 import { as, elem, page, type PageNode, svg, text } from "./dom-page";
 import { Block, fakeCss } from "./edit-block";
 
@@ -623,7 +624,7 @@ describe("the page's own store", () => {
     at("/", local);
     for (let page = 0; page < MAX_PAGES; page++) local.setItem(`${EDITS_KEY}/p${page}`, JSON.stringify({ v: 1, edits: [], at: 1000 + page }));
     localEditsStore().save({ v: 1, edits: [] });
-    const kept = Array.from({ length: local.length }, (_, index) => local.key(index));
+    const kept = itemKeys(local, EDITS_KEY);
     expect(kept).toHaveLength(MAX_PAGES);
     expect(kept).toContain(`${EDITS_KEY}/`);
     expect(kept).not.toContain(`${EDITS_KEY}/p0`);

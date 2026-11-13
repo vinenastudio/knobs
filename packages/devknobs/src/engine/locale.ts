@@ -4,6 +4,7 @@ import { ownReload, webStorage } from "./fresh";
 import { setDefaultLocale } from "./intl";
 import { keepOwn } from "./scrollkeep";
 import { newer, stamped } from "./stored";
+import { readItem, removeItem, writeItem } from "./storekeys";
 
 export const LOCALE_PRESETS = [
   "en",
@@ -27,13 +28,13 @@ export const PARAGLIDE_COOKIE = "PARAGLIDE_LOCALE";
  * a reload and dies with the tab: a second tab left on `system` never puts
  * back what this one wrote.
  */
-export const OWNER_KEY = "devknobs:locale-stores";
+export const OWNER_KEY = "knobs:locale-stores";
 
 /** The version of the record `OWNER_KEY` keeps. Bump it with a change of shape, see stored.ts. */
 export const OWNER_VERSION = 1;
 
 /** Where the last reload devknobs asked for is timed. */
-export const RELOAD_KEY = "devknobs:locale-reload";
+export const RELOAD_KEY = "knobs:locale-reload";
 
 /** The version of the timing `RELOAD_KEY` keeps. Bump it with a change of shape, see stored.ts. */
 export const RELOAD_VERSION = 1;
@@ -213,7 +214,7 @@ export function parseOwned(json: string | null): Owned | null {
 /** What devknobs wrote, across this tab's reloads. */
 function readOwned(): Owned | null {
   try {
-    return parseOwned(webStorage("session")?.getItem(OWNER_KEY) ?? null);
+    return parseOwned(readItem(webStorage("session"), OWNER_KEY));
   } catch {
     // Private mode, disabled storage: nothing is devknobs' to put back.
     return null;
@@ -224,7 +225,7 @@ function readOwned(): Owned | null {
 function writeOwned(owned: Owned): boolean {
   try {
     const session = webStorage("session");
-    session?.setItem(OWNER_KEY, JSON.stringify(stamped(owned, OWNER_VERSION)));
+    writeItem(session, OWNER_KEY, JSON.stringify(stamped(owned, OWNER_VERSION)));
     return session !== null;
   } catch {
     // Same.
@@ -234,7 +235,7 @@ function writeOwned(owned: Owned): boolean {
 
 function clearOwned(): void {
   try {
-    webStorage("session")?.removeItem(OWNER_KEY);
+    removeItem(webStorage("session"), OWNER_KEY);
   } catch {
     // Same.
   }
@@ -270,7 +271,7 @@ function reloadWait(): number {
   try {
     const session = webStorage("session");
     if (!session) return Infinity;
-    const previous = parseReload(session.getItem(RELOAD_KEY));
+    const previous = parseReload(readItem(session, RELOAD_KEY));
     if (!(previous > 0)) return 0;
     // A time ahead of the clock waits one window at a time, not until the clock catches up.
     return Math.min(RELOAD_THROTTLE, Math.max(0, previous + RELOAD_THROTTLE - realNow()));
@@ -299,7 +300,7 @@ function reloadOnce(): boolean {
     const record = stamped({ at: realNow() }, RELOAD_VERSION);
     const session = webStorage("session");
     if (!session) return false;
-    session.setItem(RELOAD_KEY, JSON.stringify(record));
+    writeItem(session, RELOAD_KEY, JSON.stringify(record));
   } catch {
     // Storage answered a moment ago and refuses now: nothing would time this
     // reload, so do not start it.

@@ -1,12 +1,13 @@
 import { fresh, webStorage } from "../engine/fresh";
 import { newer, stamped, versionOf } from "../engine/stored";
+import { readItem, removeItem, sameItem, writeItem } from "../engine/storekeys";
 import { PANEL_WIDTH } from "./size";
 
 /**
  * Where the panel's preferences the user set are kept, in `localStorage`, so
  * they hold across reloads and in new tabs of the origin. Reset all leaves them.
  */
-export const PREFS_KEY = "devknobs:prefs";
+export const PREFS_KEY = "knobs:prefs";
 
 /** The version of the preferences `PREFS_KEY` keeps. Bump it with a new shape, see stored.ts. */
 export const PREFS_VERSION = 6;
@@ -94,7 +95,7 @@ export function resolvePrefs(base: Prefs, stored: StoredPrefs): Prefs {
 
 function loadPrefs(): StoredPrefs {
   try {
-    return readPrefs(webStorage("local")?.getItem(PREFS_KEY));
+    return readPrefs(readItem(webStorage("local"), PREFS_KEY));
   } catch {
     return {};
   }
@@ -102,8 +103,8 @@ function loadPrefs(): StoredPrefs {
 
 function keepPrefs(prefs: StoredPrefs): void {
   try {
-    if (Object.keys(prefs).length === 0) webStorage("local")?.removeItem(PREFS_KEY);
-    else webStorage("local")?.setItem(PREFS_KEY, JSON.stringify(stamped(prefs, PREFS_VERSION)));
+    if (Object.keys(prefs).length === 0) removeItem(webStorage("local"), PREFS_KEY);
+    else writeItem(webStorage("local"), PREFS_KEY, JSON.stringify(stamped(prefs, PREFS_VERSION)));
   } catch {
     // Private mode, disabled storage: the preference holds until the page goes.
   }
@@ -157,7 +158,7 @@ export function createPrefs(options: { handle?: boolean } = {}): LivePrefs {
   }
 
   function onStorage(event: StorageEvent): void {
-    if (event.key !== PREFS_KEY && event.key !== null) return;
+    if (event.key !== null && !sameItem(event.key, PREFS_KEY)) return;
     // In fresh mode nothing kept is read: a choice made here holds, whatever another tab keeps.
     if (fresh()) return;
     stored = loadPrefs();

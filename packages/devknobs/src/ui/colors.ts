@@ -1,6 +1,7 @@
 import { isCustomColor, readColor } from "../engine/color";
 import { fresh, webStorage } from "../engine/fresh";
 import { newer, stamped } from "../engine/stored";
+import { readItem, removeItem, sameItem, writeItem } from "../engine/storekeys";
 import type { CustomColor } from "../types";
 
 /**
@@ -8,7 +9,7 @@ import type { CustomColor } from "../types";
  * them across reloads and in new tabs of the origin. Reset all leaves them,
  * and fresh mode starts with none and keeps none.
  */
-export const COLORS_KEY = "devknobs:colors";
+export const COLORS_KEY = "knobs:colors";
 
 /** The version of the colors `COLORS_KEY` keeps. Bump it with a new shape, see stored.ts. */
 export const COLORS_VERSION = 1;
@@ -86,7 +87,7 @@ export function pickColor(
 
 function loadColors(): Colors {
   try {
-    return readColors(webStorage("local")?.getItem(COLORS_KEY));
+    return readColors(readItem(webStorage("local"), COLORS_KEY));
   } catch {
     return readColors(null);
   }
@@ -95,8 +96,8 @@ function loadColors(): Colors {
 function keepColors(colors: Colors): void {
   try {
     const local = webStorage("local");
-    if (colors.mat.length + colors.grab.length === 0) local?.removeItem(COLORS_KEY);
-    else local?.setItem(COLORS_KEY, colorsText(colors));
+    if (colors.mat.length + colors.grab.length === 0) removeItem(local, COLORS_KEY);
+    else writeItem(local, COLORS_KEY, colorsText(colors));
   } catch {
     // Private mode, disabled storage: the colors hold until the page goes.
   }
@@ -121,7 +122,7 @@ export function createColors(): LiveColors {
   }
 
   function onStorage(event: StorageEvent): void {
-    if (event.key !== COLORS_KEY && event.key !== null) return;
+    if (event.key !== null && !sameItem(event.key, COLORS_KEY)) return;
     // In fresh mode nothing kept is read: a color added here holds, whatever another tab keeps.
     if (fresh()) return;
     colors = loadColors();

@@ -272,7 +272,7 @@ describe("where presets are kept", () => {
     open();
     expect(canKeep()).toBe(true);
     expect(savePresets([LOGGED_IN])).toBeNull();
-    expect(Array.from(local.map.keys())).toEqual(["devknobs:storage-presets"]);
+    expect(Array.from(local.map.keys())).toEqual(["knobs:storage-presets", "devknobs:storage-presets"]);
     expect(JSON.parse(local.map.get(PRESETS_KEY) ?? "")).toEqual({ v: 1, presets: [LOGGED_IN] });
     expect(loadPresets()).toEqual([LOGGED_IN]);
   });

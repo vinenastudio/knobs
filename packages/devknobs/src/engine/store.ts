@@ -29,9 +29,10 @@ import { deviceOf, formParent, hold, POSTURES, settle } from "./devices";
 import { webStorage } from "./fresh";
 import { DEFAULT_ACCURACY, DEFAULT_SPEED } from "./geo";
 import { newer, stamped } from "./stored";
+import { readItem, writeItem } from "./storekeys";
 import { clampZoom } from "./zoom";
 
-export const STORAGE_KEY = "devknobs";
+export const STORAGE_KEY = "knobs";
 
 /** The version of the state `STORAGE_KEY` keeps. Bump it with a change of shape, see stored.ts. */
 export const STATE_VERSION = 2;
@@ -40,7 +41,7 @@ export const STATE_VERSION = 2;
  * Where the panel's place is kept beside the session, in `localStorage`, so
  * a new tab or session starts with the panel where the user last put it.
  */
-export const PLACE_KEY = "devknobs:place";
+export const PLACE_KEY = "knobs:place";
 
 /** The version of the place `PLACE_KEY` keeps. Bump it with a change of shape, see stored.ts. */
 export const PLACE_VERSION = 2;
@@ -393,7 +394,7 @@ export function merge(state: KnobsState, patch: KnobsStatePatch): KnobsState {
 /** Either storage's value under a key, or null where it cannot be read. */
 function item(kind: "session" | "local", key: string): string | null {
   try {
-    return webStorage(kind)?.getItem(key) ?? null;
+    return readItem(webStorage(kind), key);
   } catch {
     return null;
   }
@@ -409,7 +410,7 @@ export function save(state: KnobsState): void {
   try {
     // Real phone mode is the host's, for every tab: the session keeps none.
     const { realPhone: _, ...panel } = state.panel;
-    webStorage("session")?.setItem(STORAGE_KEY, JSON.stringify(stamped({ ...state, panel }, STATE_VERSION)));
+    writeItem(webStorage("session"), STORAGE_KEY, JSON.stringify(stamped({ ...state, panel }, STATE_VERSION)));
   } catch {
     // Private mode, disabled storage: knobs still work, they just do not stick.
   }
@@ -422,7 +423,7 @@ export function save(state: KnobsState): void {
  */
 export function keepPlace(state: KnobsState): void {
   try {
-    webStorage("local")?.setItem(PLACE_KEY, placeText(state));
+    writeItem(webStorage("local"), PLACE_KEY, placeText(state));
   } catch {
     // The same: the panel just starts on the right in a new session.
   }

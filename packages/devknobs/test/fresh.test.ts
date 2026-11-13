@@ -25,6 +25,7 @@ import {
   STORAGE_KEY,
   save,
 } from "../src/engine/store";
+import { oldKey } from "../src/engine/storekeys";
 import { createKeys, KEYS_KEY } from "../src/ui/bindings";
 import { comboText } from "../src/ui/keys";
 import { createPrefs, PREFS_KEY } from "../src/ui/prefs";
@@ -469,13 +470,13 @@ describe("with fresh mode off", () => {
       const state = load();
       expect(state.scheme).toBe("dark");
       expect(state.panel.side).toBe("left");
-      // One read of each storage, the stale mark dropped unread, and nothing looked through.
-      expect(sessionCalls()).toBe(2);
+      // One read of each storage, the stale mark dropped unread under both its names, and nothing looked through.
+      expect(sessionCalls()).toBe(3);
       expect(localCalls()).toBe(1);
       expect(session).toEqual(kept);
 
       ownReload();
-      expect(sessionCalls()).toBe(2);
+      expect(sessionCalls()).toBe(3);
 
       const prefs = createPrefs();
       expect(prefs.get().handle).toBe(false);
@@ -496,7 +497,8 @@ describe("with fresh mode off", () => {
     const keys = createKeys();
     keys.set("panel", { key: "j", shift: true, alt: false, ctrl: false, meta: false });
     keys.destroy();
-    expect(Array.from(local.keys()).sort()).toEqual([KEYS_KEY, PLACE_KEY, PREFS_KEY].sort());
+    const written = [KEYS_KEY, PLACE_KEY, PREFS_KEY];
+    expect(Array.from(local.keys()).sort()).toEqual([...written, ...written.map(oldKey)].sort());
     expect(session.has(FRESH_RELOAD_KEY)).toBe(false);
   });
 });
