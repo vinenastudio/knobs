@@ -8,10 +8,12 @@ import {
   batteryParts,
   batteryWidth,
   buildSafari,
+  domainFit,
   domainOf,
   domainRoom,
   glassTint,
   pillBox,
+  SAFARI_CSS,
   STATUS_GLYPHS,
 } from "../src/engine/safaridraw";
 
@@ -227,7 +229,8 @@ describe("Safari's domain has room for its text", () => {
     const pill = mini?.shapes.find((shape) => shape.kind === "pill");
     const address = full?.shapes.find((shape) => shape.kind === "field") ?? full?.shapes.find((shape) => shape.text !== undefined);
     if (!screen || !full || !mini || !pill || !address) throw new Error("no bars");
-    const host = "claudemarketplaces.com";
+    // A host that fits the address shrunk, so the size changes between the states.
+    const host = "mertduzgun.com";
     const painted = buildSafari(full, mini, look(host), actions);
     const root = painted.root as unknown as FakeElement;
     const surface = root.children.find((child) => child.className.split(" ").includes("surface"));
@@ -261,7 +264,9 @@ describe("Safari's domain has room for its text", () => {
       else Reflect.deleteProperty(globalThis, "getComputedStyle");
     }
     const W = turn(screen, "portrait").width;
-    const scale = 1.1 * (textWidth(host, pill.text?.size ?? 0, 500) / textWidth(host, address.text?.size ?? 0, 500));
+    const fitted = domainFit(address, host, W).size;
+    expect(fitted).toBe(17);
+    const scale = 1.1 * (textWidth(host, pill.text?.size ?? 0, 500) / textWidth(host, fitted, 500));
     expect(writes).toEqual([
       "transitionProperty top, height",
       `transform translate(-50%, -50%) scale(${scale})`,
@@ -270,6 +275,61 @@ describe("Safari's domain has room for its text", () => {
       `maxWidth ${domainRoom(address, host, W)}px`,
       "transform translate(-50%, -50%)",
     ]);
+  });
+
+  test("a cut host keeps its end and fades its start, never an ellipsis", () => {
+    expect(SAFARI_CSS).not.toContain("text-overflow");
+    expect(SAFARI_CSS).toContain("justify-content: flex-end;");
+    expect(SAFARI_CSS).toContain("mask-image: linear-gradient(to right, transparent, #000 9px);");
+    // Where it fits, the fade sits out past the start; where it is cut, on it.
+    expect(SAFARI_CSS).toContain("mask-position: -9px 0;");
+    expect(SAFARI_CSS).toContain('.safari .domain[data-cut="true"] { -webkit-mask-position: 0 0; mask-position: 0 0; }');
+  });
+
+  test("the address's room is 21 in from each glyph's center: 132, 170 and 105 on the Pro, Pro Max and SE", () => {
+    const room = (id: string) => {
+      const screen = SCREENS.find((each) => each.id === id);
+      const full = screen && barsOf(screen, "portrait", "compact", false);
+      const address = full?.shapes.find((shape) => shape.text !== undefined);
+      if (!screen || !address) throw new Error(`no address on ${id}`);
+      return domainRoom(address, "knobs.dev", turn(screen, "portrait").width);
+    };
+    expect(room("iphone-17-pro")).toBeCloseTo(132, 0);
+    expect(room("iphone-17-pro-max")).toBeCloseTo(170, 0);
+    expect(room("iphone-se")).toBeCloseTo(105, 0);
+  });
+
+  test("mertduzgun.com fits the SE's address whole, shrunk", () => {
+    const screen = SCREENS.find((each) => each.id === "iphone-se");
+    const full = screen && barsOf(screen, "portrait", "compact", false);
+    const address = full?.shapes.find((shape) => shape.text !== undefined);
+    if (!screen || !address) throw new Error("no address");
+    const fit = domainFit(address, "mertduzgun.com", turn(screen, "portrait").width);
+    expect(fit.size).toBeLessThan(17);
+    expect(fit.size).toBeGreaterThanOrEqual(13);
+    expect(fit.cut).toBe(false);
+    expect(textWidth("mertduzgun.com", fit.size, 500)).toBeLessThanOrEqual(fit.room + 1e-9);
+  });
+
+  test("a new host in the same state shows at its size at once, with no glide", () => {
+    const screen = SCREENS.find((each) => each.id === "iphone-17-pro");
+    const full = screen && barsOf(screen, "portrait", "compact", false);
+    const mini = screen && barsOf(screen, "portrait", "compact", true);
+    if (!full || !mini) throw new Error("no bars");
+    const painted = buildSafari(full, mini, look("knobs.dev"), actions);
+    const root = painted.root as unknown as FakeElement;
+    const surface = root.children.find((child) => child.className.split(" ").includes("surface"));
+    const [domain] = surface?.querySelectorAll(".domain") ?? [];
+    if (!domain) throw new Error("no domain");
+    const set: string[] = [];
+    Object.defineProperty(domain.style, "transform", {
+      get: () => set.at(-1) ?? "",
+      set: (value: string) => set.push(value),
+    });
+    painted.apply(false, look("knobs.dev"));
+    painted.apply(false, look("claudemarketplaces.com"));
+    expect(domain.style.fontSize).toBe("13px");
+    expect(set).toEqual(["translate(-50%, -50%)", "translate(-50%, -50%)"]);
   });
 
   for (const id of ids) {
@@ -307,8 +367,19 @@ describe("Safari's domain has room for its text", () => {
               const shown: Shape | undefined = minimized ? pill : address;
               if (!shown) throw new Error("no shape for the domain");
               // The text's limit and the pill's width come from one room, at the size the text is laid out.
-              expect(size).toBe(shown.text?.size ?? 0);
               expect(room).toBe(domainRoom(shown, host, W));
+              const fit = domainFit(shown, host, W);
+              expect(fit.room).toBe(room);
+              if (minimized) {
+                expect(size).toBe(shown.text?.size ?? 0);
+              } else {
+                // An address shrinks its domain to its room, from 17 down to 13.
+                const want = (17 * room) / textWidth(host, 17, 500);
+                expect(size).toBe(Math.min(17, Math.max(13, want)));
+              }
+              // Too wide even at its least, the start is cut and fades; else it fits whole, unfaded.
+              expect(domain.dataset.cut).toBe(String(fit.cut));
+              expect(fit.cut).toBe(text > room + 1e-9);
               if (minimized) {
                 const box = pillBox(pill, host, W);
                 expect(Number.parseFloat(surface.style.width ?? "")).toBe(box.width);
@@ -320,11 +391,12 @@ describe("Safari's domain has room for its text", () => {
                 const fits = textWidth(host, SAFARI_TEXT.pill, 500) + (pill.text?.pad ?? 0) <= most;
                 if (fits && room < text) cut.push(host);
               } else {
-                // Centered, the text keeps clear of the glyphs' 30 px boxes at the address's ends.
+                // Centered, the text keeps 21 clear of the glyphs' centers at the address's ends.
                 const middle = shown.text?.x ?? 0;
                 for (const mark of shown.marks) {
-                  expect(Math.abs(mark.x - middle) - 15).toBeGreaterThanOrEqual(room / 2 - 1e-9);
+                  expect(Math.abs(mark.x - middle) - 21).toBeGreaterThanOrEqual(room / 2 - 1e-9);
                 }
+                if (fit.cut) expect(size).toBe(13);
               }
             }
             expect(cut).toEqual([]);

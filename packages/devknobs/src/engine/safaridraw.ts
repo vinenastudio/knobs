@@ -93,14 +93,25 @@ export const SAFARI_CSS = `
 .safari .glyph.off { stroke-opacity: 0.3; fill-opacity: 0.3; }
 .safari .domain {
   left: 50%;
+  /* A host that does not fit keeps its end and loses its start, never to an ellipsis. */
+  display: flex;
+  justify-content: flex-end;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: center;
   font-size: ${SAFARI_TEXT.field}px;
   font-weight: ${DOMAIN_WEIGHT};
   transform: translate(-50%, -50%);
+  /* Its start fades over 9 px where it is cut; where it fits, the fade slides out past the start. */
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 9px);
+  mask-image: linear-gradient(to right, transparent, #000 9px);
+  -webkit-mask-size: calc(100% + 9px) 100%;
+  mask-size: calc(100% + 9px) 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: -9px 0;
+  mask-position: -9px 0;
 }
+.safari .domain[data-cut="true"] { -webkit-mask-position: 0 0; mask-position: 0 0; }
 .safari .time { font-weight: 600; transform: translate(-50%, -50%); }
 .safari .status { fill: currentColor; }
 /* The battery's uncharged rest: #b2b2b2 on white, #808080 on black. */
@@ -126,7 +137,9 @@ export const SAFARI_CSS = `
     top var(--main) ${MORPH.ease},
     height var(--main) ${MORPH.ease},
     transform var(--main) ${MORPH.ease},
-    max-width var(--main) ${MORPH.ease};
+    max-width var(--main) ${MORPH.ease},
+    -webkit-mask-position var(--main) ${MORPH.ease},
+    mask-position var(--main) ${MORPH.ease};
 }
 /* The parts only the expanded bars have: an icon swap, out early, in late. */
 .safari .full {
@@ -514,11 +527,17 @@ export function domainOf(host: string): string {
 /** How far the minimized pill keeps in from the screen's sides, as Top's address does. */
 const PILL_MARGIN = 16;
 
+/** How far an address's text keeps from the center of each glyph at its ends, measured on the iOS 26.5 simulator. */
+const MARK_CLEAR = 21;
+
+/** The smallest an address shrinks its domain to before it cuts its start, measured on the iOS 26.5 simulator. */
+const FIELD_LEAST = 13;
+
 /**
- * The room the domain has in `shape`, in px of its own text size, on a
- * screen `width` wide: in the minimized pill, the domain's advance, or as much
- * as the pill gets PILL_MARGIN in from the screen's sides; in an address, as
- * wide as it goes centered, clear of the boxes of the glyphs at its ends.
+ * The room the domain has in `shape`, in px, on a screen `width` wide: in
+ * the minimized pill, the domain's advance at the pill's size, or as much as
+ * the pill gets PILL_MARGIN in from the screen's sides; in an address, as
+ * wide as it goes centered, MARK_CLEAR clear of the glyphs at its ends.
  */
 export function domainRoom(shape: Shape, host: string, width: number): number {
   const middle = shape.text?.x ?? shape.x + shape.width / 2;
@@ -529,9 +548,34 @@ export function domainRoom(shape: Shape, host: string, width: number): number {
   }
   let half = shape.width / 2;
   for (const { x } of shape.marks) {
-    half = Math.min(half, Math.abs(x - middle) - GLYPH_BOX / 2);
+    half = Math.min(half, Math.abs(x - middle) - MARK_CLEAR);
   }
   return Math.max(0, 2 * half);
+}
+
+/** How the domain is shown in a shape: its size, its room, and is its start cut? */
+export interface DomainFit {
+  size: number;
+  room: number;
+  cut: boolean;
+}
+
+/**
+ * How Safari fits the domain in `shape` on a screen `width` wide: the pill at
+ * its own size, cut where the screen's sides clamp it; an address at 17, shrunk
+ * to its room down to FIELD_LEAST, and cut where it is still too wide there.
+ */
+export function domainFit(shape: Shape, host: string, width: number): DomainFit {
+  const room = domainRoom(shape, host, width);
+  const text = domainOf(host);
+  if (shape.kind === "pill") {
+    const size = shape.text?.size ?? SAFARI_TEXT.pill;
+    return { size, room, cut: room < textWidth(text, size, DOMAIN_WEIGHT) };
+  }
+  const most = shape.text?.size ?? SAFARI_TEXT.field;
+  const advance = textWidth(text, most, DOMAIN_WEIGHT);
+  const want = advance > 0 ? (most * room) / advance : most;
+  return { size: Math.min(most, Math.max(FIELD_LEAST, want)), room, cut: want < FIELD_LEAST };
 }
 
 /** The minimized domain pill's box on a screen `width` wide: its domain's room and the pill's either side. */
@@ -720,7 +764,7 @@ export function scrimOver(node: HTMLElement, mini: Bars, look: Look): Color | nu
  * Safari's bars, drawn once for both states (the plus to menu morph of
  * transitions.dev). The address capsule, Bottom's card or Top's address bar
  * is one surface that becomes the minimized pill: its box and corners tween,
- * the domain glides and scales from 17 to the pill's size in it, and the page
+ * the domain glides and scales from its fitted size to the pill's in it, and the page
  * menu, reload and Bottom's buttons fade out as an icon swap. The capsules
  * beside it fade and drift 10 px.
  */
@@ -832,7 +876,12 @@ export function buildSafari(full: Bars, mini: Bars, look: Look, actions: Actions
       for (const text of Array.from(root.querySelectorAll<HTMLElement>(".domain"))) {
         text.textContent = domainOf(sight.host);
       }
-      for (const { node, shape } of texts) node.style.maxWidth = `${domainRoom(shape, sight.host, screen)}px`;
+      for (const { node, shape } of texts) {
+        const fit = domainFit(shape, sight.host, screen);
+        node.style.fontSize = `${fit.size}px`;
+        node.style.maxWidth = `${fit.room}px`;
+        node.dataset.cut = String(fit.cut);
+      }
       for (const { node, box } of sides) tintGlass(node, box, sight);
       for (const { node, glyph } of glyphs) {
         const off =
@@ -846,11 +895,14 @@ export function buildSafari(full: Bars, mini: Bars, look: Look, actions: Actions
         tintGlass(surface, box, sight);
         // The domain is laid out at the size it is shown, in the room of the same shape.
         const shown = minimized ? pill : (field ?? main);
-        const size = shown.text?.size ?? SAFARI_TEXT.field;
+        const { size, room, cut } = domainFit(shown, sight.host, screen);
         const was = Number(domain.dataset.size) || size;
-        const room = domainRoom(shown, sight.host, screen);
+        // Only a change of state glides the size: a new host shows at once.
+        const turned = domain.dataset.min !== undefined && domain.dataset.min !== String(minimized);
         domain.dataset.size = String(size);
-        if (was !== size) {
+        domain.dataset.min = String(minimized);
+        domain.dataset.cut = String(cut);
+        if (turned && was !== size) {
           // Read before anything changes, so a morph turned back midway goes on from where it is.
           const seen = domain.getBoundingClientRect().width;
           const host = domainOf(sight.host);
