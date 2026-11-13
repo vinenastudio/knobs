@@ -94,11 +94,15 @@ export interface Picture {
   overlay: Overlay | null;
 }
 
+/** Is `target` a picture or a video? Told apart by what it has, as the frame's elements are not of this window's classes. */
+function isMedia(target: EventTarget | null): target is HTMLImageElement | HTMLVideoElement {
+  return target !== null && "currentSrc" in target;
+}
+
 /** Is a load of `target`, in a page scrolled `scrollY`, one of a picture or video that meets `span`? */
 function nearLoad(target: EventTarget | null, scrollY: number, span: Span): boolean {
-  const node = target as Element | null;
-  if (!node || typeof node.getBoundingClientRect !== "function" || !node.matches?.("img, video")) return false;
-  return meets(node.getBoundingClientRect(), scrollY, span);
+  if (!isMedia(target)) return false;
+  return meets(target.getBoundingClientRect(), scrollY, span);
 }
 
 /**

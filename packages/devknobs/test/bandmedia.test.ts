@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { bandSpan, forgetPixels, inSpan, layersOf, readSize, sizedPicture, urlOf } from "../src/engine/bandmedia";
+import type { Look } from "../src/engine/browserkit";
 import { blankUrl } from "../src/engine/pageshot";
-import { pictureOf } from "../src/engine/underbar";
+import { createUnderbar, pictureOf } from "../src/engine/underbar";
 
 /** How the page in the frame lays out: its viewport, its scroll and its device px. */
 const VIEW = { innerWidth: 400, innerHeight: 700, scrollX: 0, scrollY: 0, devicePixelRatio: 3 };
@@ -50,6 +51,8 @@ class Node {
   /** Its box in the document's css px, and its computed style. */
   box = { left: 0, top: 0, width: 0, height: 0 };
   style = computed();
+  /** Does it show, as `checkVisibility` tells: not hidden, nor wholly see-through. */
+  shown = true;
   constructor(
     readonly localName: string,
     attributes: Record<string, string> = {},
@@ -103,6 +106,13 @@ class Node {
   }
   all(): Node[] {
     return this.children.flatMap((child) => [child, ...child.all()]);
+  }
+  contains(node: Node): boolean {
+    return node === this || this.all().includes(node);
+  }
+  checkVisibility(): boolean {
+    for (let at: Node | null = this; at; at = at.parentElement) if (!at.shown) return false;
+    return true;
   }
   getElementsByTagName(): Node[] {
     return this.all();
@@ -160,6 +170,7 @@ class Drawing extends Node {
 /** A picture the frame makes to read a background picture by: it has the page's at once, where the page has loaded it. */
 class Probe {
   complete = false;
+  crossOrigin: string | null = null;
   naturalWidth = 0;
   naturalHeight = 0;
   tainted = false;
@@ -187,6 +198,7 @@ class Probe {
 class Canvas {
   width = 0;
   height = 0;
+  style: Record<string, string> = {};
   readonly calls: [string, unknown[]][] = [];
   drawn: unknown[] = [];
   static made: Canvas[] = [];
@@ -208,6 +220,7 @@ class Canvas {
       },
     });
   }
+  remove(): void {}
   toDataURL(): string {
     const source = this.drawn.at(-1) as { tainted?: boolean; currentSrc?: string; label?: string } | undefined;
     if (source?.tainted) throw new Error("SecurityError: the canvas has been tainted");
@@ -225,13 +238,52 @@ function markupOf(node: Node): string {
   return `<${node.localName}${attrs}>${node.text}${node.children.map(markupOf).join("")}</${node.localName}>`;
 }
 
-const GLOBALS = ["document", "window", "XMLSerializer"];
+/** An element of the host's: the band, or the picture in it, which decodes at once. */
+class HostNode {
+  style: Record<string, string> = {};
+  className = "";
+  hidden = false;
+  alt = "";
+  src = "";
+  readonly children: object[] = [];
+  setAttribute(): void {}
+  append(...nodes: object[]): void {
+    this.children.push(...nodes);
+  }
+  remove(): void {}
+  replaceWith(node: object): void {
+    for (const holder of HostNode.made) {
+      const at = holder.children.indexOf(this);
+      if (at >= 0) holder.children[at] = node;
+    }
+  }
+  decode(): Promise<void> {
+    return Promise.resolve();
+  }
+  static made: HostNode[] = [];
+  constructor() {
+    HostNode.made.push(this);
+  }
+}
+
+/** The host's timers, run by hand. */
+let timers: (() => void)[] = [];
+
+const GLOBALS = ["document", "window", "XMLSerializer", "Image", "MutationObserver"];
 let before: unknown[] = [];
 
 beforeEach(() => {
   before = GLOBALS.map((name) => Reflect.get(globalThis, name));
-  Reflect.set(globalThis, "document", { createElement: () => new Canvas() });
-  Reflect.set(globalThis, "window", { devicePixelRatio: 2 });
+  Reflect.set(globalThis, "document", { createElement: (tag: string) => (tag === "canvas" ? new Canvas() : new HostNode()) });
+  Reflect.set(globalThis, "window", {
+    devicePixelRatio: 2,
+    setTimeout: (run: () => void) => timers.push(run),
+  });
+  Reflect.set(globalThis, "Image", HostNode);
+  Reflect.set(globalThis, "MutationObserver", class {
+    observe(): void {}
+    disconnect(): void {}
+  });
   Reflect.set(globalThis, "XMLSerializer", class {
     serializeToString(node: Node): string {
       serialized = node;
@@ -240,6 +292,8 @@ beforeEach(() => {
   });
   Canvas.made = [];
   Canvas.reads = new Map();
+  HostNode.made = [];
+  timers = [];
   serialized = null;
   VIEW.scrollY = 0;
 });
@@ -263,8 +317,15 @@ function frameOf(body: Node[], loaded = new Map<string, { width: number; height:
     getComputedStyle: (node: Node) => node.style,
     matchMedia: () => ({ matches: false }),
   };
+  /** The listeners on the document, by the event they hear. */
+  const heard = new Map<string, unknown>();
   const doc = {
     documentElement: Object.assign(root, { scrollHeight: 4000 }),
+    body: root.children[1],
+    addEventListener: (type: string, listener: unknown) => heard.set(type, listener),
+    removeEventListener: (type: string, listener: unknown) => {
+      if (heard.get(type) === listener) heard.delete(type);
+    },
     styleSheets: [{ cssRules: rules.map((cssText) => ({ cssText })) }],
     defaultView: view,
     implementation: { createHTMLDocument: () => inert },
@@ -277,7 +338,7 @@ function frameOf(body: Node[], loaded = new Map<string, { width: number; height:
     querySelectorAll: (selector: string) => root.querySelectorAll(selector),
   };
   const frame = { contentDocument: doc, contentWindow: view } as unknown as HTMLIFrameElement;
-  return { frame, probes };
+  return { frame, probes, doc, heard };
 }
 
 /** The copy's element that stands for `node` of the page, found by its id. */
@@ -425,6 +486,189 @@ describe("pictureOf, with pictures near the band", () => {
     expect(pictureOf(frame, BAND)?.span).toBeNull();
     const { frame: pictured } = frameOf([new Node("p").at(0, 0, 400, 20)], undefined, ['.a { background: url("/far.png") }']);
     expect(pictureOf(pictured, BAND)?.span).toEqual(bandSpan(0, 700, BAND));
+  });
+});
+
+describe("pictureOf, with pictures the frame may not read as they are", () => {
+  test("one from another origin that allows CORS is read through a picture asked for with it, with nothing drawn over the copy", () => {
+    const away = new Picture("https://cdn.other.test/x.jpg", 800, 400, true).at(0, 700, 400, 200);
+    away.setAttribute("id", "away");
+    const { frame, probes } = frameOf([away], new Map([["https://cdn.other.test/x.jpg", { width: 800, height: 400 }]]));
+    const picture = pictureOf(frame, BAND);
+    expect(probes.map((probe) => probe.crossOrigin)).toEqual(["anonymous"]);
+    expect(copyOf("away")?.getAttribute("src")).toBe(sizedPicture("data:image/webp;base64,https://cdn.other.test/x.jpg@800x400", 800, 400));
+    expect(picture?.overlay).toBeNull();
+  });
+
+  test("a background picture the frame may not read stays as it is, with nothing drawn over the copy", () => {
+    const hero = new Node("div", { id: "hero" }).at(0, 650, 400, 300).styled({ backgroundImage: 'url("https://cdn.other.test/bg.png")' });
+    const loaded = new Map([["https://cdn.other.test/bg.png", { width: 400, height: 300, tainted: true }]]);
+    const { frame, probes } = frameOf([hero], loaded);
+    const picture = pictureOf(frame, BAND);
+    expect(probes[0]?.crossOrigin).toBe("anonymous");
+    expect(copyOf("hero")?.hasAttribute("style")).toBe(false);
+    expect(picture?.overlay).toBeNull();
+  });
+
+  test("a caption laid over a picture the frame may not read keeps it from being drawn over the copy, which would hide the caption", () => {
+    const away = new Picture("https://cdn.other.test/x.jpg", 800, 600, true).at(0, 650, 400, 300);
+    const caption = new Node("h1").at(24, 750, 352, 60);
+    const { frame } = frameOf([new Node("div", {}, [away, caption]).at(0, 650, 400, 300)]);
+    expect(pictureOf(frame, BAND)?.overlay).toBeNull();
+    // One under it, or hidden, leaves it drawn.
+    caption.at(24, 960, 352, 60);
+    expect(pictureOf(frame, BAND)?.overlay).not.toBeNull();
+    caption.at(24, 750, 352, 60).shown = false;
+    expect(pictureOf(frame, BAND)?.overlay).not.toBeNull();
+  });
+
+  test("a hidden picture the frame may not read, as a fading carousel has, is not drawn", () => {
+    const shown = new Picture("https://cdn.other.test/a.jpg", 800, 600, true).at(0, 650, 400, 300);
+    const faded = new Picture("https://cdn.other.test/b.jpg", 800, 600, true).at(0, 650, 400, 300);
+    faded.shown = false;
+    const { frame } = frameOf([new Node("div", {}, [shown, faded]).at(0, 650, 400, 300)]);
+    const canvas = pictureOf(frame, BAND)?.overlay?.canvas as unknown as Canvas;
+    const sources = canvas.calls.filter(([name]) => name === "drawImage").map(([, args]) => (args[0] as Canvas).drawn);
+    expect(sources).toEqual([[shown]]);
+  });
+
+  test("the body and the root, cutting off what overflows them, cut off none of what is drawn over the copy", () => {
+    const away = new Picture("https://cdn.other.test/x.jpg", 800, 400, true).at(0, 700, 400, 200);
+    const { frame, doc } = frameOf([away]);
+    doc.body?.styled({ overflowX: "hidden" });
+    doc.documentElement.styled({ overflowX: "hidden", overflowY: "hidden" });
+    const canvas = pictureOf(frame, BAND)?.overlay?.canvas as unknown as Canvas;
+    const names = canvas.calls.map(([name]) => name);
+    expect(names).toContain("drawImage");
+    expect(names).not.toContain("roundRect");
+  });
+
+  test("with many background pictures near the band, a picture taken again asks for and reads none of them again", () => {
+    const loaded = new Map<string, { width: number; height: number }>();
+    const rows = Array.from({ length: 70 }, (_, at) => {
+      const address = `https://site.test/t.png?i=${at}`;
+      loaded.set(address, { width: 40, height: 20 });
+      return new Node("div").at(0, at * 20, 400, 20).styled({ backgroundImage: `url("${address}")` });
+    });
+    const { frame, probes } = frameOf(rows, loaded);
+    pictureOf(frame, BAND);
+    pictureOf(frame, BAND);
+    expect(probes.length).toBe(70);
+    // Each had its picture at once, so none waits to tell it came.
+    expect(probes.every((probe) => probe.heard.length === 0)).toBe(true);
+    expect([...Canvas.reads.values()].every((count) => count === 1)).toBe(true);
+    expect(Canvas.reads.size).toBe(70);
+  });
+});
+
+/** The page's look, as the band takes its fill from. */
+const LOOK: Look = {
+  background: "rgb(255, 255, 255)",
+  top: "rgb(255, 255, 255)",
+  header: false,
+  bottom: "rgb(255, 255, 255)",
+  footer: false,
+  under: [],
+  dark: false,
+  scheme: "light",
+  host: "",
+  canBack: false,
+  canForward: false,
+};
+
+/** The band in the screen's css px: half as wide as the page's 400, so 100 of the document's px tall. */
+const RECT = { x: 0, y: 776, width: 200, height: 50 };
+
+/** Run the host's timers that are due, and let what each paint waits on settle. */
+async function tick(): Promise<void> {
+  const due = timers;
+  timers = [];
+  for (const run of due) run();
+  for (let turn = 0; turn < 10; turn++) await Promise.resolve();
+}
+
+/** The band over `frame`, shown, and its picture and overlay once taken. */
+async function shownBand(frame: HTMLIFrameElement) {
+  const glass = new HostNode();
+  const underbar = createUnderbar(glass as unknown as HTMLElement, frame);
+  const band = glass.children[0] as HostNode;
+  underbar.show(RECT, 1, LOOK);
+  await tick();
+  const image = () => band.children.find((node) => node instanceof HostNode) as HostNode | undefined;
+  const cover = () => band.children.find((node) => node instanceof Canvas) as Canvas | undefined;
+  return { underbar, image, cover };
+}
+
+describe("createUnderbar", () => {
+  test("the overlay sits over the stretch it was drawn for, at the band's scale, and moves with the page", async () => {
+    VIEW.scrollY = 1200;
+    const away = new Picture("https://cdn.other.test/x.jpg", 800, 400, true).at(0, 1850, 400, 200);
+    const { frame } = frameOf([away]);
+    const { underbar, image, cover } = await shownBand(frame);
+    // Half the page's px: the band starts 1900 px down, and the overlay's stretch at 1200.
+    expect(image()?.style.transform).toBe("translate3d(0, -950px, 0)");
+    expect(image()?.style.height).toBe("2000px");
+    expect(cover()?.style.transform).toBe("translate3d(0, -350px, 0)");
+    expect(cover()?.style.height).toBe("750px");
+    VIEW.scrollY = 1500;
+    underbar.move();
+    expect(cover()?.style.transform).toBe("translate3d(0, -500px, 0)");
+  });
+
+  test("a scroll inside the stretch read takes no new picture, one past it takes one", async () => {
+    VIEW.scrollY = 1200;
+    const away = new Picture("https://cdn.other.test/x.jpg", 800, 400, true).at(0, 1850, 400, 200);
+    const { frame } = frameOf([away]);
+    const { underbar } = await shownBand(frame);
+    const made = HostNode.made.length;
+    VIEW.scrollY = 1900;
+    underbar.move();
+    expect(timers.length).toBe(0);
+    VIEW.scrollY = 2000;
+    underbar.move();
+    underbar.move();
+    expect(timers.length).toBe(1);
+    await tick();
+    expect(HostNode.made.length - made).toBe(1);
+    expect(timers.length).toBe(0);
+  });
+
+  test("a picture near the band that comes in takes a new picture; one far off, or not a picture, does not", async () => {
+    const near = new Picture("https://site.test/near.jpg", 800, 400).at(0, 700, 400, 200);
+    const far = new Picture("https://site.test/far.jpg", 800, 400).at(0, 3600, 400, 200);
+    const { frame, heard } = frameOf([near, far, new Node("div").at(0, 700, 400, 200)]);
+    await shownBand(frame);
+    const onLoad = heard.get("load") as (event: { target: unknown }) => void;
+    onLoad({ target: far });
+    onLoad({ target: new Node("div").at(0, 700, 400, 200) });
+    expect(timers.length).toBe(0);
+    onLoad({ target: near });
+    expect(timers.length).toBe(1);
+  });
+
+  test("a new document in the frame has the listeners, the old one's are taken off, and removing the band takes off the new one's", async () => {
+    const first = frameOf([new Picture("https://site.test/hero.jpg", 800, 400).at(0, 700, 400, 200)]);
+    const { underbar } = await shownBand(first.frame);
+    expect([...first.heard.keys()].sort()).toEqual(["load", "loadeddata"]);
+    const next = frameOf([new Picture("https://site.test/next.jpg", 800, 400).at(0, 700, 400, 200)]);
+    Reflect.set(first.frame, "contentDocument", next.doc);
+    underbar.refresh();
+    await tick();
+    expect(first.heard.size).toBe(0);
+    expect([...next.heard.keys()].sort()).toEqual(["load", "loadeddata"]);
+    underbar.remove();
+    expect(next.heard.size).toBe(0);
+  });
+
+  test("removed, it lets go of the pictures read, so a picture taken after reads them again", async () => {
+    const { frame } = frameOf([new Picture("https://site.test/hero.jpg", 800, 400).at(0, 700, 400, 200)]);
+    const { underbar } = await shownBand(frame);
+    expect(Canvas.reads.get("https://site.test/hero.jpg")).toBe(1);
+    pictureOf(frame, BAND);
+    expect(Canvas.reads.get("https://site.test/hero.jpg")).toBe(1);
+    underbar.remove();
+    pictureOf(frame, BAND);
+    expect(Canvas.reads.get("https://site.test/hero.jpg")).toBe(2);
   });
 });
 

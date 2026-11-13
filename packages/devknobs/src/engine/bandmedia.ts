@@ -1,14 +1,17 @@
 import { ownSelector } from "../mark";
-import { drawMedia, MEDIA, type Media, type MediaNode, mediaOf, svgUrl } from "./pageshot";
+import { drawMedia, type FitStyle, MEDIA, type Media, type MediaNode, mediaOf, svgUrl } from "./pageshot";
 
 /**
  * The real pictures of the page under Safari's bottom bars. A drawing of a
  * copy of the page loads none of its own, so each picture, video, drawing and
  * background picture near the band is read as data and put in the copy,
  * where the browser lays it out, fits it, cuts it at its corners and turns
- * it as it does the page's. One the frame may not read, from another origin
- * that does not allow it, is drawn by hand over the copy instead, in its box,
- * cut off where what holds it cuts it off. Only those near the band are
+ * it as it does the page's. One from another origin is asked for again with
+ * CORS, which most hosts allow, so it is read too. A picture, video or
+ * drawing the frame still may not read is drawn by hand over the copy, in its
+ * box, cut off where what holds it cuts it off, but only where nothing else
+ * of the page shows over it, as the overlay would cover that. A background
+ * picture the frame may not read is left out. Only those near the band are
  * read, and each picture once at the size it shows at.
  */
 
@@ -20,8 +23,7 @@ const MOST = 20000;
 const LARGEST = 4e6;
 /** The most device px a css px of the page is read at. */
 const SHARPEST = 3;
-/** How many pictures read are kept, and how many characters of their data in all. */
-const KEEP = 32;
+/** How many characters of the pictures read, and of their addresses, are kept in all. */
 const KEEP_LENGTH = 48e6;
 
 /** A stretch of the document, from `top` to `bottom`, in its css px. */
@@ -96,7 +98,7 @@ function readPixels(source: CanvasImageSource, size: { width: number; height: nu
 const kept = new Map<string, string | null>();
 let keptLength = 0;
 
-/** The picture kept by `key`, or `read` now and kept, those used longest ago let go past `KEEP`. */
+/** The picture kept by `key`, or `read` now and kept, those used longest ago let go past `KEEP_LENGTH`. */
 function keptPixels(key: string, read: () => string | null): string | null {
   if (kept.has(key)) {
     const data = kept.get(key) ?? null;
@@ -106,17 +108,17 @@ function keptPixels(key: string, read: () => string | null): string | null {
   }
   const data = read();
   kept.set(key, data);
-  keptLength += data?.length ?? 0;
+  keptLength += key.length + (data?.length ?? 0);
   for (const [old, value] of kept) {
-    if (kept.size <= KEEP && keptLength <= KEEP_LENGTH) break;
+    if (keptLength <= KEEP_LENGTH || old === key) break;
     kept.delete(old);
-    keptLength -= value?.length ?? 0;
+    keptLength -= old.length + (value?.length ?? 0);
   }
   return data;
 }
 
-/** Pictures of the frame's made to read its background pictures by, by address. */
-const probes = new Map<string, HTMLImageElement>();
+/** Pictures of the frame's made to read its pictures by, by address: those the last picture of the page used. */
+let probes = new Map<string, HTMLImageElement>();
 
 /** Let go of the pictures read and of those made to read them by. */
 export function forgetPixels(): void {
@@ -126,22 +128,22 @@ export function forgetPixels(): void {
 }
 
 /**
- * A picture in `doc` of what `address` holds, to read a background picture
- * by. The page has it already, so the browser mostly has it at once; where
- * not, `loaded` is told when it comes.
+ * A picture in `doc` of what `address` holds, asked for with CORS so one
+ * from another origin that allows it can be read, kept in `used`. The page
+ * has it already, so the browser mostly has it at once; where not, `loaded`
+ * is told when it comes.
  */
-function probeOf(doc: Document, address: string, loaded: () => void): HTMLImageElement {
-  const known = probes.get(address);
-  if (known && known.ownerDocument === doc) return known;
-  const probe = doc.createElement("img");
-  probe.addEventListener("load", loaded, { once: true });
-  probe.src = address;
-  probes.delete(address);
-  probes.set(address, probe);
-  for (const old of probes.keys()) {
-    if (probes.size <= 2 * KEEP) break;
-    probes.delete(old);
+function probeOf(doc: Document, address: string, loaded: () => void, used: Map<string, HTMLImageElement>): HTMLImageElement {
+  const known = used.get(address) ?? probes.get(address);
+  if (known && known.ownerDocument === doc) {
+    used.set(address, known);
+    return known;
   }
+  const probe = doc.createElement("img");
+  probe.crossOrigin = "anonymous";
+  probe.src = address;
+  if (!probe.complete) probe.addEventListener("load", loaded, { once: true });
+  used.set(address, probe);
   return probe;
 }
 
@@ -168,12 +170,6 @@ export function urlOf(layer: string): string | null {
   return found?.[2] ?? null;
 }
 
-/** A background's `size`, as the `object-fit` that fits a picture the same way. */
-function fitOf(size: string): string {
-  if (size === "cover" || size === "contain") return size;
-  return size === "100% 100%" ? "fill" : "none";
-}
-
 /** The `object-fit` a video or drawing has, as the background size that fits it the same way in a box `wide` by `tall`. */
 function sizeOf(fit: string, media: Media, wide: number, tall: number): string {
   if (fit === "cover" || fit === "contain") return fit;
@@ -194,7 +190,7 @@ export interface Box {
 export interface Unread {
   media: Media;
   rect: Box;
-  style: CSSStyleDeclaration;
+  style: FitStyle;
   made?: HTMLCanvasElement;
   /** The box of what holds it and cuts it off, and the radius of its corners, where something does. */
   clip?: { rect: Box; radius: number };
@@ -208,9 +204,13 @@ export interface BandMedia {
   unread: Unread[];
 }
 
-/** The box of the nearest element holding `node` that cuts what it holds off, and its corner's radius, or undefined where none does. */
-function clipOf(node: Element, view: Window, boxOf: (rect: DOMRect) => Box): Unread["clip"] {
-  for (let at = node.parentElement; at; at = at.parentElement) {
+/**
+ * The box of the nearest element holding `node` that cuts what it holds off,
+ * and its corner's radius, or undefined where none does. The body and the
+ * root of `doc` are left out: what they cut off is the viewport's.
+ */
+function clipOf(node: Element, doc: Document, view: Window, boxOf: (rect: DOMRect) => Box): Unread["clip"] {
+  for (let at = node.parentElement; at && at !== doc.body && at !== doc.documentElement; at = at.parentElement) {
     const style = view.getComputedStyle(at);
     if (style.overflowX === "visible" && style.overflowY === "visible") continue;
     return { rect: boxOf(at.getBoundingClientRect()), radius: Number.parseFloat(style.borderTopLeftRadius) || 0 };
@@ -226,6 +226,49 @@ function pinned(node: Element, view: Window): boolean {
   return false;
 }
 
+/** Does `node` show, not hidden or wholly see-through by itself or what holds it? Where the browser cannot tell, it does. */
+function visible(node: Element): boolean {
+  if (typeof node.checkVisibility !== "function") return true;
+  // The older names too, for a browser that knows only those.
+  return node.checkVisibility({ opacityProperty: true, visibilityProperty: true, checkOpacity: true, checkVisibilityCSS: true });
+}
+
+/** Do the boxes `a` and `b` share more than half a px each way? */
+function overlap(a: DOMRect, b: DOMRect): boolean {
+  return Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.5 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5;
+}
+
+/** A picture, video or drawing the frame may not read, where it shows in the viewport, and how to draw it over the copy. */
+interface Pending {
+  node: Element;
+  rect: DOMRect;
+  draw: () => Unread | null;
+}
+
+/**
+ * Those of `pending` that something else of the page in `doc`, not knobs'
+ * own (`own`), may show over. An overlay is drawn over the whole copy, so it
+ * would cover a caption or a heading laid over the picture. To keep simple
+ * and safe, any element that shows, other than the picture itself and what
+ * holds it, whose box meets the picture's counts, wherever it stacks; what
+ * is pinned to the screen does not, as the copy leaves it out.
+ */
+function covered(doc: Document, view: Window, own: string, pending: Pending[]): Set<Element> {
+  const over = new Set<Element>();
+  const all = doc.documentElement.getElementsByTagName("*");
+  for (let index = 0; index < all.length && index < MOST && over.size < pending.length; index++) {
+    const node = all[index];
+    if (!node) continue;
+    const rect = node.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) continue;
+    for (const one of pending) {
+      if (over.has(one.node) || node === one.node || node.contains(one.node) || !overlap(rect, one.rect)) continue;
+      if (visible(node) && !node.closest(own) && !pinned(node, view)) over.add(one.node);
+    }
+  }
+  return over;
+}
+
 /**
  * The pictures, videos, drawings and background pictures of the page in
  * `doc` that meet `span`, read for its copy. `loaded` is told when a
@@ -233,7 +276,8 @@ function pinned(node: Element, view: Window): boolean {
  */
 export function bandMedia(doc: Document, view: Window, span: Span, loaded: () => void): BandMedia {
   const fills = new Map<Element, (copy: Element) => void>();
-  const unread: Unread[] = [];
+  const pending: Pending[] = [];
+  const used = new Map<string, HTMLImageElement>();
   const ratio = Math.min(SHARPEST, Math.max(1, view.devicePixelRatio || 1));
   const { scrollX, scrollY } = view;
   const own = ownSelector();
@@ -260,29 +304,45 @@ export function bandMedia(doc: Document, view: Window, span: Span, loaded: () =>
       // One picked from a set by its density has more px than its size as made: up to the device's.
       const dense = node.srcset || node.parentElement?.localName === "picture" ? ratio : 1;
       const size = readSize({ width: media.width * dense, height: media.height * dense }, rect.width, rect.height, ratio);
-      const data = keptPixels(`${address}|${size.width}x${size.height}`, () => readPixels(node, size));
+      const sized = `${size.width}x${size.height}`;
+      let data = keptPixels(`${address}|${sized}`, () => readPixels(node, size));
+      if (data === null) {
+        // From another origin: asked for again with CORS, which reads where its host allows it.
+        const probe = probeOf(doc, address, loaded, used);
+        if (mediaOf(probe)) data = keptPixels(`${address}|cors|${sized}`, () => readPixels(probe, size));
+      }
       if (data !== null) {
-        add(node, (copy) => copy.setAttribute("src", sizedPicture(data, media.width, media.height, style.imageRendering)));
+        const read = data;
+        add(node, (copy) => copy.setAttribute("src", sizedPicture(read, media.width, media.height, style.imageRendering)));
         continue;
       }
-      // Drawn whole on a canvas of its own first: a part of a picture is cut by its px, not by its size as made.
-      const whole = document.createElement("canvas");
-      whole.width = size.width;
-      whole.height = size.height;
-      try {
-        whole.getContext("2d")?.drawImage(node, 0, 0, size.width, size.height);
-      } catch {
-        continue;
-      }
-      const drawn = { source: whole, width: media.width, height: media.height, scale: size.width / media.width };
-      unread.push({ media: drawn, rect: boxOf(rect), style, made: whole, clip: clipOf(node, view, boxOf) });
+      if (!visible(node)) continue;
+      pending.push({
+        node,
+        rect,
+        draw: () => {
+          // Drawn whole on a canvas of its own first: a part of a picture is cut by its px, not by its size as made.
+          const whole = document.createElement("canvas");
+          whole.width = size.width;
+          whole.height = size.height;
+          try {
+            whole.getContext("2d")?.drawImage(node, 0, 0, size.width, size.height);
+          } catch {
+            whole.width = 0;
+            whole.height = 0;
+            return null;
+          }
+          const drawn = { source: whole, width: media.width, height: media.height, scale: size.width / media.width };
+          return { media: drawn, rect: boxOf(rect), style, made: whole, clip: clipOf(node, doc, view, boxOf) };
+        },
+      });
       continue;
     }
     const size = readSize(media, rect.width, rect.height, ratio);
     // A video or a drawing may show something else by the next picture, so it is read each time.
     const data = readPixels(node, size);
     if (data === null) {
-      unread.push({ media, rect: boxOf(rect), style, clip: clipOf(node, view, boxOf) });
+      if (visible(node)) pending.push({ node, rect, draw: () => ({ media, rect: boxOf(rect), style, clip: clipOf(node, doc, view, boxOf) }) });
       continue;
     }
     const px = (value: string) => Number.parseFloat(value) || 0;
@@ -313,50 +373,33 @@ export function bandMedia(doc: Document, view: Window, span: Span, loaded: () =>
     const style = view.getComputedStyle(node);
     const value = style.backgroundImage;
     if (!value?.includes("url(") || node.closest(own) || pinned(node, view)) continue;
-    const layers = layersOf(value);
-    const sizes = layersOf(style.backgroundSize ?? "");
-    const places = layersOf(style.backgroundPosition ?? "");
     let read = false;
-    const hidden: Unread[] = [];
-    const shown = layers.map((layer, at) => {
+    // One the frame may not read stays as it is, which the copy shows as its color only.
+    const shown = layersOf(value).map((layer) => {
       const address = urlOf(layer);
       if (address === null || address.startsWith("data:")) return layer;
-      const probe = probeOf(doc, address, loaded);
+      const probe = probeOf(doc, address, loaded, used);
       const media = mediaOf(probe);
       if (!media) return layer;
       const size = readSize(media, rect.width, rect.height, ratio);
       const data = keptPixels(`${address}|${size.width}x${size.height}`, () => readPixels(probe, size));
-      if (data !== null) {
-        read = true;
-        return `url("${sizedPicture(data, media.width, media.height, style.imageRendering)}")`;
-      }
-      // Drawn by hand in the box inside the border, as the background is placed, sized and set as the layer's.
-      const fitted = {
-        borderLeftWidth: style.borderLeftWidth,
-        borderRightWidth: style.borderRightWidth,
-        borderTopWidth: style.borderTopWidth,
-        borderBottomWidth: style.borderBottomWidth,
-        paddingLeft: "0px",
-        paddingRight: "0px",
-        paddingTop: "0px",
-        paddingBottom: "0px",
-        objectFit: fitOf(sizes[at % sizes.length] ?? "auto"),
-        objectPosition: places[at % places.length] ?? "0% 0%",
-        borderTopLeftRadius: style.borderTopLeftRadius,
-        borderTopRightRadius: style.borderTopRightRadius,
-        borderBottomRightRadius: style.borderBottomRightRadius,
-        borderBottomLeftRadius: style.borderBottomLeftRadius,
-        imageRendering: style.imageRendering,
-      } as unknown as CSSStyleDeclaration;
-      hidden.push({ media, rect: boxOf(rect), style: fitted });
-      return layer;
+      if (data === null) return layer;
+      read = true;
+      return `url("${sizedPicture(data, media.width, media.height, style.imageRendering)}")`;
     });
-    // The first layer is on top, so the last is drawn first.
-    unread.push(...hidden.reverse());
     if (read) {
       const css = `background-image:${shown.join(", ")} !important`;
       add(node, (copy) => restyle(copy, css));
     }
+  }
+  probes = used;
+
+  const over = pending.length > 0 ? covered(doc, view, own, pending) : new Set<Element>();
+  const unread: Unread[] = [];
+  for (const one of pending) {
+    if (over.has(one.node)) continue;
+    const drawn = one.draw();
+    if (drawn) unread.push(drawn);
   }
   return { fills, unread };
 }

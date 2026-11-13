@@ -69,6 +69,26 @@ function radiusOf(value: string, wide: number, tall: number): { x: number; y: nu
   return { x: px(across, wide), y: px(down, tall) };
 }
 
+/** What of an element's computed style fits a picture into its box. */
+export type FitStyle = Pick<
+  CSSStyleDeclaration,
+  | "borderLeftWidth"
+  | "borderRightWidth"
+  | "borderTopWidth"
+  | "borderBottomWidth"
+  | "paddingLeft"
+  | "paddingRight"
+  | "paddingTop"
+  | "paddingBottom"
+  | "objectFit"
+  | "objectPosition"
+  | "borderTopLeftRadius"
+  | "borderTopRightRadius"
+  | "borderBottomRightRadius"
+  | "borderBottomLeftRadius"
+  | "imageRendering"
+>;
+
 /**
  * Draw one of the page's pictures where its element shows it, `rect`, as its
  * `style` fits it in: inside the border and padding, cut and placed as
@@ -81,7 +101,7 @@ export function drawMedia(
   pen: CanvasRenderingContext2D,
   media: Media,
   rect: Pick<DOMRect, "left" | "top" | "width" | "height">,
-  style: CSSStyleDeclaration,
+  style: FitStyle,
 ): void {
   const px = (value: string) => Number.parseFloat(value) || 0;
   const left = px(style.borderLeftWidth) + px(style.paddingLeft);
