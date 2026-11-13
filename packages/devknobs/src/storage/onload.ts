@@ -1,6 +1,7 @@
 import { webStorage } from "../engine/fresh";
 import { isDevknobsFrame } from "../engine/frame";
 import { newer } from "../engine/stored";
+import { isOwnKey, readItem, writeItem } from "../engine/storekeys";
 
 /**
  * Presets that apply on load, and nothing more of the storage view, so the
@@ -12,7 +13,7 @@ import { newer } from "../engine/stored";
  */
 
 /** Where the presets are kept, in `localStorage`, through devknobs' own gateway. */
-export const PRESETS_KEY = "devknobs:storage-presets";
+export const PRESETS_KEY = "knobs:storage-presets";
 
 /** The version of what `PRESETS_KEY` keeps. Bump it with a new shape, see stored.ts. */
 export const PRESETS_VERSION = 1;
@@ -39,7 +40,7 @@ function list(value: unknown): Fields[] {
 /** The presets as kept, each a bag of fields nothing has checked yet. Empty in fresh mode. */
 export function storedPresets(): Fields[] {
   try {
-    const raw: unknown = JSON.parse(webStorage("local")?.getItem(PRESETS_KEY) ?? "null");
+    const raw: unknown = JSON.parse(readItem(webStorage("local"), PRESETS_KEY) ?? "null");
     return newer(raw, PRESETS_VERSION) ? [] : list(fields(raw).presets);
   } catch {
     return [];
@@ -70,7 +71,7 @@ function empty(storage: Storage): void {
   const keys: string[] = [];
   for (let index = 0; index < storage.length; index++) {
     const key = storage.key(index);
-    if (key !== null && key !== "devknobs" && !key.startsWith("devknobs:")) keys.push(key);
+    if (key !== null && !isOwnKey(key)) keys.push(key);
   }
   for (const key of keys) storage.removeItem(key);
 }
@@ -157,7 +158,7 @@ export function stopOnLoad(): void {
     const presets = storedPresets();
     if (presets.some((preset) => preset.onLoad === true)) {
       const off = presets.map((preset) => ({ ...preset, onLoad: false }));
-      webStorage("local")?.setItem(PRESETS_KEY, JSON.stringify({ v: PRESETS_VERSION, presets: off }));
+      writeItem(webStorage("local"), PRESETS_KEY, JSON.stringify({ v: PRESETS_VERSION, presets: off }));
     }
   } catch {
     // Storage that cannot be written: nothing was kept there to turn off.

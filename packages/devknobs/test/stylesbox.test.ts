@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import { DEFAULT_STATE } from "../src/engine/store";
+import { oldKey } from "../src/engine/storekeys";
 import type { BoxRing } from "../src/grab/boxmodel";
 import type { Inspection, StyleBlock } from "../src/styles/types";
 import type { KnobsState } from "../src/types";
@@ -394,7 +395,7 @@ describe("the fold of the box in the preferences", () => {
     expect(fold(node).className).toBe("row open");
     main(node).fire("click");
     expect(fold(node).className).toBe("row");
-    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({ v: PREFS_VERSION, stylesBox: false });
+    expect(JSON.parse(local.get(oldKey(PREFS_KEY)) ?? "")).toEqual({ v: PREFS_VERSION, stylesBox: false });
     view?.destroy();
     prefs.destroy();
     const next = createPrefs();
@@ -403,7 +404,7 @@ describe("the fold of the box in the preferences", () => {
     expect(fold(again).className).toBe("row");
     // Folded out again is the way it starts, so nothing is left to keep.
     main(again).fire("click");
-    expect(local.has(PREFS_KEY)).toBe(false);
+    expect(local.has(oldKey(PREFS_KEY))).toBe(false);
     next.destroy();
   });
 
@@ -414,7 +415,7 @@ describe("the fold of the box in the preferences", () => {
     view?.show(as(save));
     main(node).fire("click");
     node.find("seg-item")[1]?.fire("click");
-    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({
+    expect(JSON.parse(local.get(oldKey(PREFS_KEY)) ?? "")).toEqual({
       v: PREFS_VERSION,
       stylesBox: false,
       stylesMode: "advanced",
@@ -424,7 +425,7 @@ describe("the fold of the box in the preferences", () => {
 
   test("preferences kept before the box had a word are read as they were, the box out", () => {
     const local = stubStorage();
-    local.set(PREFS_KEY, JSON.stringify({ v: 3, stylesMode: "advanced", viewWidth: 500 }));
+    local.set(oldKey(PREFS_KEY), JSON.stringify({ v: 3, stylesMode: "advanced", viewWidth: 500 }));
     const prefs = createPrefs();
     expect(prefs.get()).toEqual({
       handle: true,
@@ -443,7 +444,7 @@ describe("the fold of the box in the preferences", () => {
 
   test("something that is no yes or no is not read as one", () => {
     const local = stubStorage();
-    local.set(PREFS_KEY, JSON.stringify({ v: 4, stylesBox: "closed" }));
+    local.set(oldKey(PREFS_KEY), JSON.stringify({ v: 4, stylesBox: "closed" }));
     const prefs = createPrefs();
     expect(prefs.get().stylesBox).toBe(true);
     prefs.destroy();
@@ -452,7 +453,7 @@ describe("the fold of the box in the preferences", () => {
   test("in fresh mode is out whatever is kept, and folding it away is not written", () => {
     const local = stubStorage("?devknobs=fresh");
     const was = JSON.stringify({ v: 4, stylesBox: false });
-    local.set(PREFS_KEY, was);
+    local.set(oldKey(PREFS_KEY), was);
     const prefs = createPrefs();
     const node = start(doors(prefs));
     view?.show(as(save));
@@ -460,7 +461,7 @@ describe("the fold of the box in the preferences", () => {
     main(node).fire("click");
     expect(fold(node).className).toBe("row");
     expect(prefs.get().stylesBox).toBe(false);
-    expect(local.get(PREFS_KEY)).toBe(was);
+    expect(local.get(oldKey(PREFS_KEY))).toBe(was);
     prefs.destroy();
     const empty = stubStorage("?devknobs=fresh");
     const first = createPrefs();

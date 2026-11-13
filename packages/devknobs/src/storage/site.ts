@@ -1,3 +1,5 @@
+import { isOwnKey } from "../engine/storekeys";
+
 /**
  * The page's storage as the storage view reaches it: the parts of the window
  * it reads, and nothing else of it. Every reader takes one of these, so a
@@ -40,7 +42,7 @@ export type WebKind = "local" | "session";
 
 /** Is `key` an item devknobs keeps for itself, not one of the page's? */
 export function isOwn(key: string): boolean {
-  return key === "devknobs" || key.startsWith("devknobs:");
+  return isOwnKey(key);
 }
 
 function nameOf(error: unknown): string {

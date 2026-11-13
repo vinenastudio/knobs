@@ -1,6 +1,7 @@
 import { realNow } from "./clock";
 import { FRAME_NAME, isDevknobsFrame } from "./frame";
 import { newer, stamped } from "./stored";
+import { ownName, readItem, removeItem, writeItem } from "./storekeys";
 import { ATTRIBUTES, hasMark } from "../mark";
 
 /**
@@ -28,7 +29,7 @@ export const KNOBS_FRESH_PARAM = "knobs";
 export const FRESH_ATTRIBUTE = ATTRIBUTES.fresh;
 
 /** Where a reload devknobs is about to ask for is timed, in `sessionStorage`. */
-export const FRESH_RELOAD_KEY = "devknobs:fresh-reload";
+export const FRESH_RELOAD_KEY = "knobs:fresh-reload";
 
 /** The version of the timing `FRESH_RELOAD_KEY` keeps. Bump it with a change of shape, see stored.ts. */
 export const FRESH_RELOAD_VERSION = 1;
@@ -42,7 +43,7 @@ export const FRESH_RELOAD_WINDOW = 10000;
  * back on `system`, puts those stores back from it and drops it. Without it, a
  * cookie devknobs wrote would stay on the page for good.
  */
-const KEPT = "devknobs:locale-";
+const KEPT = "knobs:locale-";
 
 /**
  * Where a document's mode is kept once it is known, on its window. The early
@@ -66,8 +67,8 @@ export function freshIn(search: string): boolean {
 
 /** Is `key` an item of devknobs that a load of the user's starts without? */
 export function wiped(key: string): boolean {
-  if (key === FRESH_PARAM) return true;
-  return key.startsWith(`${FRESH_PARAM}:`) && !key.startsWith(KEPT);
+  const name = ownName(key);
+  return name !== null && !name.startsWith(KEPT);
 }
 
 /** When the reload devknobs last asked for was, from its record, or 0 for none. */
@@ -90,8 +91,8 @@ function reloadAt(text: string | null): number {
 function begin(): void {
   try {
     const session = window.sessionStorage;
-    const age = realNow() - reloadAt(session.getItem(FRESH_RELOAD_KEY));
-    session.removeItem(FRESH_RELOAD_KEY);
+    const age = realNow() - reloadAt(readItem(session, FRESH_RELOAD_KEY));
+    removeItem(session, FRESH_RELOAD_KEY);
     if (age >= 0 && age < FRESH_RELOAD_WINDOW) return;
     const keys: string[] = [];
     for (let index = 0; index < session.length; index++) {
@@ -111,7 +112,7 @@ function begin(): void {
  */
 function settle(): void {
   try {
-    window.sessionStorage.removeItem(FRESH_RELOAD_KEY);
+    removeItem(window.sessionStorage, FRESH_RELOAD_KEY);
   } catch {
     // Private mode, disabled storage: no mark is kept there.
   }
@@ -218,7 +219,7 @@ export function ownReload(): void {
   if (!fresh() || isDevknobsFrame()) return;
   try {
     const record = stamped({ at: realNow() }, FRESH_RELOAD_VERSION);
-    window.sessionStorage.setItem(FRESH_RELOAD_KEY, JSON.stringify(record));
+    writeItem(window.sessionStorage, FRESH_RELOAD_KEY, JSON.stringify(record));
   } catch {
     // Storage refused: the next load starts over, as a load of the user's does.
   }

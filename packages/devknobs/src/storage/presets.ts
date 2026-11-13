@@ -1,5 +1,6 @@
 import { webStorage } from "../engine/fresh";
 import { stamped } from "../engine/stored";
+import { removeItem, writeItem } from "../engine/storekeys";
 import { byteSize } from "./format";
 import { PRESETS_KEY, PRESETS_VERSION, put, storedPresets, type Target } from "./onload";
 import type { Cookie } from "./cookies";
@@ -218,8 +219,8 @@ export function savePresets(presets: readonly Preset[]): string | null {
   const storage = webStorage("local");
   if (!storage) return "presets are not kept here";
   try {
-    if (presets.length === 0) storage.removeItem(PRESETS_KEY);
-    else storage.setItem(PRESETS_KEY, JSON.stringify(stamped({ presets }, PRESETS_VERSION)));
+    if (presets.length === 0) removeItem(storage, PRESETS_KEY);
+    else writeItem(storage, PRESETS_KEY, JSON.stringify(stamped({ presets }, PRESETS_VERSION)));
     return null;
   } catch {
     return "cannot keep the preset: the storage is full";

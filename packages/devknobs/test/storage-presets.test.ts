@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { FRAME_ATTRIBUTE, FRAME_NAME } from "../src/engine/frame";
+import { oldKey } from "../src/engine/storekeys";
 import { readCookies } from "../src/storage/cookies";
 import {
   appliedOnLoad,
@@ -89,7 +90,7 @@ const LOGGED_IN: Preset = {
 
 /** Keep presets as devknobs does, without going through the gateway. */
 function kept(...presets: Preset[]): void {
-  local.map.set(PRESETS_KEY, JSON.stringify({ v: PRESETS_VERSION, presets }));
+  local.map.set(oldKey(PRESETS_KEY), JSON.stringify({ v: PRESETS_VERSION, presets }));
 }
 
 describe("a preset's json", () => {
@@ -272,8 +273,8 @@ describe("where presets are kept", () => {
     open();
     expect(canKeep()).toBe(true);
     expect(savePresets([LOGGED_IN])).toBeNull();
-    expect(Array.from(local.map.keys())).toEqual(["devknobs:storage-presets"]);
-    expect(JSON.parse(local.map.get(PRESETS_KEY) ?? "")).toEqual({ v: 1, presets: [LOGGED_IN] });
+    expect(Array.from(local.map.keys())).toEqual(["devknobs:storage-presets", "knobs:storage-presets"]);
+    expect(JSON.parse(local.map.get(oldKey(PRESETS_KEY)) ?? "")).toEqual({ v: 1, presets: [LOGGED_IN] });
     expect(loadPresets()).toEqual([LOGGED_IN]);
   });
 
@@ -287,17 +288,17 @@ describe("where presets are kept", () => {
 
   test("what a newer devknobs kept reads as nothing kept, and a broken one too", () => {
     open();
-    local.map.set(PRESETS_KEY, JSON.stringify({ v: PRESETS_VERSION + 1, presets: [LOGGED_IN] }));
+    local.map.set(oldKey(PRESETS_KEY), JSON.stringify({ v: PRESETS_VERSION + 1, presets: [LOGGED_IN] }));
     expect(loadPresets()).toEqual([]);
-    local.map.set(PRESETS_KEY, "{broken");
+    local.map.set(oldKey(PRESETS_KEY), "{broken");
     expect(loadPresets()).toEqual([]);
-    local.map.set(PRESETS_KEY, JSON.stringify({ v: 1, presets: [LOGGED_IN, { name: 3 }, "x"] }));
+    local.map.set(oldKey(PRESETS_KEY), JSON.stringify({ v: 1, presets: [LOGGED_IN, { name: 3 }, "x"] }));
     expect(loadPresets()).toEqual([LOGGED_IN]);
   });
 
   test("in fresh mode presets are neither read nor written", () => {
     kept({ ...LOGGED_IN, onLoad: true });
-    const before = local.map.get(PRESETS_KEY);
+    const before = local.map.get(oldKey(PRESETS_KEY));
     open({ search: "?devknobs=fresh" });
     local.calls = 0;
     expect(canKeep()).toBe(false);
@@ -305,7 +306,7 @@ describe("where presets are kept", () => {
     expect(storedPresets()).toEqual([]);
     expect(savePresets([{ ...LOGGED_IN, name: "new" }])).toBe("presets are not kept here");
     stopOnLoad();
-    expect(local.map.get(PRESETS_KEY)).toBe(before);
+    expect(local.map.get(oldKey(PRESETS_KEY))).toBe(before);
     expect(local.calls).toBe(0);
   });
 
@@ -400,7 +401,7 @@ describe("apply on load", () => {
     session.map.set("stale", "1");
     open();
     expect(applyOnLoad()).toBe(1);
-    expect(Object.keys(local.all()).sort()).toEqual(["devknobs", PRESETS_KEY, "token", "user"].sort());
+    expect(Object.keys(local.all()).sort()).toEqual(["devknobs", oldKey(PRESETS_KEY), "token", "user"].sort());
     expect(session.all()).toEqual({ step: "2" });
   });
 

@@ -25,6 +25,7 @@ import {
   STORAGE_KEY,
   save,
 } from "../src/engine/store";
+import { oldKey } from "../src/engine/storekeys";
 import { createKeys, KEYS_KEY } from "../src/ui/bindings";
 import { comboText } from "../src/ui/keys";
 import { createPrefs, PREFS_KEY } from "../src/ui/prefs";
@@ -231,9 +232,9 @@ describe("wiped", () => {
 
 describe("fresh mode and localStorage", () => {
   test("never reads it and never writes it, and what it keeps reads as the defaults", () => {
-    local.set(PLACE_KEY, LEFT);
-    local.set(PREFS_KEY, JSON.stringify({ v: 1, handle: false }));
-    local.set(KEYS_KEY, JSON.stringify({ v: 1, panel: "alt+shift+p" }));
+    local.set(oldKey(PLACE_KEY), LEFT);
+    local.set(oldKey(PREFS_KEY), JSON.stringify({ v: 1, handle: false }));
+    local.set(oldKey(KEYS_KEY), JSON.stringify({ v: 1, panel: "alt+shift+p" }));
     const before = new Map(local);
     open({ search: FRESH });
 
@@ -262,7 +263,7 @@ describe("fresh mode and localStorage", () => {
   });
 
   test("the new name, knobs=fresh, starts it too", () => {
-    local.set(PLACE_KEY, LEFT);
+    local.set(oldKey(PLACE_KEY), LEFT);
     open({ search: "?knobs=fresh" });
     expect(load()).toEqual(DEFAULT_STATE);
     expect(webStorage("local")).toBeNull();
@@ -274,18 +275,18 @@ describe("fresh mode and a pinned panel", () => {
   const PINNED = JSON.stringify({ v: 2, side: "left", y: 300, top: 240, docked: true });
 
   test("starts floating whatever was kept, and keeps no pin", () => {
-    local.set(PLACE_KEY, PINNED);
+    local.set(oldKey(PLACE_KEY), PINNED);
     open({ search: FRESH });
     const state = load();
     expect(state.panel.docked).toBe(false);
     expect(state).toEqual(DEFAULT_STATE);
     keepPlace(merge(state, { panel: { docked: true } }));
-    expect(local.get(PLACE_KEY)).toBe(PINNED);
+    expect(local.get(oldKey(PLACE_KEY))).toBe(PINNED);
     expect(localCalls()).toBe(0);
   });
 
   test("reads the kept pin with the mode off", () => {
-    local.set(PLACE_KEY, PINNED);
+    local.set(oldKey(PLACE_KEY), PINNED);
     open();
     expect(load().panel).toMatchObject({ side: "left", docked: true });
   });
@@ -293,8 +294,8 @@ describe("fresh mode and a pinned panel", () => {
 
 describe("fresh mode and sessionStorage", () => {
   test("a load of the user's starts from nothing", () => {
-    session.set(STORAGE_KEY, DARK);
-    session.set(SNAPSHOT_KEY, "{}");
+    session.set(oldKey(STORAGE_KEY), DARK);
+    session.set(oldKey(SNAPSHOT_KEY), "{}");
     session.set("i18nextLng", "tr");
     open({ search: FRESH });
     expect(load()).toEqual(DEFAULT_STATE);
@@ -302,12 +303,12 @@ describe("fresh mode and sessionStorage", () => {
   });
 
   test("keeps the record of the locale stores, for the locale knob to put them back", () => {
-    session.set(STORAGE_KEY, DARK);
-    session.set(OWNER_KEY, "{}");
-    session.set(RELOAD_KEY, "{}");
+    session.set(oldKey(STORAGE_KEY), DARK);
+    session.set(oldKey(OWNER_KEY), "{}");
+    session.set(oldKey(RELOAD_KEY), "{}");
     open({ search: FRESH });
     load();
-    expect(Array.from(session.keys())).toEqual([OWNER_KEY, RELOAD_KEY]);
+    expect(Array.from(session.keys())).toEqual([oldKey(OWNER_KEY), oldKey(RELOAD_KEY)]);
   });
 
   test("the knobs hold inside the visit", () => {
@@ -320,11 +321,11 @@ describe("fresh mode and sessionStorage", () => {
     open({ search: FRESH });
     save(merge(load(), { scheme: "dark" }));
     ownReload();
-    expect(session.has(FRESH_RELOAD_KEY)).toBe(true);
+    expect(session.has(oldKey(FRESH_RELOAD_KEY))).toBe(true);
 
     open({ search: FRESH });
     expect(load().scheme).toBe("dark");
-    expect(session.has(FRESH_RELOAD_KEY)).toBe(false);
+    expect(session.has(oldKey(FRESH_RELOAD_KEY))).toBe(false);
 
     // The user's reload after it starts over.
     open({ search: FRESH });
@@ -352,22 +353,22 @@ describe("fresh mode and sessionStorage", () => {
       resume();
       return puts;
     };
-    session.set(SCROLL_KEY, kept());
-    session.set(FRESH_RELOAD_KEY, asked(0));
+    session.set(oldKey(SCROLL_KEY), kept());
+    session.set(oldKey(FRESH_RELOAD_KEY), asked(0));
     expect(loadPage()).toEqual([640]);
-    expect(session.has(SCROLL_KEY)).toBe(false);
+    expect(session.has(oldKey(SCROLL_KEY))).toBe(false);
 
     // Kept moments ago, but the load is the user's: it starts over.
-    session.set(SCROLL_KEY, kept());
+    session.set(oldKey(SCROLL_KEY), kept());
     expect(loadPage()).toEqual([]);
-    expect(session.has(SCROLL_KEY)).toBe(false);
+    expect(session.has(oldKey(SCROLL_KEY))).toBe(false);
     expect(localCalls()).toBe(0);
   });
 
   test("a mark that is too old, or does not read, does not count", () => {
     for (const mark of [asked(FRESH_RELOAD_WINDOW + 1), asked(-60000), "nonsense", "5"]) {
-      session.set(STORAGE_KEY, DARK);
-      session.set(FRESH_RELOAD_KEY, mark);
+      session.set(oldKey(STORAGE_KEY), DARK);
+      session.set(oldKey(FRESH_RELOAD_KEY), mark);
       open({ search: FRESH });
       expect(load()).toEqual(DEFAULT_STATE);
       expect(session.size).toBe(0);
@@ -381,20 +382,20 @@ describe("fresh mode and sessionStorage", () => {
     // The page went on without the switch, and the mark is not this load's to use.
     open();
     expect(load().scheme).toBe("dark");
-    expect(session.has(FRESH_RELOAD_KEY)).toBe(false);
+    expect(session.has(oldKey(FRESH_RELOAD_KEY))).toBe(false);
     // The visit after it, inside the mark's time, is the user's.
     open({ search: FRESH });
     expect(load()).toEqual(DEFAULT_STATE);
   });
 
   test("the early script and the full script wipe once between them", async () => {
-    session.set(STORAGE_KEY, DARK);
+    session.set(oldKey(STORAGE_KEY), DARK);
     open({ search: FRESH });
     // The early script's copy of the module settles the mode and wipes.
     expect(load()).toEqual(DEFAULT_STATE);
     // What the user sets before the full script runs is theirs.
-    session.set(STORAGE_KEY, DARK);
-    session.set(FRESH_RELOAD_KEY, asked(0));
+    session.set(oldKey(STORAGE_KEY), DARK);
+    session.set(oldKey(FRESH_RELOAD_KEY), asked(0));
     const later: typeof import("../src/engine/fresh") = await import(
       `../src/engine/fresh.ts?copy=${Date.now()}`
     );
@@ -402,7 +403,7 @@ describe("fresh mode and sessionStorage", () => {
     expect(later.fresh()).toBe(true);
     expect(later.webStorage("local")).toBeNull();
     expect(load().scheme).toBe("dark");
-    expect(session.has(FRESH_RELOAD_KEY)).toBe(true);
+    expect(session.has(oldKey(FRESH_RELOAD_KEY))).toBe(true);
   });
 
   test("the mode holds when the address moves on after the load", () => {
@@ -416,11 +417,11 @@ describe("fresh mode and sessionStorage", () => {
 
 describe("fresh mode in the width knob's frame", () => {
   test("follows the page above, and never wipes", () => {
-    session.set(STORAGE_KEY, DARK);
-    session.set(SNAPSHOT_KEY, "{}");
-    session.set(FRESH_RELOAD_KEY, asked(FRESH_RELOAD_WINDOW * 2));
+    session.set(oldKey(STORAGE_KEY), DARK);
+    session.set(oldKey(SNAPSHOT_KEY), "{}");
+    session.set(oldKey(FRESH_RELOAD_KEY), asked(FRESH_RELOAD_WINDOW * 2));
     const before = new Map(session);
-    local.set(PLACE_KEY, LEFT);
+    local.set(oldKey(PLACE_KEY), LEFT);
     open({ frame: [FRAME_ATTRIBUTE, FRESH_ATTRIBUTE], name: FRAME_NAME });
     expect(fresh()).toBe(true);
     const state = load();
@@ -432,8 +433,8 @@ describe("fresh mode in the width knob's frame", () => {
   });
 
   test("is off under a page that is not fresh, whatever its own address says", () => {
-    session.set(STORAGE_KEY, DARK);
-    local.set(PLACE_KEY, LEFT);
+    session.set(oldKey(STORAGE_KEY), DARK);
+    local.set(oldKey(PLACE_KEY), LEFT);
     open({ search: FRESH, frame: [FRAME_ATTRIBUTE], name: FRAME_NAME });
     expect(fresh()).toBe(false);
     const state = load();
@@ -442,7 +443,7 @@ describe("fresh mode in the width knob's frame", () => {
   });
 
   test("reads its own address where it cannot reach its frame element", () => {
-    session.set(STORAGE_KEY, DARK);
+    session.set(oldKey(STORAGE_KEY), DARK);
     open({ search: FRESH, name: FRAME_NAME });
     expect(fresh()).toBe(true);
     expect(load().scheme).toBe("dark");
@@ -451,16 +452,16 @@ describe("fresh mode in the width knob's frame", () => {
 
 describe("with fresh mode off", () => {
   test("both storages read and write as ever", () => {
-    session.set(STORAGE_KEY, DARK);
-    session.set(SNAPSHOT_KEY, "{}");
+    session.set(oldKey(STORAGE_KEY), DARK);
+    session.set(oldKey(SNAPSHOT_KEY), "{}");
     session.set("i18nextLng", "tr");
-    local.set(PLACE_KEY, LEFT);
-    local.set(PREFS_KEY, JSON.stringify({ v: 1, handle: false }));
-    local.set(KEYS_KEY, JSON.stringify({ v: 1, panel: "alt+shift+p" }));
+    local.set(oldKey(PLACE_KEY), LEFT);
+    local.set(oldKey(PREFS_KEY), JSON.stringify({ v: 1, handle: false }));
+    local.set(oldKey(KEYS_KEY), JSON.stringify({ v: 1, panel: "alt+shift+p" }));
     const kept = new Map(session);
     for (const search of ["", "?devknobs=stale", "?fresh"]) {
       // A mark a page in fresh mode left is all such a load drops.
-      session.set(FRESH_RELOAD_KEY, asked(0));
+      session.set(oldKey(FRESH_RELOAD_KEY), asked(0));
       open({ search });
       expect(fresh()).toBe(false);
       expect(webStorage("local")).toBe(window.localStorage);
@@ -469,13 +470,13 @@ describe("with fresh mode off", () => {
       const state = load();
       expect(state.scheme).toBe("dark");
       expect(state.panel.side).toBe("left");
-      // One read of each storage, the stale mark dropped unread, and nothing looked through.
-      expect(sessionCalls()).toBe(2);
+      // One read of each storage, the stale mark dropped unread under both its names, and nothing looked through.
+      expect(sessionCalls()).toBe(3);
       expect(localCalls()).toBe(1);
       expect(session).toEqual(kept);
 
       ownReload();
-      expect(sessionCalls()).toBe(2);
+      expect(sessionCalls()).toBe(3);
 
       const prefs = createPrefs();
       expect(prefs.get().handle).toBe(false);
@@ -496,7 +497,8 @@ describe("with fresh mode off", () => {
     const keys = createKeys();
     keys.set("panel", { key: "j", shift: true, alt: false, ctrl: false, meta: false });
     keys.destroy();
-    expect(Array.from(local.keys()).sort()).toEqual([KEYS_KEY, PLACE_KEY, PREFS_KEY].sort());
-    expect(session.has(FRESH_RELOAD_KEY)).toBe(false);
+    const written = [KEYS_KEY, PLACE_KEY, PREFS_KEY];
+    expect(Array.from(local.keys()).sort()).toEqual([...written, ...written.map(oldKey)].sort());
+    expect(session.has(oldKey(FRESH_RELOAD_KEY))).toBe(false);
   });
 });

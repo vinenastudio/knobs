@@ -5,6 +5,7 @@ import { needsFrame, plainFrame } from "./frame";
 import { webStorage } from "./fresh";
 import { matGradient, matStops } from "./matcolors";
 import { newer, stamped } from "./stored";
+import { readItem, removeItem, writeItem } from "./storekeys";
 import { addStyle, ensureStyle, findStyle, removeStyle } from "./style";
 import { findOwn, markOwn, ownSelector } from "../mark";
 
@@ -22,7 +23,7 @@ export const Z_INDEX = 2147483645;
 export const EARLY = "early";
 
 /** Where the frame's drawing is kept for the next page, in `sessionStorage`. */
-export const SNAPSHOT_KEY = "devknobs:snapshot";
+export const SNAPSHOT_KEY = "knobs:snapshot";
 
 /** The version of the snapshot `SNAPSHOT_KEY` keeps. Bump it with a new shape, see stored.ts. */
 export const SNAPSHOT_VERSION = 1;
@@ -148,7 +149,7 @@ function lookOf(value: unknown): Look | null {
 /** The drawing the last page kept, if it was drawn for these knobs at this window's size. */
 export function readSnapshot(knobs: Drawn, view: WindowSize): Snapshot | null {
   try {
-    const text = webStorage("session")?.getItem(SNAPSHOT_KEY);
+    const text = readItem(webStorage("session"), SNAPSHOT_KEY);
     if (!text) return null;
     const data: unknown = JSON.parse(text);
     if (typeof data !== "object" || data === null || newer(data, SNAPSHOT_VERSION)) return null;
@@ -166,7 +167,7 @@ export function readSnapshot(knobs: Drawn, view: WindowSize): Snapshot | null {
 
 export function writeSnapshot(snapshot: Snapshot): void {
   try {
-    webStorage("session")?.setItem(SNAPSHOT_KEY, JSON.stringify(stamped(snapshot, SNAPSHOT_VERSION)));
+    writeItem(webStorage("session"), SNAPSHOT_KEY, JSON.stringify(stamped(snapshot, SNAPSHOT_VERSION)));
   } catch {
     // Storage full or off: the next page shows the bare mat.
     clearSnapshot();
@@ -211,7 +212,7 @@ export function keepDrawing({ letterbox, zoom, key, css, look }: Kept): void {
 
 export function clearSnapshot(): void {
   try {
-    webStorage("session")?.removeItem(SNAPSHOT_KEY);
+    removeItem(webStorage("session"), SNAPSHOT_KEY);
   } catch {
     // Nothing kept, or nothing to reach.
   }

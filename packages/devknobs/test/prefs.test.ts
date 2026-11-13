@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { oldKey } from "../src/engine/storekeys";
 import {
   createPrefs,
   type Prefs,
@@ -178,7 +179,7 @@ describe("createPrefs", () => {
 
   test("the stored choice wins over the mount option", () => {
     const { local } = stubWindow();
-    local.set(PREFS_KEY, JSON.stringify({ handle: true }));
+    local.set(oldKey(PREFS_KEY), JSON.stringify({ handle: true }));
     const prefs = createPrefs({ handle: false });
     expect(prefs.get().handle).toBe(true);
     prefs.destroy();
@@ -190,10 +191,10 @@ describe("createPrefs", () => {
     let heard = 0;
     prefs.subscribe(() => heard++);
     prefs.setHandle(false);
-    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({ v: PREFS_VERSION, handle: false });
+    expect(JSON.parse(local.get(oldKey(PREFS_KEY)) ?? "")).toEqual({ v: PREFS_VERSION, handle: false });
     expect(prefs.get().handle).toBe(false);
     prefs.setHandle(true);
-    expect(local.has(PREFS_KEY)).toBe(false);
+    expect(local.has(oldKey(PREFS_KEY))).toBe(false);
     expect(prefs.get().handle).toBe(true);
     expect(heard).toBe(2);
     prefs.destroy();
@@ -208,7 +209,7 @@ describe("createPrefs", () => {
 
   test("keeps a width saved narrower than the new default as it is", () => {
     const { local } = stubWindow();
-    local.set(PREFS_KEY, JSON.stringify({ v: PREFS_VERSION, width: 260 }));
+    local.set(oldKey(PREFS_KEY), JSON.stringify({ v: PREFS_VERSION, width: 260 }));
     const prefs = createPrefs();
     expect(prefs.get()).toMatchObject({ width: 260 });
     prefs.destroy();
@@ -220,10 +221,10 @@ describe("createPrefs", () => {
     let heard = 0;
     prefs.subscribe(() => heard++);
     prefs.setWidth(500);
-    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({ v: PREFS_VERSION, width: 500 });
+    expect(JSON.parse(local.get(oldKey(PREFS_KEY)) ?? "")).toEqual({ v: PREFS_VERSION, width: 500 });
     prefs.setWidth(280);
     prefs.setHandle(false);
-    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({
+    expect(JSON.parse(local.get(oldKey(PREFS_KEY)) ?? "")).toEqual({
       v: PREFS_VERSION,
       handle: false,
       width: 280,
@@ -238,16 +239,16 @@ describe("createPrefs", () => {
       htmlFull: false,
     });
     prefs.setWidth(320);
-    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({ v: PREFS_VERSION, handle: false });
+    expect(JSON.parse(local.get(oldKey(PREFS_KEY)) ?? "")).toEqual({ v: PREFS_VERSION, handle: false });
     prefs.setHandle(true);
-    expect(local.has(PREFS_KEY)).toBe(false);
+    expect(local.has(oldKey(PREFS_KEY))).toBe(false);
     expect(heard).toBe(5);
     prefs.destroy();
   });
 
   test("reads the width that was kept", () => {
     const { local } = stubWindow();
-    local.set(PREFS_KEY, JSON.stringify({ v: PREFS_VERSION, width: 300 }));
+    local.set(oldKey(PREFS_KEY), JSON.stringify({ v: PREFS_VERSION, width: 300 }));
     const prefs = createPrefs();
     expect(prefs.get()).toEqual({
       handle: true,
@@ -263,13 +264,13 @@ describe("createPrefs", () => {
 
   test("of the two widths kept at version 5, takes the rows' and writes the view's away", () => {
     const { local } = stubWindow();
-    local.set(PREFS_KEY, JSON.stringify({ v: 5, handle: false, listWidth: 300, viewWidth: 600 }));
+    local.set(oldKey(PREFS_KEY), JSON.stringify({ v: 5, handle: false, listWidth: 300, viewWidth: 600 }));
     const prefs = createPrefs();
     expect(prefs.get()).toMatchObject({ handle: false, width: 300 });
     expect(prefs.get()).not.toHaveProperty("listWidth");
     expect(prefs.get()).not.toHaveProperty("viewWidth");
     prefs.setStylesBox(false);
-    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({
+    expect(JSON.parse(local.get(oldKey(PREFS_KEY)) ?? "")).toEqual({
       v: PREFS_VERSION,
       handle: false,
       width: 300,
@@ -281,12 +282,12 @@ describe("createPrefs", () => {
   test("in fresh mode the width is a first visit's, and one set here is not written", () => {
     const { local } = stubWindow("?devknobs=fresh");
     const kept = JSON.stringify({ v: PREFS_VERSION, width: 300 });
-    local.set(PREFS_KEY, kept);
+    local.set(oldKey(PREFS_KEY), kept);
     const prefs = createPrefs();
     expect(prefs.get()).toMatchObject({ width: 320 });
     prefs.setWidth(480);
     expect(prefs.get()).toMatchObject({ width: 480 });
-    expect(local.get(PREFS_KEY)).toBe(kept);
+    expect(local.get(oldKey(PREFS_KEY))).toBe(kept);
     prefs.destroy();
   });
 
@@ -297,13 +298,13 @@ describe("createPrefs", () => {
     prefs.subscribe(() => heard++);
     expect(prefs.get().stylesMode).toBe("simple");
     prefs.setStylesMode("advanced");
-    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({ v: PREFS_VERSION, stylesMode: "advanced" });
+    expect(JSON.parse(local.get(oldKey(PREFS_KEY)) ?? "")).toEqual({ v: PREFS_VERSION, stylesMode: "advanced" });
     expect(prefs.get().stylesMode).toBe("advanced");
     prefs.destroy();
     const next = createPrefs();
     expect(next.get().stylesMode).toBe("advanced");
     next.setStylesMode("simple");
-    expect(local.has(PREFS_KEY)).toBe(false);
+    expect(local.has(oldKey(PREFS_KEY))).toBe(false);
     expect(next.get().stylesMode).toBe("simple");
     expect(heard).toBe(1);
     next.destroy();
@@ -316,26 +317,26 @@ describe("createPrefs", () => {
     expect([prefs.get().htmlHeight, prefs.get().htmlFull]).toEqual([200, false]);
     prefs.setChangesDiff(true);
     prefs.setHtmlSize({ height: 320, full: true });
-    expect(JSON.parse(local.get(PREFS_KEY) ?? "")).toEqual({ v: PREFS_VERSION, changesDiff: true, htmlHeight: 320, htmlFull: true });
+    expect(JSON.parse(local.get(oldKey(PREFS_KEY)) ?? "")).toEqual({ v: PREFS_VERSION, changesDiff: true, htmlHeight: 320, htmlFull: true });
     prefs.destroy();
     const next = createPrefs();
     expect([next.get().changesDiff, next.get().htmlHeight, next.get().htmlFull]).toEqual([true, 320, true]);
     next.setChangesDiff(false);
     next.setHtmlSize({ height: 200, full: false });
-    expect(local.has(PREFS_KEY)).toBe(false);
+    expect(local.has(oldKey(PREFS_KEY))).toBe(false);
     next.destroy();
   });
 
   test("in fresh mode the styles view is simple, and a mode set here is not written", () => {
     const { local } = stubWindow("?devknobs=fresh");
     const kept = JSON.stringify({ v: 3, stylesMode: "advanced" });
-    local.set(PREFS_KEY, kept);
+    local.set(oldKey(PREFS_KEY), kept);
     const prefs = createPrefs();
     expect(prefs.get().stylesMode).toBe("simple");
     prefs.setStylesMode("advanced");
     expect(prefs.get().stylesMode).toBe("advanced");
     prefs.setStylesMode("simple");
-    expect(local.get(PREFS_KEY)).toBe(kept);
+    expect(local.get(oldKey(PREFS_KEY))).toBe(kept);
     prefs.destroy();
     const { local: empty } = stubWindow("?devknobs=fresh");
     const first = createPrefs();
@@ -347,7 +348,7 @@ describe("createPrefs", () => {
   test("hears a choice another document of the origin made", () => {
     const { local, fire, listening } = stubWindow();
     const prefs = createPrefs();
-    local.set(PREFS_KEY, JSON.stringify({ handle: false }));
+    local.set(oldKey(PREFS_KEY), JSON.stringify({ handle: false }));
     fire("devknobs:keys");
     expect(prefs.get().handle).toBe(true);
     fire(PREFS_KEY);
@@ -362,7 +363,7 @@ describe("createPrefs", () => {
     let heard = 0;
     prefs.subscribe(() => heard++);
     prefs.setHandle(false);
-    local.set(PREFS_KEY, JSON.stringify({ handle: true }));
+    local.set(oldKey(PREFS_KEY), JSON.stringify({ handle: true }));
     fire(PREFS_KEY);
     fire(null);
     expect(prefs.get().handle).toBe(false);

@@ -12,6 +12,7 @@ import {
   recordStep,
   resolveKeys,
 } from "../src/ui/bindings";
+import { oldKey } from "../src/engine/storekeys";
 import { type Combo, comboText, defaultKeys, type KeyLike, keyAction, parseCombo } from "../src/ui/keys";
 
 function press(patch: Partial<KeyLike>): KeyLike {
@@ -334,7 +335,7 @@ describe("createKeys", () => {
 
   test("starts from the stored keys over the mount's", () => {
     const { local } = stubWindow();
-    local.set(KEYS_KEY, JSON.stringify({ panel: "alt+k", grab: "meta+c" }));
+    local.set(oldKey(KEYS_KEY), JSON.stringify({ panel: "alt+k", grab: "meta+c" }));
     const keys = createKeys({ hotkey: "d" });
     expect(comboText(keys.get().panel)).toBe("alt+k");
     expect(textOf(keys.get().grab)).toBe("shift+g");
@@ -358,13 +359,13 @@ describe("createKeys", () => {
     let heard = 0;
     keys.subscribe(() => heard++);
     keys.set("grab", combo("shift+x"));
-    expect(JSON.parse(local.get(KEYS_KEY) ?? "")).toEqual({ v: KEYS_VERSION, grab: "shift+x" });
+    expect(JSON.parse(local.get(oldKey(KEYS_KEY)) ?? "")).toEqual({ v: KEYS_VERSION, grab: "shift+x" });
     expect(textOf(keys.get().grab)).toBe("shift+x");
     keys.set("grab", null);
-    expect(local.has(KEYS_KEY)).toBe(false);
+    expect(local.has(oldKey(KEYS_KEY))).toBe(false);
     expect(textOf(keys.get().grab)).toBe("shift+g");
     keys.set("panel", combo("shift+k"));
-    expect(local.has(KEYS_KEY)).toBe(false);
+    expect(local.has(oldKey(KEYS_KEY))).toBe(false);
     expect(heard).toBe(3);
     keys.destroy();
   });
@@ -372,7 +373,7 @@ describe("createKeys", () => {
   test("hears a key another document of the origin set", () => {
     const { local, fire, listening } = stubWindow();
     const keys = createKeys();
-    local.set(KEYS_KEY, JSON.stringify({ panel: "alt+k" }));
+    local.set(oldKey(KEYS_KEY), JSON.stringify({ panel: "alt+k" }));
     fire("devknobs");
     expect(comboText(keys.get().panel)).toBe("shift+k");
     fire(KEYS_KEY);
@@ -387,7 +388,7 @@ describe("createKeys", () => {
     let heard = 0;
     keys.subscribe(() => heard++);
     keys.set("panel", combo("shift+j"));
-    local.set(KEYS_KEY, JSON.stringify({ panel: "alt+k" }));
+    local.set(oldKey(KEYS_KEY), JSON.stringify({ panel: "alt+k" }));
     fire(KEYS_KEY);
     fire(null);
     expect(comboText(keys.get().panel)).toBe("shift+j");
@@ -455,14 +456,14 @@ describe("createKeys with a store", () => {
 
   test("starts from the store, not the origin's storage, and keeps a key set there with its version", () => {
     const { local } = stubWindow();
-    local.set(KEYS_KEY, JSON.stringify({ panel: "alt+k" }));
+    local.set(oldKey(KEYS_KEY), JSON.stringify({ panel: "alt+k" }));
     const { store, saved } = fakeStore({ v: KEYS_VERSION, grab: "shift+j" });
     const keys = createKeys({ store });
     expect(comboText(keys.get().panel)).toBe("shift+k");
     expect(textOf(keys.get().grab)).toBe("shift+j");
     keys.set("settings", combo("shift+p"));
     expect(saved).toEqual([{ v: KEYS_VERSION, grab: "shift+j", settings: "shift+p" }]);
-    expect(local.get(KEYS_KEY)).toBe(JSON.stringify({ panel: "alt+k" }));
+    expect(local.get(oldKey(KEYS_KEY))).toBe(JSON.stringify({ panel: "alt+k" }));
     keys.set("grab", null);
     keys.set("settings", null);
     expect(saved.at(-1)).toEqual({ v: KEYS_VERSION });

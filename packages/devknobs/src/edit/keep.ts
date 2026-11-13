@@ -26,6 +26,7 @@
 import { realNow } from "../engine/clock";
 import { webStorage } from "../engine/fresh";
 import { newer, stamped } from "../engine/stored";
+import { itemKeys, readItem, removeItem, sameItem, writeItem } from "../engine/storekeys";
 import { type Edit, type EditKind, type EditLog, type EditPlace, edits } from "./log";
 import { riskyEdit } from "./risk";
 
@@ -51,7 +52,7 @@ export interface Replayed {
 }
 
 /** Where the edits of a page are kept in `localStorage`, its path after it. */
-export const EDITS_KEY = "devknobs:edits:";
+export const EDITS_KEY = "knobs:edits:";
 
 /** The version `EDITS_KEY` keeps. Bump it with a new shape, see stored.ts. */
 export const EDITS_VERSION = 1;
@@ -195,16 +196,15 @@ function writtenAt(text: string | null): number {
 /** The other pages kept, newest first, never `kept`. */
 function otherPages(storage: Storage, kept: string): string[] {
   const pages: { key: string; at: number }[] = [];
-  for (let index = 0; index < storage.length; index++) {
-    const key = storage.key(index);
-    if (key?.startsWith(EDITS_KEY) && key !== kept) pages.push({ key, at: writtenAt(storage.getItem(key)) });
+  for (const key of itemKeys(storage, EDITS_KEY)) {
+    if (key !== kept) pages.push({ key, at: writtenAt(readItem(storage, key)) });
   }
   return pages.sort((a, b) => b.at - a.at).map((page) => page.key);
 }
 
 /** Forget the pages kept longest ago, past `MAX_PAGES`, never `kept`, the one just written. */
 function evict(storage: Storage, kept: string): void {
-  for (const key of otherPages(storage, kept).slice(MAX_PAGES - 1)) storage.removeItem(key);
+  for (const key of otherPages(storage, kept).slice(MAX_PAGES - 1)) removeItem(storage, key);
 }
 
 /** Write a page's item; where the storage is full, forget the pages kept longest ago, one at a time, until it fits. */
@@ -213,13 +213,13 @@ function write(storage: Storage, key: string, text: string): void {
   let older: string[] | null = null;
   for (;;) {
     try {
-      storage.setItem(key, text);
+      writeItem(storage, key, text);
       return;
     } catch (error) {
       older ??= otherPages(storage, key);
       const oldest = older.pop();
       if (!oldest) throw error;
-      storage.removeItem(oldest);
+      removeItem(storage, oldest);
     }
   }
 }
@@ -244,7 +244,7 @@ export function localEditsStore(path: string = pathNow()): EditsStore {
   return {
     load() {
       try {
-        const kept = webStorage("local")?.getItem(pageKey());
+        const kept = readItem(webStorage("local"), pageKey());
         return kept ? JSON.parse(kept) : null;
       } catch {
         return null;
@@ -254,7 +254,7 @@ export function localEditsStore(path: string = pathNow()): EditsStore {
       const storage = webStorage("local");
       if (!storage) return;
       try {
-        if (kept === null) storage.removeItem(pageKey());
+        if (kept === null) removeItem(storage, pageKey());
         else {
           write(storage, pageKey(), JSON.stringify({ ...kept, at: realNow() }));
           evict(storage, pageKey());
@@ -265,7 +265,7 @@ export function localEditsStore(path: string = pathNow()): EditsStore {
     },
     subscribe(listener) {
       const onStorage = (event: StorageEvent): void => {
-        if (event.key === null || event.key === pageKey()) listener();
+        if (event.key === null || sameItem(event.key, pageKey())) listener();
       };
       window.addEventListener("storage", onStorage);
       return () => window.removeEventListener("storage", onStorage);

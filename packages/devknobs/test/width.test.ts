@@ -13,6 +13,7 @@ import { holeAt, holePath, MORPH_TIME, rounded, windowRect } from "../src/engine
 import { evenHole } from "../src/engine/morphrun";
 import { keepDrawing, SNAPSHOT_KEY } from "../src/engine/placeholder";
 import { DEFAULT_STATE, merge } from "../src/engine/store";
+import { oldKey } from "../src/engine/storekeys";
 import { type Mark, MARK_EVENT } from "../src/engine/touchmark";
 import * as turnModule from "../src/engine/turnrun";
 import {
@@ -1508,7 +1509,7 @@ describe("the frame in fresh mode", () => {
     apply(KNOBS);
     // The page the window goes to is in fresh mode too.
     expect(assigned).toEqual([`${FRAMED}${SWITCH}`]);
-    expect(session.has(FRESH_RELOAD_KEY)).toBe(true);
+    expect(session.has(oldKey(FRESH_RELOAD_KEY))).toBe(true);
   });
 
   test("leaves no mark where the frame only moved inside its document", async () => {
@@ -1517,7 +1518,7 @@ describe("the frame in fresh mode", () => {
     await load(`${PAGE}#billing`);
     apply(KNOBS);
     expect(assigned).toEqual([`${FRESH_PAGE}#billing`]);
-    expect(session.has(FRESH_RELOAD_KEY)).toBe(false);
+    expect(session.has(oldKey(FRESH_RELOAD_KEY))).toBe(false);
   });
 
   test("stays on its page where the frame only lost the switch", async () => {
@@ -1527,7 +1528,7 @@ describe("the frame in fresh mode", () => {
     apply(KNOBS);
     expect(assigned).toEqual([]);
     expect(location.href).toBe(FRESH_PAGE);
-    expect(session.has(FRESH_RELOAD_KEY)).toBe(false);
+    expect(session.has(oldKey(FRESH_RELOAD_KEY))).toBe(false);
   });
 
   test("keeps the switch in the window's address as it follows the frame", async () => {
@@ -1549,7 +1550,7 @@ describe("the frame in fresh mode", () => {
     expect(location.href).toBe(FRAMED);
     apply(KNOBS);
     expect(assigned).toEqual([FRAMED]);
-    expect(session.has(FRESH_RELOAD_KEY)).toBe(false);
+    expect(session.has(oldKey(FRESH_RELOAD_KEY))).toBe(false);
   });
 
   test("marks the load a device change ends in, and none inside the document", async () => {
@@ -1570,7 +1571,7 @@ describe("the frame in fresh mode", () => {
         expect(assigned).toEqual([]);
         await motion.play();
         expect(assigned).toEqual([landed]);
-        expect(session.has(FRESH_RELOAD_KEY)).toBe(marked);
+        expect(session.has(oldKey(FRESH_RELOAD_KEY))).toBe(marked);
       } finally {
         motion.still();
       }
@@ -2253,7 +2254,7 @@ describe("the touch cursor over the screen", () => {
       canForward: false,
     } as const;
     keepDrawing({ letterbox, zoom: "fit", key: "key", css: "", look });
-    const html = String(Reflect.get(JSON.parse(kept.get(SNAPSHOT_KEY) ?? "{}"), "html"));
+    const html = String(Reflect.get(JSON.parse(kept.get(oldKey(SNAPSHOT_KEY)) ?? "{}"), "html"));
     expect(html).toBe('<DIV class="viewport"><DIV class="glass"></DIV></DIV>');
     // The live frame keeps its own.
     expect(glass.hasAttribute("data-touch")).toBe(true);
@@ -2923,7 +2924,7 @@ describe("a panel pinned to its side", () => {
       });
       apply(PLAIN);
       fire("pagehide");
-      expect(kept.has(SNAPSHOT_KEY)).toBe(false);
+      expect(kept.has(oldKey(SNAPSHOT_KEY))).toBe(false);
     });
 
     describe("where things move", () => {

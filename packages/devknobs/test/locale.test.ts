@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { FRESH_RELOAD_KEY } from "../src/engine/fresh";
 import { setDefaultLocale } from "../src/engine/intl";
+import { oldKey } from "../src/engine/storekeys";
 import {
   apply,
   dirFor,
@@ -186,7 +187,7 @@ function stubBrowser(jar: string, options: BrowserOptions = {}): Browser {
   };
   if (options.owner !== undefined) {
     const write = { kind: "cookie", key: PARAGLIDE_COOKIE, prior: null, value: options.owner };
-    browser.storage.set(OWNER_KEY, JSON.stringify({ lang: options.owner, writes: [write] }));
+    browser.storage.set(oldKey(OWNER_KEY), JSON.stringify({ lang: options.owner, writes: [write] }));
   }
   Date.now = () => browser.now;
   Object.defineProperty(globalThis, "document", {
@@ -256,7 +257,7 @@ function stubPage(jar = "", options: BrowserOptions = {}): Browser {
 
 /** The tag devknobs owns the stores for, as the record says. */
 function owner(browser: Browser): string | undefined {
-  return parseOwned(browser.storage.get(OWNER_KEY) ?? null)?.lang;
+  return parseOwned(browser.storage.get(oldKey(OWNER_KEY)) ?? null)?.lang;
 }
 
 /** Let enough time pass that the next reload is not read as a loop. */
@@ -303,7 +304,7 @@ describe("syncStores in fresh mode", () => {
     const browser = stubPage("", { fresh: true });
     expect(syncStores("tr")).toBe(true);
     expect(browser.reloads).toBe(1);
-    expect(browser.storage.has(FRESH_RELOAD_KEY)).toBe(true);
+    expect(browser.storage.has(oldKey(FRESH_RELOAD_KEY))).toBe(true);
     expect(owner(browser)).toBe("tr");
   });
 
@@ -320,13 +321,13 @@ describe("syncStores in fresh mode", () => {
     browser.local.set("i18nextLng", "en");
     expect(syncStores("tr")).toBe(true);
     expect(browser.local.get("i18nextLng")).toBe("tr");
-    expect(browser.storage.has(FRESH_RELOAD_KEY)).toBe(false);
+    expect(browser.storage.has(oldKey(FRESH_RELOAD_KEY))).toBe(false);
   });
 
   /** The record of a `tr` devknobs wrote over the page's `en` in localStorage, with the store as it left it. */
   function ownsLocal(browser: Browser): Written {
     const write: Written = { kind: "local", key: "i18nextLng", prior: "en", value: "tr" };
-    browser.storage.set(OWNER_KEY, JSON.stringify({ lang: "tr", writes: [write] }));
+    browser.storage.set(oldKey(OWNER_KEY), JSON.stringify({ lang: "tr", writes: [write] }));
     browser.local.set("i18nextLng", "tr");
     return write;
   }
@@ -345,12 +346,12 @@ describe("syncStores in fresh mode", () => {
     const write = ownsLocal(browser);
     apply({ lang: "system", dir: "system" });
     expect(browser.local.get("i18nextLng")).toBe("tr");
-    expect(parseOwned(browser.storage.get(OWNER_KEY) ?? null)).toEqual({ lang: "tr", writes: [write] });
+    expect(parseOwned(browser.storage.get(oldKey(OWNER_KEY)) ?? null)).toEqual({ lang: "tr", writes: [write] });
     expect(browser.reloads).toBe(0);
     const normal = loadAgain(browser);
     apply({ lang: "system", dir: "system" });
     expect(normal.local.get("i18nextLng")).toBe("en");
-    expect(normal.storage.has(OWNER_KEY)).toBe(false);
+    expect(normal.storage.has(oldKey(OWNER_KEY))).toBe(false);
     expect(normal.reloads).toBe(1);
   });
 
@@ -359,12 +360,12 @@ describe("syncStores in fresh mode", () => {
     const write = ownsLocal(browser);
     expect(syncStores("de")).toBe(true);
     expect(browser.local.get("i18nextLng")).toBe("tr");
-    expect(parseOwned(browser.storage.get(OWNER_KEY) ?? null)?.writes).toContainEqual(write);
+    expect(parseOwned(browser.storage.get(oldKey(OWNER_KEY)) ?? null)?.writes).toContainEqual(write);
     const normal = loadAgain(browser);
     apply({ lang: "system", dir: "system" });
     expect(normal.local.get("i18nextLng")).toBe("en");
     expect(readCookie(normal.jar, PARAGLIDE_COOKIE)).toBeNull();
-    expect(normal.storage.has(OWNER_KEY)).toBe(false);
+    expect(normal.storage.has(oldKey(OWNER_KEY))).toBe(false);
   });
 });
 
@@ -400,7 +401,7 @@ describe("syncStores", () => {
     const browser = stubBrowser(jar);
     expect(syncStores("tr")).toBe(false);
     expect(browser.jar).toBe(jar);
-    expect(browser.storage.has(OWNER_KEY)).toBe(false);
+    expect(browser.storage.has(oldKey(OWNER_KEY))).toBe(false);
     expect(browser.reloads).toBe(0);
   });
 
@@ -409,7 +410,7 @@ describe("syncStores", () => {
     expect(syncStores(null)).toBe(true);
     expect(readCookie(browser.jar, PARAGLIDE_COOKIE)).toBeNull();
     expect(readCookie(browser.jar, "session")).toBe("abc");
-    expect(browser.storage.has(OWNER_KEY)).toBe(false);
+    expect(browser.storage.has(oldKey(OWNER_KEY))).toBe(false);
     expect(browser.reloads).toBe(1);
   });
 
@@ -426,7 +427,7 @@ describe("syncStores", () => {
     const browser = stubBrowser(jar, { owner: "tr" });
     expect(syncStores(null)).toBe(false);
     expect(browser.jar).toBe(jar);
-    expect(browser.storage.has(OWNER_KEY)).toBe(false);
+    expect(browser.storage.has(oldKey(OWNER_KEY))).toBe(false);
     expect(browser.reloads).toBe(0);
   });
 
@@ -434,7 +435,7 @@ describe("syncStores", () => {
     const browser = stubBrowser("session=abc", { owner: "tr" });
     expect(syncStores(null)).toBe(false);
     expect(browser.jar).toBe("session=abc");
-    expect(browser.storage.has(OWNER_KEY)).toBe(false);
+    expect(browser.storage.has(oldKey(OWNER_KEY))).toBe(false);
     expect(browser.reloads).toBe(0);
   });
 
@@ -442,7 +443,7 @@ describe("syncStores", () => {
     const browser = stubBrowser("", { cookiesDisabled: true });
     expect(syncStores("tr")).toBe(false);
     expect(browser.jar).toBe("");
-    expect(browser.storage.has(OWNER_KEY)).toBe(false);
+    expect(browser.storage.has(oldKey(OWNER_KEY))).toBe(false);
     expect(browser.reloads).toBe(0);
   });
 
@@ -477,9 +478,9 @@ describe("syncStores", () => {
     expect(syncStores("de")).toBe(false);
     expect(readCookie(browser.jar, PARAGLIDE_COOKIE)).toBe("tr");
     expect(owner(browser)).toBe("tr");
-    expect(browser.storage.has(RELOAD_KEY)).toBe(true);
-    expect(JSON.parse(browser.storage.get(RELOAD_KEY) ?? "").v).toBe(RELOAD_VERSION);
-    expect(JSON.parse(browser.storage.get(OWNER_KEY) ?? "").v).toBe(OWNER_VERSION);
+    expect(browser.storage.has(oldKey(RELOAD_KEY))).toBe(true);
+    expect(JSON.parse(browser.storage.get(oldKey(RELOAD_KEY)) ?? "").v).toBe(RELOAD_VERSION);
+    expect(JSON.parse(browser.storage.get(oldKey(OWNER_KEY)) ?? "").v).toBe(OWNER_VERSION);
     expect(browser.reloads).toBe(1);
   });
 
@@ -519,7 +520,7 @@ describe("adapters", () => {
     later(browser);
     expect(syncStores(null)).toBe(true);
     expect(readCookie(browser.jar, PARAGLIDE_COOKIE)).toBe("de");
-    expect(browser.storage.has(OWNER_KEY)).toBe(false);
+    expect(browser.storage.has(oldKey(OWNER_KEY))).toBe(false);
     expect(browser.reloads).toBe(3);
   });
 
@@ -692,7 +693,7 @@ describe("apply", () => {
     later(page);
     apply({ lang: "system", dir: "system" });
     expect(readCookie(page.jar, PARAGLIDE_COOKIE)).toBeNull();
-    expect(page.storage.has(OWNER_KEY)).toBe(false);
+    expect(page.storage.has(oldKey(OWNER_KEY))).toBe(false);
     expect(page.reloads).toBe(2);
   });
 
@@ -718,7 +719,7 @@ describe("apply", () => {
     later(page);
     apply({ lang: "system", dir: "system" });
     expect(readCookie(page.jar, PARAGLIDE_COOKIE)).toBe("en");
-    expect(page.storage.has(OWNER_KEY)).toBe(false);
+    expect(page.storage.has(oldKey(OWNER_KEY))).toBe(false);
     expect(page.reloads).toBe(1);
   });
 
@@ -731,7 +732,7 @@ describe("apply", () => {
     later(page);
     apply({ lang: "system", dir: "system" });
     expect(readCookie(page.jar, PARAGLIDE_COOKIE)).toBeNull();
-    expect(page.storage.has(OWNER_KEY)).toBe(false);
+    expect(page.storage.has(oldKey(OWNER_KEY))).toBe(false);
     expect(page.reloads).toBe(2);
   });
 
@@ -740,7 +741,7 @@ describe("apply", () => {
     const page = stubPage(jar);
     apply({ lang: "tr", dir: "system" });
     expect(page.jar).toBe(jar);
-    expect(page.storage.has(OWNER_KEY)).toBe(false);
+    expect(page.storage.has(oldKey(OWNER_KEY))).toBe(false);
     expect(page.reloads).toBe(0);
     later(page);
     apply({ lang: "system", dir: "system" });
@@ -752,7 +753,7 @@ describe("apply", () => {
     const page = stubPage(`${PARAGLIDE_COOKIE}=de; session=abc`, { owner: "de" });
     apply({ lang: "system", dir: "system" });
     expect(page.jar).toBe("session=abc");
-    expect(page.storage.has(OWNER_KEY)).toBe(false);
+    expect(page.storage.has(oldKey(OWNER_KEY))).toBe(false);
     expect(page.reloads).toBe(1);
   });
 
@@ -780,26 +781,26 @@ describe("apply", () => {
     tick(page, 1_000);
     expect(readCookie(page.jar, PARAGLIDE_COOKIE)).toBeNull();
     expect(page.local.get("PARAGLIDE_LOCALE")).toBe("en");
-    expect(page.storage.has(OWNER_KEY)).toBe(false);
+    expect(page.storage.has(oldKey(OWNER_KEY))).toBe(false);
     expect(page.reloads).toBe(2);
   });
 
   test("a page load on system moments after a reload waits out the throttle", () => {
     const page = stubPage(`${PARAGLIDE_COOKIE}=tr`, { owner: "tr" });
-    page.storage.set(RELOAD_KEY, String(page.now));
+    page.storage.set(oldKey(RELOAD_KEY), String(page.now));
     apply({ lang: "system", dir: "system" });
     expect(readCookie(page.jar, PARAGLIDE_COOKIE)).toBe("tr");
     expect(page.reloads).toBe(0);
     tick(page, 5_000);
     expect(readCookie(page.jar, PARAGLIDE_COOKIE)).toBeNull();
-    expect(page.storage.has(OWNER_KEY)).toBe(false);
+    expect(page.storage.has(oldKey(OWNER_KEY))).toBe(false);
     expect(page.reloads).toBe(1);
   });
 
   test("says a put back is waiting until it reloads the page", () => {
     const page = stubPage(`${PARAGLIDE_COOKIE}=tr`, { owner: "tr" });
     expect(retrying()).toBe(false);
-    page.storage.set(RELOAD_KEY, String(page.now));
+    page.storage.set(oldKey(RELOAD_KEY), String(page.now));
     apply({ lang: "system", dir: "system" });
     expect(retrying()).toBe(true);
     tick(page, 5_000);
@@ -809,7 +810,7 @@ describe("apply", () => {
 
   test("drops a put back still waiting when a language is picked or devknobs goes", () => {
     const page = stubPage(`${PARAGLIDE_COOKIE}=tr`, { owner: "tr" });
-    page.storage.set(RELOAD_KEY, String(page.now));
+    page.storage.set(oldKey(RELOAD_KEY), String(page.now));
     apply({ lang: "system", dir: "system" });
     expect(page.timers.size).toBe(1);
     apply({ lang: "tr", dir: "system" });

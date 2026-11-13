@@ -79,8 +79,8 @@ export const FOLD_MS = 200;
 /** What a node says where its store cannot be read. Why is in its tooltip. */
 export const NOT_READ = "cannot read";
 
-/** What the presets' node stands under in the tree: they are devknobs' own, and not the page's. */
-export const OWN_GROUP = "devknobs";
+/** What the presets' node stands under in the tree: they are knobs' own, and not the page's. */
+export const OWN_GROUP = "knobs";
 
 /** What the view keeps while the page is, where a test hands in none of its own. */
 const kept: StorageMemory = { expanded: new Set(), seeded: false };

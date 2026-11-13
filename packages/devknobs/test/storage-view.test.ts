@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { oldKey } from "../src/engine/storekeys";
 import { HTTP_ONLY_NOTE } from "../src/storage/cookies";
 import { RENDER_LIMIT } from "../src/storage/format";
 import { NO_LIST } from "../src/storage/idb";
@@ -355,7 +356,7 @@ describe("the tree of stores", () => {
   test("the presets stand last, under a small label of their own, as they are devknobs' and not the page's", async () => {
     const shown = await listed();
     const [group] = shown.root.find("group");
-    expect(OWN_GROUP).toBe("devknobs");
+    expect(OWN_GROUP).toBe("knobs");
     expect(group?.attributes.get("aria-label")).toBe(OWN_GROUP);
     expect(group?.find("group-label")[0]?.textContent).toBe(OWN_GROUP);
     expect(group?.find("row-label").map((label) => label.textContent)).toEqual(["presets"]);
@@ -1839,7 +1840,7 @@ describe("presets", () => {
     toggle(preset);
     preset.find("seg-item")[1]?.fire("click");
     chip(preset, "apply").fire("click");
-    expect(Object.keys(shown.site.localStorage.all()).sort()).toEqual(["devknobs", PRESETS_KEY, "token"].sort());
+    expect(Object.keys(shown.site.localStorage.all()).sort()).toEqual(["devknobs", PRESETS_KEY, oldKey(PRESETS_KEY), "token"].sort());
     expect(shown.site.sessionStorage.all()).toEqual({ step: "9" });
     expect(notes(shown.body)).toContain("replaced with logged in: 3 values set");
   });
