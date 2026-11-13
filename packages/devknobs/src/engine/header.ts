@@ -2,7 +2,12 @@ import type { ClockValue } from "../types";
 import { NativeDate, now } from "./clock";
 
 /** The request header that tells the page's own server what time the clock says. */
-export const NOW_HEADER = "x-devknobs-now";
+export const NOW_HEADER = "x-knobs-now";
+
+/** The header's old name, sent beside it with the same value until 1.0. */
+export const OLD_NOW_HEADER = "x-devknobs-now";
+
+const NOW_HEADERS = [NOW_HEADER, OLD_NOW_HEADER];
 
 type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 type Method = (this: XMLHttpRequest, ...args: unknown[]) => unknown;
@@ -55,11 +60,13 @@ function withHeader(
 ): [RequestInfo | URL, RequestInit | undefined] {
   if (isRequest(input) && init?.headers === undefined) {
     const copy = new Request(input);
-    copy.headers.set(NOW_HEADER, stamp());
+    const value = stamp();
+    for (const name of NOW_HEADERS) copy.headers.set(name, value);
     return [copy, init];
   }
   const headers = new Headers(init?.headers);
-  headers.set(NOW_HEADER, stamp());
+  const value = stamp();
+  for (const name of NOW_HEADERS) headers.set(name, value);
   return [input, { ...init, headers }];
 }
 
@@ -107,7 +114,8 @@ function patch(): void {
       function (this: XMLHttpRequest, ...args: unknown[]) {
         if (on && ownOrigin.has(this)) {
           try {
-            this.setRequestHeader(NOW_HEADER, stamp());
+            const value = stamp();
+            for (const name of NOW_HEADERS) this.setRequestHeader(name, value);
           } catch {
             // Not opened: send throws its own error.
           }

@@ -148,7 +148,7 @@ function knobs(): { [K in Exclude<keyof KnobsState, Skipped>]: Spec } {
             max: CLOCK_SPEED_MAX,
           }),
           header: field(
-            "Send the clock's instant to the page's own origin in an x-devknobs-now header.",
+            "Send the clock's instant to the page's own origin in an x-knobs-now header (and the old x-devknobs-now).",
             flag,
           ),
         },

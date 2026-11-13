@@ -480,7 +480,7 @@ export const HEADER: Knob = {
   category: "location and time",
   control: "switch",
   options: OFF_ON,
-  aliases: ["header", "server", "x-devknobs-now", "backend"],
+  aliases: ["header", "server", "x-knobs-now", "x-devknobs-now", "backend"],
   read: (state) => flag(state.clock.header),
   write: (value) => ({ clock: { header: value === "on" } }),
   reset: { clock: { header: DEFAULT_STATE.clock.header } },

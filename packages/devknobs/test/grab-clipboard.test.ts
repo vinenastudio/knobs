@@ -59,10 +59,11 @@ describe("clipboardData", () => {
     expect(data["text/html"]).toBe(
       "<meta charset='utf-8'><pre><code>[&lt;b&gt;a &amp; b&lt;/b&gt; in Save]\n[&lt;i /&gt; in Other]</code></pre>",
     );
-    expect(JSON.parse(data["application/x-devknobs-grab"] ?? "")).toEqual({
+    expect(JSON.parse(data["application/x-knobs-grab"] ?? "")).toEqual({
       ...PAYLOAD,
       timestamp: 42,
     });
+    expect(data["application/x-devknobs-grab"]).toBe(data["application/x-knobs-grab"]);
   });
 
   test("gives react-grab's type its own shape", () => {
@@ -134,6 +135,7 @@ describe("copyGrab", () => {
     expect(await copyGrab(PAYLOAD)).toBe(true);
     expect([...set.keys()].sort()).toEqual([
       "application/x-devknobs-grab",
+      "application/x-knobs-grab",
       "application/x-react-grab",
       "text/html",
       "text/plain",
