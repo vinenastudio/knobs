@@ -12,7 +12,12 @@
 // Build first, then: pnpm --filter @vinena/knobs underbar-oracle [index.global.js] [screenshot dir] [--url URL] [--scroll PX] [--dark]
 // With --url and no --scroll it puts the page's first large picture across the band.
 // Without --url it serves its own page: a picture in a round clip, a background picture, a
-// drawing, and a picture from another origin that the frame may not read.
+// drawing, and a picture from another origin that the frame may not read. And videos, of a
+// clip the browser records first, whose frames are all the same, so one that plays shows the
+// same in the band and in the frame: one that loops under a sound button, one from another
+// origin the frame may not read, one that shows only its poster, one scaled in a round clip,
+// and four of another origin, paused, with a caption that paints over or under them as the
+// browser stacks it. The looping one is watched for some turns: it takes no picture at each.
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -75,7 +80,10 @@ const pictures: Record<string, Buffer> = {
   '/hero@2x.png': striped(800, 1000),
   '/paper.png': png(240, 160, (x, y) => [(x * 7) % 256, (y * 5) % 256, ((x + y) * 3) % 256]),
   '/away.png': png(300, 200, (x, y) => [240, Math.round((y / 200) * 255), Math.round((x / 300) * 255)]),
+  '/still.png': png(640, 360, (x, y) => [Math.floor(x / 40) % 2 ? 230 : 40, Math.round((y / 360) * 255), 120]),
 };
+/** The clip the videos show, recorded in the browser before the page loads. */
+let clip: Buffer | null = null;
 
 const page = (away: string) => `<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>band oracle</title>
@@ -89,13 +97,29 @@ body { margin: 0; background: #1b1b18; color: #ddd; font: 16px/1.5 system-ui; }
 .paper { height: 260px; margin: 0 0 40px; border-radius: 12px; background: #383835 url(/paper.png) center / cover no-repeat; }
 canvas { display: block; width: 100%; height: 200px; margin: 0 0 40px; }
 .away { display: block; width: 100%; height: auto; margin: 0 0 40px; }
+.card { position: relative; border-radius: 28px; overflow: clip; margin: 0 0 300px; }
+.card video, .clip video { display: block; width: 100%; height: auto; }
+.sound { position: absolute; right: 12px; bottom: 12px; width: 44px; height: 44px; border: 0; border-radius: 22px; background: #f4f4f0; }
+.clip { display: block; width: 100%; margin: 0 0 300px; border: 0; padding: 0; border-radius: 28px; overflow: clip; background: none; }
+.clip video { scale: 1.03; object-fit: contain; background: #2b2b28; }
+.case { display: flow-root; height: 160px; margin: 0 0 300px; }
+.case video { display: block; top: 0; left: 0; width: 100%; height: 160px; object-fit: cover; }
+.case p, .case h2 { width: 70%; height: 60px; margin: 0; background: #f5d90a; color: #111; font: 600 28px/60px system-ui; text-align: center; }
 .tail { height: 1400px; }
 </style><script src="/devknobs.js"></script></head><body><div class="col">
 <div class="lead"></div>
 <span class="media"><img id="hero" loading="lazy" src="/hero.png" srcset="/hero.png 1x, /hero@2x.png 2x" alt=""></span>
 <div class="paper" id="paper"></div>
 <canvas id="chart" width="708" height="400"></canvas>
-<img class="away" id="away" src="${away}/away.png" alt="">
+<img class="away" id="away" src="${away}/away.png" alt="" style="margin-bottom: 300px">
+<div class="card"><video id="loop" src="/clip.webm" muted loop autoplay playsinline width="640" height="360"></video><button class="sound"></button></div>
+<div class="card"><video id="cors" src="${away}/clip.webm" muted loop autoplay playsinline width="640" height="360"></video></div>
+<div class="card"><video id="wait" src="/clip.webm" poster="/still.png" muted playsinline preload="none" width="640" height="360"></video></div>
+<button class="clip"><video id="scaled" src="${away}/clip.webm" muted playsinline preload="auto" width="640" height="360"></video></button>
+<section class="case" id="paint-a"><div style="position: relative; height: 0"><video style="position: absolute; z-index: -10" src="${away}/clip.webm" muted playsinline preload="auto"></video></div><h2 style="margin-top: 50px">over</h2></section>
+<section class="case" id="paint-b" style="position: relative"><video style="position: absolute; z-index: 2" src="${away}/clip.webm" muted playsinline preload="auto"></video><div style="position: relative"><p style="position: absolute; z-index: 5; top: 50px">over</p></div></section>
+<section class="case" id="paint-c"><video style="position: relative" src="${away}/clip.webm" muted playsinline preload="auto"></video><p style="opacity: 0.9; margin-top: -110px">over</p></section>
+<section class="case" id="paint-e"><p style="z-index: 5; margin-top: 50px">under</p><video style="position: relative; margin-top: -110px" src="${away}/clip.webm" muted playsinline preload="auto"></video></section>
 <div class="tail"></div>
 </div><script>
 const pen = document.getElementById('chart').getContext('2d');
@@ -103,7 +127,54 @@ for (let x = 0; x < 708; x += 12) {
   pen.fillStyle = 'hsl(' + x / 2 + ' 80% 55%)';
   pen.fillRect(x, 400 - ((x * 37) % 380), 10, 400);
 }
+// The turns the looping video took, each a seek back to its start.
+window.turns = 0;
+document.getElementById('loop').addEventListener('seeked', () => window.turns++);
 </script></body></html>`;
+
+/**
+ * Record `seconds` of a clip in `tab` as webm, its frames all the same: stripes and a square,
+ * drawn again at each frame, so the recorder takes each.
+ */
+async function recordClip(tab: Page, seconds: number): Promise<Buffer> {
+  const data = await tab.evaluate(async (long) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 360;
+    const pen = canvas.getContext('2d');
+    if (!pen) throw new Error('no canvas');
+    const draw = () => {
+      for (let y = 0; y < 360; y += 20) {
+        pen.fillStyle = `hsl(${y} 70% ${y % 40 ? 30 : 60}%)`;
+        pen.fillRect(0, y, 640, 20);
+      }
+      pen.fillStyle = '#fff';
+      pen.fillRect(40, 40, 120, 120);
+    };
+    draw();
+    const recorder = new MediaRecorder(canvas.captureStream(30), { mimeType: 'video/webm;codecs=vp8', videoBitsPerSecond: 8e6 });
+    const parts: Blob[] = [];
+    recorder.ondataavailable = (event) => parts.push(event.data);
+    const stopped = new Promise((done) => (recorder.onstop = done));
+    recorder.start();
+    const end = performance.now() + long * 1000;
+    await new Promise<void>((done) => {
+      const step = () => {
+        draw();
+        if (performance.now() < end) requestAnimationFrame(step);
+        else done();
+      };
+      step();
+    });
+    recorder.stop();
+    await stopped;
+    const bytes = new Uint8Array(await new Blob(parts).arrayBuffer());
+    let text = '';
+    for (const byte of bytes) text += String.fromCharCode(byte);
+    return btoa(text);
+  }, seconds);
+  return Buffer.from(data, 'base64');
+}
 
 const code = await readFile(script, 'utf8');
 const serve = (html: () => string) => (request: IncomingMessage, response: ServerResponse) => {
@@ -112,6 +183,18 @@ const serve = (html: () => string) => (request: IncomingMessage, response: Serve
   if (picture) {
     response.setHeader('content-type', 'image/png');
     response.end(picture);
+  } else if (path === '/clip.webm' && clip) {
+    // In the parts the browser asks for, as a video is.
+    response.setHeader('content-type', 'video/webm');
+    response.setHeader('accept-ranges', 'bytes');
+    const range = /^bytes=(\d+)-(\d*)$/.exec(request.headers.range ?? '');
+    if (range) {
+      const start = Number(range[1]);
+      const end = range[2] ? Math.min(Number(range[2]), clip.length - 1) : clip.length - 1;
+      response.statusCode = 206;
+      response.setHeader('content-range', `bytes ${start}-${end}/${clip.length}`);
+      response.end(clip.subarray(start, end + 1));
+    } else response.end(clip);
   } else if (path === '/devknobs.js') {
     response.setHeader('content-type', 'text/javascript');
     response.end(code);
@@ -282,7 +365,10 @@ async function places(tab: Page, least: number): Promise<{ name: string; top: nu
         const rect = node?.getBoundingClientRect();
         return rect ? [{ name, top: rect.top + scrolled, height: rect.height }] : [];
       };
-      if (fixture) return ['hero', 'paper', 'chart', 'away'].flatMap((id) => at(id, view.document.getElementById(id)));
+      if (fixture) {
+        const ids = ['hero', 'paper', 'chart', 'away', 'loop', 'cors', 'wait', 'scaled', 'paint-a', 'paint-b', 'paint-c', 'paint-e'];
+        return ids.flatMap((id) => at(id, view.document.getElementById(id)));
+      }
       const picture = [...view.document.querySelectorAll('img')].find((node) => {
         const rect = node.getBoundingClientRect();
         return rect.height >= tall && rect.top + scrolled > view.innerHeight;
@@ -304,6 +390,11 @@ function check(name: string, ok: boolean, detail: string): void {
 }
 
 try {
+  if (!target) {
+    const maker = await browser.newPage();
+    clip = await recordClip(maker, 1);
+    await maker.close();
+  }
   const tab = await browser.newPage({ viewport: { width: 1280, height: 1100 }, deviceScaleFactor: SHOT, colorScheme: dark ? 'dark' : 'light' });
   // What the page's console shows, the frame's included: errors and warnings.
   const logged: string[] = [];
@@ -382,6 +473,27 @@ try {
         `mean channel gap ${sharp.mean.toFixed(2)}, px off ${(sharp.off * 100).toFixed(2)}%, closest at ${sharp.shift} px down (${sharp.shifted.toFixed(2)})`,
       );
     }
+  }
+  // The looping video under the band for some turns: the cover draws each of its frames, so a turn takes no picture.
+  const looping = spots.find((spot) => spot.name === 'loop');
+  if (looping) {
+    await scrollFrame(tab, looping.scroll);
+    const count = () =>
+      tab.evaluate(() => {
+        const shadow = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot;
+        const view = shadow?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')?.contentWindow as (Window & { turns?: number }) | null | undefined;
+        return { pictures: performance.getEntriesByName('devknobs underbar picture').length, turns: view?.turns ?? 0 };
+      });
+    const start = await count();
+    await tab.waitForTimeout(4500);
+    const end = await count();
+    const pictures = end.pictures - start.pictures;
+    const turns = end.turns - start.turns;
+    check(
+      'loop: a looping video under the band takes no new picture at each turn',
+      turns >= 3 && pictures <= 1,
+      `${pictures} pictures over ${turns} turns`,
+    );
   }
   // The frame loaded again, a new document, which asks for no address the last one was refused.
   const corsBefore = logged.filter((text) => text.includes('blocked by CORS policy')).length;

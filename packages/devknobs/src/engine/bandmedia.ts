@@ -426,20 +426,41 @@ interface Pending {
   draw: () => Unread | null;
 }
 
+/** A `display` whose children a `z-index` stacks without a `position`. */
+const STACKS_CHILDREN = new Set(["flex", "inline-flex", "grid", "inline-grid"]);
+
+/** Is `value`, a computed property that is `none` where it does nothing, set? */
+const inEffect = (value: string | undefined) => (value || "none") !== "none";
+
 /**
  * How high `node` stacks among what else `top` holds, as near as its own
  * style and that of what holds it under `top` tell: 0 in the flow, below it
- * for a negative `z-index`, above it where it or what holds it is positioned
- * or turned, and higher for a higher `z-index`. The outermost that is lifted
- * so sets it, as it makes the stacking context the rest paints in.
+ * for a negative `z-index`, above it where it or what holds it is positioned,
+ * turned, faded, filtered or isolated, and higher for a higher `z-index`. A
+ * `z-index` counts only on one positioned or laid out by a flex or grid, as
+ * a browser computes it on any. The outermost that makes a stacking context
+ * sets it, as the rest paints in that; one positioned that makes none lifts
+ * only what nothing in it lifted yet.
  */
 function rankOf(node: Element, top: Element, view: Window): number {
   let rank = 0;
   for (let at: Element | null = node; at && at !== top; at = at.parentElement) {
     const style = view.getComputedStyle(at);
-    const z = Number.parseInt(style.zIndex, 10);
-    const lifted = style.position !== "static" || Number.isFinite(z) || (style.transform || "none") !== "none";
-    if (lifted) rank = !Number.isFinite(z) || z === 0 ? 1 : z < 0 ? z : 1 + z;
+    const positioned = style.position !== "static";
+    const holder = at.parentElement && view.getComputedStyle(at.parentElement).display;
+    const z = positioned || (holder && STACKS_CHILDREN.has(holder)) ? Number.parseInt(style.zIndex, 10) : Number.NaN;
+    const opacity = Number.parseFloat(style.opacity);
+    const context =
+      Number.isFinite(z) ||
+      inEffect(style.transform) ||
+      inEffect(style.scale) ||
+      inEffect(style.rotate) ||
+      inEffect(style.translate) ||
+      inEffect(style.filter) ||
+      opacity < 1 ||
+      style.isolation === "isolate";
+    if (context) rank = !Number.isFinite(z) || z === 0 ? 1 : z < 0 ? z : 1 + z;
+    else if (positioned && rank === 0) rank = 1;
   }
   return rank;
 }

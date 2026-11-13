@@ -613,6 +613,28 @@ describe("pictureOf, with pictures the frame may not read as they are", () => {
     // Positioned, one earlier paints over a picture in the flow.
     before.styled({ position: "relative" });
     expect(pictureOf(frame, BAND)?.overlay?.above).not.toBeNull();
+    // A `z-index` on one in the flow does nothing, though the browser computes it: one positioned after paints over it.
+    before.styled({ zIndex: "5" });
+    away.styled({ position: "relative" });
+    expect(pictureOf(frame, BAND)?.overlay?.above).toBeNull();
+    // On one a flex lays out, it stacks it.
+    away.parentElement?.styled({ display: "flex" });
+    expect(pictureOf(frame, BAND)?.overlay?.above).not.toBeNull();
+  });
+
+  test("what paints over a picture the frame may not read, as the browser stacks it, is drawn back over it", () => {
+    const away = () => new Picture("https://cdn.other.test/x.jpg", 800, 600, true).at(0, 650, 400, 300);
+    const raised = (holder: Node) => pictureOf(frameOf([holder.at(0, 650, 400, 300)]).frame, BAND)?.overlay?.above?.parts.length ?? 0;
+    // Below the flow in a positioned holder that makes no stacking context: a heading after it in the flow shows over it.
+    const sunk = new Node("div", {}, [away().styled({ position: "absolute", zIndex: "-10" })]).at(0, 650, 400, 0).styled({ position: "relative" });
+    expect(raised(new Node("section", {}, [sunk, new Node("h1").at(24, 750, 352, 60)]))).toBe(1);
+    // Stacked at 2, under a caption at 5 in a positioned holder that makes none.
+    const caption = new Node("div", {}, [new Node("p").at(0, 650, 200, 100).styled({ position: "absolute", zIndex: "5" })]).at(0, 650, 400, 0).styled({ position: "relative" });
+    expect(raised(new Node("section", {}, [away().styled({ position: "absolute", zIndex: "2" }), caption]).styled({ position: "relative" }))).toBe(1);
+    // Positioned, under one faded after it, which stacks as high.
+    expect(raised(new Node("section", {}, [away().styled({ position: "relative" }), new Node("p").at(0, 650, 200, 100).styled({ opacity: "0.9" })]))).toBe(1);
+    // In the flow, under a button positioned over it.
+    expect(raised(new Node("section", {}, [away(), new Node("button").at(10, 660, 50, 50).styled({ position: "absolute" })]).styled({ position: "relative" }))).toBe(1);
   });
 
   test("drawn back, the drawing goes over each covered picture only, cut off as the picture is", () => {
@@ -1318,6 +1340,24 @@ describe("createUnderbar", () => {
     clip.frames.shift()?.();
     expect(first?.calls.length).toBe(drawnBefore);
     expect(clip.frames.length).toBe(asked - 1);
+  });
+
+  test("a video the cover draws at each of its frames takes no new picture as it loops; a paused one that seeks or plays takes one", async () => {
+    const clip = new Video("https://media.other.test/clip.mp4", 1080, 1920, true).at(0, 650, 400, 300);
+    const still = new Video("https://site.test/still.mp4", 1080, 1920).at(0, 700, 400, 200);
+    still.paused = true;
+    const { frame, heard } = frameOf([clip, still]);
+    await shownBand(frame);
+    const told = (type: string, target: unknown) => (heard.get(type) as (event: { target: unknown }) => void)({ target });
+    // At each turn of its loop it seeks to its start and plays again.
+    told("seeked", clip);
+    told("playing", clip);
+    expect(timers.length).toBe(0);
+    told("seeked", still);
+    expect(timers.length).toBe(1);
+    await tick();
+    told("playing", still);
+    expect(timers.length).toBe(1);
   });
 
   test("a scroll inside the stretch read takes no new picture, one past it takes one", async () => {

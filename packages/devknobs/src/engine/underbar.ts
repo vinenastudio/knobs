@@ -258,6 +258,8 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
   const bandOf = (across: number) => (wide > 0 ? (high * across) / wide : 0);
   /** A picture or video near the band came in or shows another frame, which no change to the page tells of. */
   const onLoad = (event: Event) => {
+    // A video the cover draws at each of its frames shows them all: one that loops seeks and plays again at each turn.
+    if (picture?.overlay?.live.some((one) => one.live === event.target)) return;
     try {
       const view = frame.contentWindow;
       const doc = frame.contentDocument;
