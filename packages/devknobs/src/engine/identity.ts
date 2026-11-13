@@ -1,4 +1,4 @@
-import type { DevknobsState, DprValue } from "../types";
+import type { KnobsState, DprValue } from "../types";
 import { hasTouch } from "./devices";
 import { coarse } from "./media";
 import * as screen from "./screen";
@@ -21,10 +21,10 @@ export interface Identity {
   served?: boolean;
 }
 
-type IdentityKnobs = Pick<DevknobsState, "ua" | "device" | "dpr"> & { panel?: Pick<DevknobsState["panel"], "realPhone"> };
+type IdentityKnobs = Pick<KnobsState, "ua" | "device" | "dpr"> & { panel?: Pick<KnobsState["panel"], "realPhone"> };
 
 /** What the frame's new window is patched with: its identity, and the screen it reads. */
-type PatchKnobs = IdentityKnobs & Pick<DevknobsState, "posture" | "orientation">;
+type PatchKnobs = IdentityKnobs & Pick<KnobsState, "posture" | "orientation">;
 
 export function identityOf(state: IdentityKnobs): Identity {
   const agent = ua.uaPreset(state.ua.preset) ? state.ua.preset : ua.userAgentOf(state.ua);

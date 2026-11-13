@@ -17,7 +17,7 @@ import { type SystemMedia, watchSystemMedia } from "../engine/system";
 import type { GrabControl } from "../grab/control";
 import type { InspectControl } from "../grab/inspect";
 import type { PreferValue } from "../host";
-import type { DevknobsState } from "../types";
+import type { KnobsState } from "../types";
 import { runAction, stopAction } from "./actions";
 import { type Action, availableActions, type Live } from "./catalog";
 import { readColumn, wrapSliding } from "./column";
@@ -385,7 +385,7 @@ export function createPanel(options: PanelOptions = {}): Panel {
   /** What the copy inside the width knob's frame last counted, null until it says. */
   let frameCount: number | null = null;
 
-  function liveOf(state: DevknobsState): Live {
+  function liveOf(state: KnobsState): Live {
     const framed = needsFrame(state);
     if (!framed) frameCount = null;
     return { now: now(), real: realNow(), overflow: framed ? frameCount : overflowCount() };

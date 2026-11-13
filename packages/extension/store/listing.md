@@ -1,7 +1,7 @@
 # Chrome Web Store listing
 
 What the Chrome Web Store developer dashboard asks for, ready to paste. Upload
-`devknobs-<version>.zip` from `pnpm --filter @knobs/extension package`. Keep this file true to the
+`knobs-<version>.zip` from `pnpm --filter @knobs/extension package`. Keep this file true to the
 code: a new permission or a new request the extension makes changes the answers below.
 
 ## Store listing

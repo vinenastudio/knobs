@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { DEFAULT_PINNED, DEFAULT_STATE, merge, parse, resetState } from "../src/engine/store";
 import type { GrabControl } from "../src/grab/control";
-import type { DevknobsState, DevknobsStatePatch } from "../src/types";
+import type { KnobsState, KnobsStatePatch } from "../src/types";
 import { actionKey, runAction, type Store, stopAction } from "../src/ui/actions";
 import {
   ACTIONS,
@@ -99,12 +99,12 @@ function inspecting() {
 }
 
 /** The knobs as the panel keeps them, as far as running an action goes. */
-function fakeStore(start: DevknobsState = DEFAULT_STATE): Store & { sets: number } {
+function fakeStore(start: KnobsState = DEFAULT_STATE): Store & { sets: number } {
   let state = start;
   const store = {
     sets: 0,
     getState: () => state,
-    setState(patch: DevknobsStatePatch) {
+    setState(patch: KnobsStatePatch) {
       store.sets++;
       state = merge(state, patch);
     },
@@ -124,7 +124,7 @@ function action(id: Action["id"]): Action {
   return found;
 }
 
-function pinned(...ids: string[]): DevknobsState {
+function pinned(...ids: string[]): KnobsState {
   return merge(DEFAULT_STATE, { panel: { pinned: [...DEFAULTS, ...ids] } });
 }
 

@@ -1,5 +1,5 @@
 import * as engine from "../engine";
-import type { DevknobsStatePatch, PanelValue, SideValue } from "../types";
+import type { KnobsStatePatch, PanelValue, SideValue } from "../types";
 import {
   between,
   cornerAt,
@@ -331,7 +331,7 @@ export function createDrag(context: DragContext): Drag {
    * shows under the pointer. A long way takes longer, and the edge eases back
    * flush in the same time, so it only stops floating here.
    */
-  function land(next: DevknobsStatePatch["panel"] | null): void {
+  function land(next: KnobsStatePatch["panel"] | null): void {
     const { open } = engine.getState().panel;
     const from = shownBox(open);
     wrap.style.transitionProperty = "transform";

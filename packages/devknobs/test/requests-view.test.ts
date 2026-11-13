@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { DEFAULT_STATE, merge } from "../src/engine/store";
 import { createStore, type RequestStore } from "../src/requests/store";
 import { type RequestEntry, RING_SIZE } from "../src/requests/types";
-import type { DevknobsState, DevknobsStatePatch } from "../src/types";
+import type { KnobsState, KnobsStatePatch } from "../src/types";
 import { actionKey, runAction, type Store, stopAction } from "../src/ui/actions";
 import { BINDINGS, comboProblem, readKeys, resolveKeys } from "../src/ui/bindings";
 import { ACTIONS, type Action, actionRow, availableActions, isActive } from "../src/ui/catalog";
@@ -187,10 +187,10 @@ function requestsAction(): Action {
 
 /** The knobs as the panel keeps them, as far as running an action goes. */
 function fakeStore(): Store {
-  let state: DevknobsState = DEFAULT_STATE;
+  let state: KnobsState = DEFAULT_STATE;
   return {
     getState: () => state,
-    setState(patch: DevknobsStatePatch) {
+    setState(patch: KnobsStatePatch) {
       state = merge(state, patch);
     },
   };

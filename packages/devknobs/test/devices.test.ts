@@ -13,9 +13,9 @@ import {
 } from "../src/engine/devices";
 import { DEFAULT_STATE, merge } from "../src/engine/store";
 import { uaPreset } from "../src/engine/ua";
-import type { DevknobsState, DevknobsStatePatch } from "../src/types";
+import type { KnobsState, KnobsStatePatch } from "../src/types";
 
-function state(patch: DevknobsStatePatch): DevknobsState {
+function state(patch: KnobsStatePatch): KnobsState {
   return merge(DEFAULT_STATE, patch);
 }
 

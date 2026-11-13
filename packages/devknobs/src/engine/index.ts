@@ -1,4 +1,4 @@
-import type { DevknobsState, DevknobsStatePatch } from "../types";
+import type { KnobsState, KnobsStatePatch } from "../types";
 import * as requests from "../requests";
 import { hasTouch } from "./devices";
 import {
@@ -52,7 +52,7 @@ export interface EngineOptions {
   /** Keep the knobs in sessionStorage across reloads. Defaults to true. */
   persist?: boolean;
   /** Knobs to apply on top of the stored state. */
-  state?: DevknobsStatePatch;
+  state?: KnobsStatePatch;
   /**
    * A host that sets text size, offline, the prefers knobs or the viewport
    * for real. Those knobs leave the page alone and go to it instead.
@@ -60,9 +60,9 @@ export interface EngineOptions {
   native?: NativeDriver;
 }
 
-export type Listener = (state: DevknobsState) => void;
+export type Listener = (state: KnobsState) => void;
 
-let state: DevknobsState = { ...DEFAULT_STATE };
+let state: KnobsState = { ...DEFAULT_STATE };
 let persist = true;
 let running = false;
 let native: NativeDriver | null = null;
@@ -77,7 +77,7 @@ let stopRelay: (() => void) | null = null;
 let panelMoving: (() => boolean) | null = null;
 const listeners = new Set<Listener>();
 
-export function getState(): DevknobsState {
+export function getState(): KnobsState {
   return state;
 }
 
@@ -94,7 +94,7 @@ function driver(): NativeDriver | null {
   return nativeEnabled() ? native : null;
 }
 
-export function applyState(next: DevknobsState): void {
+export function applyState(next: KnobsState): void {
   state = inFrame ? framed(next) : next;
   // The host keeps real phone mode for every tab: it hears each turn made after the start.
   if (running && !inFrame && native?.realPhone && toldRealPhone !== state.panel.realPhone) {
@@ -177,7 +177,7 @@ export function nativeSwitch(): { setting: NativeSetting; on: boolean; note: str
   return { setting: native.setting, on: nativeEnabled(), note: nativeNote };
 }
 
-export function setState(patch: DevknobsStatePatch): DevknobsState {
+export function setState(patch: KnobsStatePatch): KnobsState {
   applyState(merge(state, patch));
   return state;
 }
@@ -188,7 +188,7 @@ export function setState(patch: DevknobsStatePatch): DevknobsState {
  * next page. Rejects while devknobs is not mounted, and when it unmounts
  * during the wait.
  */
-export function ready(): Promise<DevknobsState> {
+export function ready(): Promise<KnobsState> {
   return whenSettled(
     () => width.idle() && !locale.retrying() && !pseudo.pending() && !panelMoving?.(),
     locale.reloading,

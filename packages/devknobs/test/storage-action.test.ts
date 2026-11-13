@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { DEFAULT_STATE, merge } from "../src/engine/store";
 import { readMessage } from "../src/engine/frame";
 import { PRESETS_KEY, PRESETS_VERSION, applyOnLoad } from "../src/storage/onload";
-import type { DevknobsState, DevknobsStatePatch } from "../src/types";
+import type { KnobsState, KnobsStatePatch } from "../src/types";
 import { actionKey, runAction, type Store, stopAction } from "../src/ui/actions";
 import { BINDING_WORDS, BINDINGS, comboProblem, readKeys, resolveKeys } from "../src/ui/bindings";
 import { ACTIONS, type Action, availableActions, isActive, ROWS, type Row } from "../src/ui/catalog";
@@ -41,12 +41,12 @@ function row(): Row {
 }
 
 /** The knobs as the panel keeps them, as far as running an action goes. */
-function fakeStore(): Store & { state(): DevknobsState } {
+function fakeStore(): Store & { state(): KnobsState } {
   let state = DEFAULT_STATE;
   return {
     state: () => state,
     getState: () => state,
-    setState(patch: DevknobsStatePatch) {
+    setState(patch: KnobsStatePatch) {
       state = merge(state, patch);
     },
   };

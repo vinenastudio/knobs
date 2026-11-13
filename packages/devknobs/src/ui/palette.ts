@@ -1,6 +1,6 @@
 import * as engine from "../engine";
 import { frameForced } from "../engine/frame";
-import type { DevknobsState } from "../types";
+import type { KnobsState } from "../types";
 import { runAction } from "./actions";
 import { type Action, browse, type Knob, nameOf, rowOf } from "./catalog";
 import { el, reveal } from "./dom";
@@ -73,7 +73,7 @@ export interface Palette {
   searching(): boolean;
   /** Stop browsing and drop the query, without drawing anything. */
   clear(): void;
-  renderBody(state: DevknobsState): void;
+  renderBody(state: KnobsState): void;
   leaveSearch(): void;
   startBrowsing(text?: string): void;
   onGrab(on: boolean): void;
@@ -121,7 +121,7 @@ export function createPalette(context: PaletteContext): Palette {
     return { node, pick };
   }
 
-  function actionEntry(id: number, action: Action, state: DevknobsState): Entry {
+  function actionEntry(id: number, action: Action, state: KnobsState): Entry {
     return entry(
       id,
       () => runAction(action),
@@ -131,7 +131,7 @@ export function createPalette(context: PaletteContext): Palette {
     );
   }
 
-  function resultEntries(query: string, state: DevknobsState): Entry[] {
+  function resultEntries(query: string, state: KnobsState): Entry[] {
     const actions = searchActions(query, actionsHere);
     const found = search(query).map((result, index) => {
       const text = resultText(result);
@@ -151,7 +151,7 @@ export function createPalette(context: PaletteContext): Palette {
     return [...actions.map((action, index) => actionEntry(index, action, state)), ...found];
   }
 
-  function browseEntries(state: DevknobsState): { nodes: HTMLElement[]; list: Entry[] } {
+  function browseEntries(state: KnobsState): { nodes: HTMLElement[]; list: Entry[] } {
     const nodes: HTMLElement[] = [];
     const list: Entry[] = [];
     nodes.push(el("div", "group-label", "actions"));
@@ -178,7 +178,7 @@ export function createPalette(context: PaletteContext): Palette {
   }
 
   /** Show what `modeOf` says: the rows, the search, a feature's view or the settings. */
-  function renderBody(state: DevknobsState): void {
+  function renderBody(state: KnobsState): void {
     const query = searchInput.value.trim();
     const mode = modeOf({
       keys: context.editingKeys(),

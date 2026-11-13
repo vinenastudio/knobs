@@ -1,4 +1,4 @@
-import type { DevknobsState, MatColorValue } from "../types";
+import type { KnobsState, MatColorValue } from "../types";
 import type { Look } from "./browserkit";
 import type { Docked } from "./dock";
 import { needsFrame, plainFrame } from "./frame";
@@ -53,7 +53,7 @@ html::after{content:"";position:fixed;inset:0;z-index:${Z_INDEX - 1};background:
 
 /** The knobs a drawing of the frame depends on, beside the window's size. */
 export type Drawn = Pick<
-  DevknobsState,
+  KnobsState,
   | "width"
   | "height"
   | "frame"

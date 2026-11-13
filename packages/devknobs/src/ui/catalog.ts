@@ -1,6 +1,6 @@
 import * as engine from "../engine";
 import { DEFAULT_STATE } from "../engine/store";
-import type { CustomColor, DevknobsState, DevknobsStatePatch } from "../types";
+import type { CustomColor, KnobsState, KnobsStatePatch } from "../types";
 import type { ColorList } from "./colors";
 import {
   BARS,
@@ -162,13 +162,13 @@ export interface Knob {
   /** More words search finds the knob by. */
   aliases: readonly string[];
   /** The value that is on, as one of the option values where it is one. */
-  read(state: DevknobsState): string;
+  read(state: KnobsState): string;
   /** The patch that sets the knob to a value. */
-  write(value: string, state: DevknobsState): DevknobsStatePatch;
+  write(value: string, state: KnobsState): KnobsStatePatch;
   /** The patch that puts the knob back to its default. */
-  reset: DevknobsStatePatch;
+  reset: KnobsStatePatch;
   /** The knob's part of its row's summary, asked only while it is off its default. */
-  brief?(state: DevknobsState, live: Live): string;
+  brief?(state: KnobsState, live: Live): string;
   /** What a value outside the options is called. */
   name?(value: string): string;
   /** A value typed out in full that is not an option, or null. */
@@ -180,14 +180,14 @@ export interface Knob {
   /** False where the browser has nothing for the knob to act on. */
   available?(): boolean;
   /** The option values the editor shows for this state, in order, where they depend on it. */
-  offers?(state: DevknobsState): readonly string[];
+  offers?(state: KnobsState): readonly string[];
   /** False while the knob does nothing, so the editor hides it. Search still sets it. */
-  shown?(state: DevknobsState): boolean;
+  shown?(state: KnobsState): boolean;
   /**
    * The value another knob brought, which stands in for the default while it
    * does: such a value puts the knob off nothing, and its row's `×` puts it back.
    */
-  base?(state: DevknobsState): string | undefined;
+  base?(state: KnobsState): string | undefined;
   /** The list of colors of the user's own its swatches take, each one a value as its hex. */
   custom?: ColorList;
   /** Show the value it has at once, with no way there, as a color still being picked asks. */
@@ -491,12 +491,12 @@ export function knobsOf(row: Row): Knob[] {
   return row.knobs.map(knobOf).filter((knob) => knob.available?.() ?? true);
 }
 
-export function offDefault(knob: Knob, state: DevknobsState): boolean {
+export function offDefault(knob: Knob, state: KnobsState): boolean {
   return knob.read(state) !== (knob.base?.(state) ?? knob.read(DEFAULT_STATE));
 }
 
 /** The knob's part of a row summary, empty while it is at its default. */
-export function brief(knob: Knob, state: DevknobsState, live: Live): string {
+export function brief(knob: Knob, state: KnobsState, live: Live): string {
   if (!offDefault(knob, state)) return "";
   return knob.brief?.(state, live) ?? nameOf(knob, knob.read(state));
 }
@@ -517,7 +517,7 @@ export function rowHere(row: Row): boolean {
  * place is, not as a mode: it lists no row and reset all has nothing of it to
  * put back.
  */
-export function isActive(row: Row, state: DevknobsState): boolean {
+export function isActive(row: Row, state: KnobsState): boolean {
   if (row.action) {
     const on = row.action.off !== undefined && row.action.state?.() === "on";
     return on || Boolean(row.action.value?.());
@@ -526,7 +526,7 @@ export function isActive(row: Row, state: DevknobsState): boolean {
 }
 
 /** What the row says it emulates, such as `390 · dpr 2`. Empty while it emulates nothing. */
-export function summary(row: Row, state: DevknobsState, live: Live): string {
+export function summary(row: Row, state: KnobsState, live: Live): string {
   return knobsOf(row)
     .map((knob) => brief(knob, state, live))
     .filter((part) => part !== "")
@@ -538,7 +538,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** Patches as one, merged a level deep like the store merges them. */
-export function combine(patches: readonly DevknobsStatePatch[]): DevknobsStatePatch {
+export function combine(patches: readonly KnobsStatePatch[]): KnobsStatePatch {
   const out: Record<string, unknown> = {};
   for (const patch of patches) {
     for (const [key, value] of Object.entries(patch)) {
@@ -546,11 +546,11 @@ export function combine(patches: readonly DevknobsStatePatch[]): DevknobsStatePa
       out[key] = isRecord(value) && isRecord(before) ? { ...before, ...value } : value;
     }
   }
-  return out as DevknobsStatePatch;
+  return out as KnobsStatePatch;
 }
 
 /** The patch that puts every knob of the row back to its default. */
-export function resetPatch(row: Row): DevknobsStatePatch {
+export function resetPatch(row: Row): KnobsStatePatch {
   return combine(row.knobs.map((id) => knobOf(id).reset));
 }
 

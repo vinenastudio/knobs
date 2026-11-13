@@ -1,6 +1,6 @@
 import * as engine from "../engine";
 import { isCustomColor } from "../engine/color";
-import type { CustomColor, DevknobsState } from "../types";
+import type { CustomColor, KnobsState } from "../types";
 import type { Knob } from "./catalog";
 import { dropColor, type LiveColors, pickColor } from "./colors";
 import { button, el } from "./dom";
@@ -36,7 +36,7 @@ export interface SwatchesContext {
 export function swatchList(
   knob: Knob,
   context: SwatchesContext,
-): [HTMLElement, (state: DevknobsState) => void] {
+): [HTMLElement, (state: KnobsState) => void] {
   const { root, colors, set } = context;
   const track = el("div", "swatches");
   track.setAttribute("role", "radiogroup");
@@ -56,7 +56,7 @@ export function swatchList(
     return { node, value: option.value };
   });
   const show = radioGroup(track, items, (value) => set(knob, value));
-  const update = (state: DevknobsState): void => show(knob.read(state));
+  const update = (state: KnobsState): void => show(knob.read(state));
   const list = knob.custom;
   if (!list) return [track, update];
   /** The colors of the user's own the knob lists, and the way to list others. */

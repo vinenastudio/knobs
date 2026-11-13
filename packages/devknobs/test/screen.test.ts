@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { apply, screenSizeOf } from "../src/engine/screen";
 import { DEFAULT_STATE, merge } from "../src/engine/store";
-import type { DevknobsStatePatch } from "../src/types";
+import type { KnobsStatePatch } from "../src/types";
 
-function state(patch: DevknobsStatePatch) {
+function state(patch: KnobsStatePatch) {
   return merge(DEFAULT_STATE, patch);
 }
 

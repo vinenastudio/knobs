@@ -30,7 +30,7 @@ import {
 } from "./host";
 import { claim, expose, free, type Host, hostOf, owned, superseded, type Take, withdraw } from "./instance";
 import { applyOnLoad } from "./storage/onload";
-import type { DevknobsState, DevknobsStatePatch, GrabColorValue } from "./types";
+import type { KnobsState, KnobsStatePatch, GrabColorValue } from "./types";
 import { createKeys, type KeysStore, type LiveKeys } from "./ui/bindings";
 import { runtimeLabel } from "./ui/footer";
 import { forwardKeys } from "./ui/keys";
@@ -44,8 +44,8 @@ export type {
   ClockValue,
   ConnectionValue,
   ContrastValue,
-  DevknobsState,
-  DevknobsStatePatch,
+  KnobsState,
+  KnobsStatePatch,
   DevIconValue,
   DirValue,
   DprValue,
@@ -501,12 +501,12 @@ function retake(options: MountOptions, native: { on: boolean; note: string | nul
  * The host's own `name`, while this copy's mount deferred to a host that still
  * holds the page, so the page's calls move the host's knobs. Null otherwise.
  */
-function hosted<K extends keyof DevknobsApi>(name: K): DevknobsApi[K] | null {
+function hosted<K extends keyof KnobsApi>(name: K): KnobsApi[K] | null {
   if (!hostedBy) return null;
   const host = hostOf(window);
   if (!host?.api || host.release !== hostedBy.release) return null;
   const found: unknown = Reflect.get(host.api, name);
-  return typeof found === "function" ? (found as DevknobsApi[K]) : null;
+  return typeof found === "function" ? (found as KnobsApi[K]) : null;
 }
 
 /**
@@ -524,7 +524,7 @@ export { holdInTopLayer, LAYER, type TopLayerHold } from "./engine/toplayer";
  */
 export const setNative = engine.setNative;
 
-export function getState(): DevknobsState {
+export function getState(): KnobsState {
   return (hosted("getState") ?? engine.getState)();
 }
 
@@ -533,7 +533,7 @@ export function getState(): DevknobsState {
  * value it does not take, throws a TypeError, and then nothing changes. The
  * whole of `getState()` goes back in.
  */
-export function setState(patch: DevknobsStatePatch): DevknobsState {
+export function setState(patch: KnobsStatePatch): KnobsState {
   const host = hosted("setState");
   if (host) return host(patch);
   checkPatch(patch);
@@ -548,7 +548,7 @@ export function replay(): void {
   (hosted("replay") ?? engine.replay)();
 }
 
-export function ready(): Promise<DevknobsState> {
+export function ready(): Promise<KnobsState> {
   return (hosted("ready") ?? engine.ready)();
 }
 
@@ -632,10 +632,17 @@ export function forceState(target: Element | string | null, states: readonly str
 const api = { mount, unmount, getState, setState, reset, replay, grab, describe, ready, edits, setEdits, undoEdit, forceState };
 
 /** What `mount` puts at `window.devknobs`, for agents that run code in the page. */
-export type DevknobsApi = typeof api;
+export type KnobsApi = typeof api;
+
+/** @deprecated use KnobsApi */
+export type DevknobsApi = KnobsApi;
+/** @deprecated use KnobsState */
+export type DevknobsState = KnobsState;
+/** @deprecated use KnobsStatePatch */
+export type DevknobsStatePatch = KnobsStatePatch;
 
 declare global {
   interface Window {
-    devknobs?: DevknobsApi;
+    devknobs?: KnobsApi;
   }
 }

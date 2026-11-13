@@ -4,8 +4,8 @@ import type {
   ClockMode,
   ConnectionValue,
   ContrastValue,
-  DevknobsState,
-  DevknobsStatePatch,
+  KnobsState,
+  KnobsStatePatch,
   DevIconValue,
   DirValue,
   EdgeValue,
@@ -73,7 +73,7 @@ const MOVED_ROWS = new Map([
   ["grabColor", "debug"],
 ]);
 
-export const DEFAULT_STATE: DevknobsState = {
+export const DEFAULT_STATE: KnobsState = {
   scheme: "system",
   motion: "system",
   speed: 1,
@@ -255,7 +255,7 @@ function placeOf(value: unknown, fallback: PanelPlace): PanelPlace {
 }
 
 /** The place of a state's panel, as `PLACE_KEY` keeps it. */
-export function placeText(state: DevknobsState): string {
+export function placeText(state: KnobsState): string {
   const { side, y, top, edge, tab, docked } = state.panel;
   return JSON.stringify(stamped({ side, y, top, edge, tab, docked }, PLACE_VERSION));
 }
@@ -265,7 +265,7 @@ export function placeText(state: DevknobsState): string {
  * panel's place falls back to `place`, the one kept across sessions, before
  * the defaults, so the session's own place wins where it has one.
  */
-export function parse(json: string | null | undefined, place?: string | null): DevknobsState {
+export function parse(json: string | null | undefined, place?: string | null): KnobsState {
   const home = placeOf(read(place, PLACE_VERSION), DEFAULT_STATE.panel);
   const state = record(read(json, STATE_VERSION));
   const locale = record(state.locale);
@@ -367,7 +367,7 @@ export function parse(json: string | null | undefined, place?: string | null): D
  * What reset all leaves: every knob at its default and the default rows
  * listed, with the panel where it is, pinned or not.
  */
-export function resetState(state: DevknobsState): DevknobsState {
+export function resetState(state: KnobsState): KnobsState {
   return { ...DEFAULT_STATE, panel: { ...state.panel, pinned: [...DEFAULT_PINNED] } };
 }
 
@@ -376,7 +376,7 @@ export function resetState(state: DevknobsState): DevknobsState {
  * takes a new anchor when it moves. A device brings its size, and the device
  * fields follow the size the frame ends up with.
  */
-export function merge(state: DevknobsState, patch: DevknobsStatePatch): DevknobsState {
+export function merge(state: KnobsState, patch: KnobsStatePatch): KnobsState {
   const held = hold(state, patch);
   return settle({
     ...state,
@@ -399,13 +399,13 @@ function item(kind: "session" | "local", key: string): string | null {
   }
 }
 
-export function load(): DevknobsState {
+export function load(): KnobsState {
   const state = parse(item("session", STORAGE_KEY), item("local", PLACE_KEY));
   // The host keeps real phone mode for every tab and hands it over as the page loads: a stored one is ignored.
   return { ...state, panel: { ...state.panel, realPhone: DEFAULT_STATE.panel.realPhone } };
 }
 
-export function save(state: DevknobsState): void {
+export function save(state: KnobsState): void {
   try {
     // Real phone mode is the host's, for every tab: the session keeps none.
     const { realPhone: _, ...panel } = state.panel;
@@ -420,7 +420,7 @@ export function save(state: DevknobsState): void {
  * it, so a tab that merely lays the panel out again leaves the place another
  * tab put there alone.
  */
-export function keepPlace(state: DevknobsState): void {
+export function keepPlace(state: KnobsState): void {
   try {
     webStorage("local")?.setItem(PLACE_KEY, placeText(state));
   } catch {

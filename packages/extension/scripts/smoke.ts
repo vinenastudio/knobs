@@ -10,7 +10,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import { type DevknobsStatePatch, PRESETS } from '@vinena/knobs';
+import { type KnobsStatePatch, PRESETS } from '@vinena/knobs';
 import { type Browser, chromium, type Frame, type Page, type Worker } from 'playwright-core';
 import type { KnobState } from '../src/knobs.ts';
 
@@ -587,7 +587,7 @@ const isDark = (tab: Page, dark: boolean) =>
   tab.waitForFunction((dark) => document.documentElement.classList.contains('dark') === dark, dark);
 
 /** Set knobs through the panel's own api, as an agent would. */
-const set = (tab: Page, patch: DevknobsStatePatch) =>
+const set = (tab: Page, patch: KnobsStatePatch) =>
   tab.evaluate((patch) => {
     window.devknobs!.setState(patch);
   }, patch);
@@ -597,7 +597,7 @@ const set = (tab: Page, patch: DevknobsStatePatch) =>
  * devknobs. The reload comes once the extension has taken its rule off, after `set` returns,
  * or while it runs, which takes its page away from under it.
  */
-async function setAndReload(tab: Page, patch: DevknobsStatePatch) {
+async function setAndReload(tab: Page, patch: KnobsStatePatch) {
   const loaded = tab.waitForEvent('load', { timeout: 15_000 });
   await set(tab, patch).catch((error: unknown) => {
     if (!String(error).includes('Execution context was destroyed')) {
@@ -2783,7 +2783,7 @@ async function uaRequests() {
     await tab.waitForFunction(() => document.querySelector('[data-devknobs="viewport"]') === null);
 
     // A page loaded as another browser loads again as Chrome once that browser goes.
-    const reloadsAsChrome = async (label: string, off: DevknobsStatePatch) => {
+    const reloadsAsChrome = async (label: string, off: KnobsStatePatch) => {
       uaSeen.clear();
       await setAndReload(tab, off);
       log(`ua: ${label}, then off`, uaSeen.get('page'));

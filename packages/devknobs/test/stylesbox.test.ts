@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import { DEFAULT_STATE } from "../src/engine/store";
 import type { BoxRing } from "../src/grab/boxmodel";
 import type { Inspection, StyleBlock } from "../src/styles/types";
-import type { DevknobsState } from "../src/types";
+import type { KnobsState } from "../src/types";
 import type { BoxReading } from "../src/ui/boxdiagram";
 import { createPrefs, PREFS_KEY, PREFS_VERSION, type StylesMode } from "../src/ui/prefs";
 import { createStylesView, SETTLE, type StylesPage, type StylesView } from "../src/ui/stylesview";
@@ -85,7 +85,7 @@ let inspected: number;
 let areas: (BoxRing | null)[];
 /** What the view boxed on the page, in order. */
 let outlined: (Element | null)[];
-let knobs: ((state: DevknobsState) => void)[];
+let knobs: ((state: KnobsState) => void)[];
 let view: StylesView | null = null;
 
 const page: StylesPage = {
