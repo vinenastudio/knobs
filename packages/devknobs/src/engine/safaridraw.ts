@@ -11,6 +11,7 @@ import {
   type StatusBar,
   type StatusColumn,
 } from "./browserui";
+import { turn } from "./devices";
 import type { Rect } from "./mock";
 
 /**
@@ -493,11 +494,14 @@ function pressOf(glyph: Glyph, actions: Actions): (() => void) | undefined {
   return undefined;
 }
 
+/** The box each glyph is drawn in, centered on its mark, in css px. */
+const GLYPH_BOX = 30;
+
 /** A glyph at its mark, placed inside a box whose corner is at `origin`. */
 function glyphIn(mark: Mark, origin: Rect, className: string, actions: Actions): SVGSVGElement {
-  const svg = glyphAt(mark, GLYPHS, 30, className, pressOf(mark.glyph, actions));
-  svg.style.left = `${mark.x - origin.x - 15}px`;
-  svg.style.top = `${mark.y - origin.y - 15}px`;
+  const svg = glyphAt(mark, GLYPHS, GLYPH_BOX, className, pressOf(mark.glyph, actions));
+  svg.style.left = `${mark.x - origin.x - GLYPH_BOX / 2}px`;
+  svg.style.top = `${mark.y - origin.y - GLYPH_BOX / 2}px`;
   return svg;
 }
 
@@ -506,11 +510,40 @@ export function domainOf(host: string): string {
   return host.replace(/:\d+$/, "");
 }
 
-/** The minimized domain pill's box: its domain's advance and the pill's room either side. */
-export function pillBox(pill: Shape, host: string): Rect {
-  const size = pill.text?.size ?? SAFARI_TEXT.pill;
-  const width = Math.round(textWidth(domainOf(host), size, DOMAIN_WEIGHT)) + (pill.text?.pad ?? 0);
-  return { x: pill.x - width / 2, y: pill.y, width, height: pill.height };
+/** How far the minimized pill keeps in from the screen's sides, as Top's address does. */
+const PILL_MARGIN = 16;
+
+/**
+ * The room the domain has in `shape`, in px of its own text size, on a
+ * screen `width` wide: in the minimized pill, the domain's advance, or as much
+ * as the pill gets PILL_MARGIN in from the screen's sides; in an address, as
+ * wide as it goes centered, clear of the boxes of the glyphs at its ends.
+ */
+export function domainRoom(shape: Shape, host: string, width: number): number {
+  const middle = shape.text?.x ?? shape.x + shape.width / 2;
+  if (shape.kind === "pill") {
+    const text = Math.ceil(textWidth(domainOf(host), shape.text?.size ?? SAFARI_TEXT.pill, DOMAIN_WEIGHT));
+    const most = 2 * (Math.min(middle, width - middle) - PILL_MARGIN) - (shape.text?.pad ?? 0);
+    return Math.max(0, Math.min(text, most));
+  }
+  let half = shape.width / 2;
+  for (const { x } of shape.marks) {
+    half = Math.min(half, Math.abs(x - middle) - GLYPH_BOX / 2);
+  }
+  return Math.max(0, 2 * half);
+}
+
+/** The minimized domain pill's box on a screen `width` wide: its domain's room and the pill's either side. */
+export function pillBox(pill: Shape, host: string, width: number): Rect {
+  const box = domainRoom(pill, host, width) + (pill.text?.pad ?? 0);
+  return { x: pill.x - box / 2, y: pill.y, width: box, height: pill.height };
+}
+
+/** How big `node` is drawn against its laid out size, partway through a transition of its scale. */
+function drawnScale(node: HTMLElement): number {
+  if (typeof getComputedStyle !== "function") return 1;
+  const scale = /^matrix\(([^,]+),/.exec(getComputedStyle(node).transform)?.[1];
+  return Number(scale) || 1;
 }
 
 /** A color's hue in degrees, its saturation and its lightness, both from 0 to 1. */
@@ -707,14 +740,17 @@ export function buildSafari(full: Bars, mini: Bars, look: Look, actions: Actions
     : null;
   let surface: HTMLElement | null = null;
   let domain: HTMLElement | null = null;
+  const screen = turn(full.screen, full.orientation).width;
+  /** The domains beside the surface's, and the shape each is in. */
+  const texts: { node: HTMLElement; shape: Shape }[] = [];
   const glyphs: { node: SVGSVGElement; glyph: Glyph }[] = [];
   const keep = (node: SVGSVGElement, glyph: Glyph) => {
     glyphs.push({ node, glyph });
     return node;
   };
+  const field = full.shapes.find((shape) => shape.kind === "field");
   if (main && pill) {
     surface = el("div", main.kind === "card" ? "surface from-card" : "surface");
-    const field = full.shapes.find((shape) => shape.kind === "field");
     if (field) {
       // Bottom: the field inside the card, and the buttons under it, leave.
       const inner = el("div", "field full");
@@ -738,8 +774,6 @@ export function buildSafari(full: Bars, mini: Bars, look: Look, actions: Actions
     }
     domain = el("div", "domain");
     const text = (field ?? main).text;
-    // Clear of the page menu and reload at its ends.
-    domain.style.maxWidth = `${(field ?? main).width - 96}px`;
     domain.dataset.top = String((text?.y ?? main.y) - main.y);
     surface.append(domain);
     const expand = actions.expand;
@@ -776,7 +810,7 @@ export function buildSafari(full: Bars, mini: Bars, look: Look, actions: Actions
     if (shape.text) {
       const text = el("div", "domain");
       text.style.top = `${shape.text.y - shape.y}px`;
-      text.style.maxWidth = `${shape.width - 96}px`;
+      texts.push({ node: text, shape });
       side.append(text);
     }
     root.append(side);
@@ -797,6 +831,7 @@ export function buildSafari(full: Bars, mini: Bars, look: Look, actions: Actions
       for (const text of Array.from(root.querySelectorAll<HTMLElement>(".domain"))) {
         text.textContent = domainOf(sight.host);
       }
+      for (const { node, shape } of texts) node.style.maxWidth = `${domainRoom(shape, sight.host, screen)}px`;
       for (const { node, box } of sides) tintGlass(node, box, sight);
       for (const { node, glyph } of glyphs) {
         const off =
@@ -805,13 +840,28 @@ export function buildSafari(full: Bars, mini: Bars, look: Look, actions: Actions
         node.classList.toggle("press", !off && pressOf(glyph, actions) !== undefined);
       }
       if (surface && domain && main && pill) {
-        const box = minimized ? pillBox(pill, sight.host) : main;
+        const box = minimized ? pillBox(pill, sight.host, screen) : main;
         placeBox(surface, box, minimized ? pill.radius : main.radius);
         tintGlass(surface, box, sight);
+        // The domain is laid out at the size it is shown, in the room of the same shape.
+        const shown = minimized ? pill : (field ?? main);
+        const size = shown.text?.size ?? SAFARI_TEXT.field;
+        const was = Number(domain.dataset.size) || size;
+        // Read before anything changes, so a morph turned back midway goes on from where it is.
+        const drawn = was === size ? 1 : drawnScale(domain);
+        domain.dataset.size = String(size);
+        domain.style.fontSize = `${size}px`;
+        domain.style.maxWidth = `${domainRoom(shown, sight.host, screen)}px`;
+        if (was !== size) {
+          // It starts as big as it was drawn at the old size and scales to the new one.
+          domain.style.transition = "none";
+          domain.style.transform = `translate(-50%, -50%) scale(${(drawn * was) / size})`;
+          void domain.offsetWidth;
+          domain.style.transition = "";
+        }
         const top = minimized ? pill.height / 2 : Number(domain.dataset.top);
         domain.style.top = `${top}px`;
-        const scale = minimized ? (pill.text?.size ?? SAFARI_TEXT.pill) / SAFARI_TEXT.field : 1;
-        domain.style.transform = `translate(-50%, -50%) scale(${scale})`;
+        domain.style.transform = "translate(-50%, -50%)";
       }
     },
     loading(on, still) {
