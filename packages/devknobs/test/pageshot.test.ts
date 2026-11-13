@@ -1099,9 +1099,9 @@ describe("copyPage, of a page with pictures and with what devknobs put on it", (
       new Tag("script"),
     ]);
     expect(copy.querySelectorAll("[data-devknobs]")).toEqual([]);
-    expect(copy.all().map((node) => node.localName)).toEqual(["head", "style", "body", "main", "p"]);
-    // The one style left is the copy's own, with the page's rules.
-    expect(copy.querySelector("style")?.attributes.has("data-devknobs")).toBe(false);
+    expect(copy.all().map((node) => node.localName)).toEqual(["head", "style", "style", "body", "main", "p"]);
+    // The styles left are the copy's own: the page's rules, and one that hides the controls a drawing puts on a video.
+    expect(copy.querySelectorAll("style").map((style) => style.attributes.has("data-devknobs"))).toEqual([false, false]);
     // The page itself keeps all of it.
     expect(live.querySelectorAll("[data-devknobs]").length).toBe(3);
   });

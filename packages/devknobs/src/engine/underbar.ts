@@ -1,4 +1,4 @@
-import { bandMedia, bandSpan, forgetPixels, inSpan, meets, type Overlay, overlayOf, type Span } from "./bandmedia";
+import { bandMedia, bandSpan, drawAbove, forgetPixels, inSpan, meets, type Overlay, overlayOf, raiseOf, redrawLive, type Span } from "./bandmedia";
 import { el, type Look, place } from "./browserkit";
 import type { Bars } from "./browserui";
 import type { Rect } from "./mock";
@@ -39,6 +39,9 @@ export const UNDERBAR_CSS = `
   will-change: transform;
 }
 `;
+
+/** What a picture or video near the band tells when it shows something new: it came, it has a frame, it was moved to another, it plays again. */
+const LOADS = ["load", "loadeddata", "seeked", "playing"];
 
 /** The least time between two pictures of a page that keeps changing, in ms. */
 const GAP = 250;
@@ -162,12 +165,15 @@ export function pictureOf(frame: HTMLIFrameElement, band = 0, loaded: () => void
   const media = bandMedia(doc, view, span, loaded, scrolled);
   /** What goes into the copies of the pictures, once the copy's viewport lengths are px: data has none. */
   const puts: (() => void)[] = [];
+  /** The copies of what shows over a picture the frame may not read. */
+  const above: Element[] = [];
   const copy = copyPage(
     frame,
     (node) => view.getComputedStyle(node).position === "fixed",
     (node, copied) => {
       const put = media.fills.get(node);
       if (put) puts.push(() => put(copied));
+      if (media.above.has(node)) above.push(copied);
     },
   );
   if (!copy) return null;
@@ -198,8 +204,16 @@ export function pictureOf(frame: HTMLIFrameElement, band = 0, loaded: () => void
     width,
     height: full,
     span: shows ? span : null,
-    overlay: overlayOf(media.unread, span, width, ratio),
+    overlay: overlayOf(media.unread, span, width, ratio, above.length > 0 ? svgUrl(drawing(aboveOnly(copy, above), width, full, sized, zoom)) : null),
   };
+}
+
+/** The markup of `copy` with all of it hidden but `shown`, which is laid out and drawn as before. */
+function aboveOnly(copy: Element, shown: Element[]): string {
+  const restyle = (node: Element, css: string) => node.setAttribute("style", `${node.getAttribute("style") ?? ""};${css}`);
+  restyle(copy, "visibility:hidden !important");
+  for (const node of shown) restyle(node, "visibility:visible !important");
+  return new XMLSerializer().serializeToString(copy);
 }
 
 export interface Underbar {
@@ -242,7 +256,7 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
   };
   /** The band's height in the document's css px, `across` of them as wide as the band. */
   const bandOf = (across: number) => (wide > 0 ? (high * across) / wide : 0);
-  /** A picture or video near the band came in, which no change to the page tells of. */
+  /** A picture or video near the band came in or shows another frame, which no change to the page tells of. */
   const onLoad = (event: Event) => {
     try {
       const view = frame.contentWindow;
@@ -259,12 +273,39 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
   const onScroll = (event: Event) => {
     if (event.target === watched?.body) move();
   };
+  /** Let go of the px of `canvas`, where there is one. */
+  const spend = (canvas: HTMLCanvasElement | null) => {
+    if (!canvas) return;
+    canvas.width = 0;
+    canvas.height = 0;
+  };
+  /** What shows over the pictures on the cover, drawn once, kept while a video on it plays. */
+  let raised: HTMLCanvasElement | null = null;
   const dropCover = () => {
+    spend(raised);
+    raised = null;
     if (!cover) return;
     cover.remove();
     cover.width = 0;
     cover.height = 0;
     cover = null;
+  };
+  /** Draw each video that plays on `overlay` again at each of its frames, for as long as it is the cover. */
+  const follow = (overlay: Overlay) => {
+    for (const one of overlay.live) {
+      const video = one.live;
+      if (!video) continue;
+      const ask = () => {
+        if (typeof video.requestVideoFrameCallback === "function") video.requestVideoFrameCallback(step);
+        else window.requestAnimationFrame(step);
+      };
+      const step = () => {
+        if (cover !== overlay.canvas) return;
+        if (!band.hidden) redrawLive(overlay, one, raised);
+        ask();
+      };
+      ask();
+    }
   };
 
   const keyOf = (): string | null => {
@@ -274,14 +315,12 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
       if (!doc?.documentElement || !view) return null;
       if (doc !== watched) {
         observer?.disconnect();
-        watched?.removeEventListener("load", onLoad, true);
-        watched?.removeEventListener("loadeddata", onLoad, true);
+        for (const type of LOADS) watched?.removeEventListener(type, onLoad, true);
         watched?.removeEventListener("scroll", onScroll, true);
         const next = new MutationObserver(again);
         next.observe(doc, { subtree: true, childList: true, attributes: true, characterData: true });
         // Loads go on in the capture, as they do not bubble.
-        doc.addEventListener("load", onLoad, true);
-        doc.addEventListener("loadeddata", onLoad, true);
+        for (const type of LOADS) doc.addEventListener(type, onLoad, true);
         // A scroll does not bubble either.
         doc.addEventListener("scroll", onScroll, true);
         observer = next;
@@ -341,12 +380,25 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
     }
     const fresh = new Image();
     let drawn = false;
+    /** What shows over the pictures on the new cover, drawn once. */
+    let lifted: HTMLCanvasElement | null = null;
     if (next) {
       fresh.src = next.src;
       drawn = await fresh.decode().then(
         () => true,
         () => false,
       );
+      const above = next.overlay?.above;
+      if (drawn && next.overlay && above) {
+        const over = new Image();
+        over.src = above.src;
+        const decoded = await over.decode().then(
+          () => true,
+          () => false,
+        );
+        lifted = decoded ? raiseOf(next.overlay, over) : null;
+        if (lifted) drawAbove(next.overlay, lifted);
+      }
     }
     cost = performance.now() - start;
     last = performance.now();
@@ -354,6 +406,7 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
     painting = false;
     if (!next || !drawn) {
       if (next?.overlay) next.overlay.canvas.width = 0;
+      spend(lifted);
       return;
     }
     fresh.alt = "";
@@ -364,6 +417,10 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
     dropCover();
     cover = next.overlay?.canvas ?? null;
     if (cover) band.append(cover);
+    // Kept only while a video on the cover plays and has it drawn back over each frame.
+    if (next.overlay?.live.length) raised = lifted;
+    else spend(lifted);
+    if (next.overlay) follow(next.overlay);
     taken = key;
     fit();
     // The page may have changed while it was pictured.
@@ -404,7 +461,8 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
       wide = rect.width;
       high = rect.height;
       band.style.transform = zoom === 1 ? "" : `scale(${zoom})`;
-      band.style.background = look.background;
+      // As a picture, not a color: Chrome smooths a color's top edge into the frame's last row of px where the band starts part way down one, and lines a picture up with the px.
+      band.style.background = `linear-gradient(${look.background}, ${look.background})`;
       const key = keyOf();
       if (key !== taken || changed) soon();
       fit();
@@ -418,8 +476,7 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
       clearTimeout(waiting);
       observer?.disconnect();
       observer = null;
-      watched?.removeEventListener("load", onLoad, true);
-      watched?.removeEventListener("loadeddata", onLoad, true);
+      for (const type of LOADS) watched?.removeEventListener(type, onLoad, true);
       watched?.removeEventListener("scroll", onScroll, true);
       watched = null;
       dropCover();

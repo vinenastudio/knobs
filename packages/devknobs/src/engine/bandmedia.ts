@@ -9,8 +9,11 @@ import { drawMedia, type FitStyle, MEDIA, type Media, type MediaNode, mediaOf, s
  * it as it does the page's. One from another origin is asked for again with
  * CORS, which most hosts allow, so it is read too. A picture, video or
  * drawing the frame still may not read is drawn by hand over the copy, in its
- * box, cut off where what holds it cuts it off, but only where nothing else
- * of the page shows over it, as the overlay would cover that. A background
+ * box, cut off where what holds it cuts it off, and what of the page shows
+ * over it, a caption or a button, is drawn back over it from a drawing of the
+ * copy with all else hidden. A video with no frame yet, or one that has not
+ * played, shows its poster, which is read as a picture is. A video that
+ * plays is drawn over the copy too, again at each of its frames. A background
  * picture the frame may not read is left out. Only those near the band are
  * read, and each picture once at the size it shows at. A request the host
  * refuses shows as an error in the page's console, as any way of asking
@@ -289,6 +292,36 @@ function probeOf(doc: Document, address: string, cors: boolean, loaded: () => vo
   return null;
 }
 
+/**
+ * A picture in `doc` of what `address` holds, asked for without CORS, kept in
+ * `used`, to draw over the copy where it may not be read. The page has it
+ * already, so the browser mostly has it at once; where not, `loaded` is told
+ * when it comes. Null where it failed to come before.
+ */
+function plainOf(doc: Document, address: string, loaded: () => void, used: Map<string, HTMLImageElement>): HTMLImageElement | null {
+  const key = `plain|${address}`;
+  const known = used.get(key) ?? probes.get(key);
+  if (known && known.ownerDocument === doc) {
+    used.set(key, known);
+    return known;
+  }
+  if (refused.has(key)) return null;
+  const image = doc.createElement("img");
+  image.src = address;
+  if (!image.complete) {
+    image.addEventListener("load", loaded, { once: true });
+    image.addEventListener("error", () => refuse(key, null, false), { once: true });
+  }
+  used.set(key, image);
+  return image;
+}
+
+/** Does `video` show its poster, not a frame: it has none yet, or it has not played and stands at its start. */
+function showsPoster(video: HTMLVideoElement): boolean {
+  if (!video.poster) return false;
+  return video.readyState < 2 || (video.paused && video.played.length === 0 && video.currentTime === 0);
+}
+
 /** `value`, a list such as computed backgrounds are, cut at the commas outside its brackets. */
 export function layersOf(value: string): string[] {
   const parts: string[] = [];
@@ -336,6 +369,10 @@ export interface Unread {
   made?: HTMLCanvasElement;
   /** The box of what holds it and cuts it off, and the radius of its corners, where something does. */
   clip?: { rect: Box; radius: number };
+  /** Does something else of the page show over it, to draw back over it? */
+  covered?: boolean;
+  /** The video it is, where it plays, to draw again at each of its frames. */
+  live?: HTMLVideoElement;
 }
 
 /** What goes into the copy of the page near the band, and what is drawn over it. */
@@ -344,6 +381,8 @@ export interface BandMedia {
   fills: Map<Element, (copy: Element) => void>;
   /** What the frame may not read, in the order to draw it. */
   unread: Unread[];
+  /** What of the page shows over what the frame may not read, drawn back over it. */
+  above: Set<Element>;
 }
 
 /**
@@ -388,27 +427,62 @@ interface Pending {
 }
 
 /**
- * Those of `pending` that something else of the page in `doc`, not knobs'
- * own (`own`), may show over. An overlay is drawn over the whole copy, so it
- * would cover a caption or a heading laid over the picture. To keep simple
- * and safe, any element that shows, other than the picture itself and what
- * holds it, whose box meets the picture's counts, wherever it stacks; what
- * is pinned to the screen does not, as the copy leaves it out.
+ * How high `node` stacks among what else `top` holds, as near as its own
+ * style and that of what holds it under `top` tell: 0 in the flow, below it
+ * for a negative `z-index`, above it where it or what holds it is positioned
+ * or turned, and higher for a higher `z-index`. The outermost that is lifted
+ * so sets it, as it makes the stacking context the rest paints in.
  */
-function covered(doc: Document, view: Window, own: string, pending: Pending[]): Set<Element> {
+function rankOf(node: Element, top: Element, view: Window): number {
+  let rank = 0;
+  for (let at: Element | null = node; at && at !== top; at = at.parentElement) {
+    const style = view.getComputedStyle(at);
+    const z = Number.parseInt(style.zIndex, 10);
+    const lifted = style.position !== "static" || Number.isFinite(z) || (style.transform || "none") !== "none";
+    if (lifted) rank = !Number.isFinite(z) || z === 0 ? 1 : z < 0 ? z : 1 + z;
+  }
+  return rank;
+}
+
+/** Does `node`, after `media` in the document where `after` has it, paint over it? Stacked higher, or as high and later. */
+function paintsOver(node: Element, media: Element, after: boolean, view: Window): boolean {
+  let top = node.parentElement;
+  while (top && !top.contains(media)) top = top.parentElement;
+  if (!top) return false;
+  const rank = rankOf(node, top, view) - rankOf(media, top, view);
+  return rank > 0 || (rank === 0 && after);
+}
+
+/**
+ * Those of `pending` that something else of the page in `doc`, not knobs'
+ * own (`own`), shows over, and what does. An overlay is drawn over the whole
+ * copy, so it would cover a caption, a heading or a button laid over the
+ * picture: those are drawn back over it. An element that shows, other than
+ * the picture itself and what holds it, whose box meets the picture's and
+ * that paints over it counts; what is pinned to the screen does not, as the
+ * copy leaves it out.
+ */
+function covered(doc: Document, view: Window, own: string, pending: Pending[]): { over: Set<Element>; above: Set<Element> } {
   const over = new Set<Element>();
+  const above = new Set<Element>();
+  const nodes = new Set(pending.map((one) => one.node));
+  /** The pictures met so far, in the document's order: what comes after one is after it. */
+  const met = new Set<Element>();
   const all = doc.documentElement.getElementsByTagName("*");
-  for (let index = 0; index < all.length && index < MOST && over.size < pending.length; index++) {
+  for (let index = 0; index < all.length && index < MOST; index++) {
     const node = all[index];
     if (!node) continue;
+    if (nodes.has(node)) met.add(node);
     const rect = node.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) continue;
     for (const one of pending) {
-      if (over.has(one.node) || node === one.node || node.contains(one.node) || !overlap(rect, one.rect)) continue;
-      if (visible(node) && !node.closest(own) && !pinned(node, view)) over.add(one.node);
+      if (node === one.node || node.contains(one.node) || !overlap(rect, one.rect)) continue;
+      if (!visible(node) || node.closest(own) || pinned(node, view) || !paintsOver(node, one.node, met.has(one.node), view)) continue;
+      over.add(one.node);
+      above.add(node);
     }
   }
-  return over;
+  return { over, above };
 }
 
 /**
@@ -431,10 +505,52 @@ export function bandMedia(doc: Document, view: Window, span: Span, loaded: () =>
     fills.set(node, before ? (copy) => (before(copy), put(copy)) : put);
   };
   const restyle = (copy: Element, css: string) => copy.setAttribute("style", `${copy.getAttribute("style") ?? ""};${css}`);
+  /** Put `data`, what the video or drawing `node` shows, `media` px as made, on its copy as a background, fitted as the page fits it. */
+  const fill = (node: MediaNode, rect: DOMRect, style: CSSStyleDeclaration, media: Media, data: string) => {
+    const px = (value: string) => Number.parseFloat(value) || 0;
+    const wide = rect.width - px(style.borderLeftWidth) - px(style.paddingLeft) - px(style.borderRightWidth) - px(style.paddingRight);
+    const tall = rect.height - px(style.borderTopWidth) - px(style.paddingTop) - px(style.borderBottomWidth) - px(style.paddingBottom);
+    const picture = sizedPicture(data, media.width, media.height, style.imageRendering);
+    // A copy of a video has no frame to be as large as, so it is told its size: its frame's where it has one, else its poster's.
+    const size = "videoWidth" in node ? (node.videoWidth > 0 ? { width: node.videoWidth, height: node.videoHeight } : media) : null;
+    add(node, (copy) => {
+      if (size && !copy.hasAttribute("width") && !copy.hasAttribute("height")) {
+        copy.setAttribute("width", String(size.width));
+        copy.setAttribute("height", String(size.height));
+      }
+      restyle(
+        copy,
+        `background-image:url("${picture}") !important;background-size:${sizeOf(style.objectFit, media, wide, tall)} !important;` +
+          `background-position:${style.objectPosition} !important;background-repeat:no-repeat !important;background-origin:content-box !important`,
+      );
+    });
+  };
 
   for (const node of doc.querySelectorAll<MediaNode>(MEDIA)) {
     const rect = node.getBoundingClientRect();
     if (!meets(rect, scrollY, span) || node.closest(own)) continue;
+    if ("videoWidth" in node && showsPoster(node)) {
+      if (pinned(node, view)) continue;
+      // Its poster, read as a picture is: with CORS only where it is of another origin, which asks without it first.
+      const address = node.poster;
+      const style = view.getComputedStyle(node);
+      const cors = !sameOrigin(address, doc.baseURI, origin);
+      const probe = probeOf(doc, address, cors, loaded, used);
+      const media = probe && mediaOf(probe);
+      if (probe && media) {
+        const size = readSize(media, rect.width, rect.height, ratio);
+        const data = keptPixels(`${address}|${cors ? "cors|" : ""}${size.width}x${size.height}`, () => readPixels(probe, size));
+        if (data !== null) {
+          fill(node, rect, style, media, data);
+          continue;
+        }
+      }
+      // One the frame may not read is drawn over the copy, from a picture asked for as the page asked for it.
+      const plain = visible(node) ? plainOf(doc, address, loaded, used) : null;
+      const shown = plain && mediaOf(plain);
+      if (shown) pending.push({ node, rect, draw: () => ({ media: shown, rect: boxOf(rect), style, clip: clipOf(node, doc, view, boxOf) }) });
+      continue;
+    }
     const media = mediaOf(node);
     if (!media || pinned(node, view)) continue;
     const style = view.getComputedStyle(node);
@@ -482,30 +598,19 @@ export function bandMedia(doc: Document, view: Window, span: Span, loaded: () =>
       });
       continue;
     }
+    // A video that plays is drawn over the copy at each of its frames, which no picture of the copy keeps up with.
+    if ("videoWidth" in node && !node.paused) {
+      if (visible(node)) pending.push({ node, rect, draw: () => ({ media, rect: boxOf(rect), style, clip: clipOf(node, doc, view, boxOf), live: node }) });
+      continue;
+    }
     const size = readSize(media, rect.width, rect.height, ratio);
-    // A video or a drawing may show something else by the next picture, so it is read each time.
+    // A paused video or a drawing may show something else by the next picture, so it is read each time.
     const data = readPixels(node, size);
     if (data === null) {
       if (visible(node)) pending.push({ node, rect, draw: () => ({ media, rect: boxOf(rect), style, clip: clipOf(node, doc, view, boxOf) }) });
       continue;
     }
-    const px = (value: string) => Number.parseFloat(value) || 0;
-    const wide = rect.width - px(style.borderLeftWidth) - px(style.paddingLeft) - px(style.borderRightWidth) - px(style.paddingRight);
-    const tall = rect.height - px(style.borderTopWidth) - px(style.paddingTop) - px(style.borderBottomWidth) - px(style.paddingBottom);
-    const picture = sizedPicture(data, media.width, media.height, style.imageRendering);
-    const video = "videoWidth" in node;
-    add(node, (copy) => {
-      // A copy of a video has no frame to be as large as, so it is told its size.
-      if (video && !copy.hasAttribute("width") && !copy.hasAttribute("height")) {
-        copy.setAttribute("width", String(media.width));
-        copy.setAttribute("height", String(media.height));
-      }
-      restyle(
-        copy,
-        `background-image:url("${picture}") !important;background-size:${sizeOf(style.objectFit, media, wide, tall)} !important;` +
-          `background-position:${style.objectPosition} !important;background-repeat:no-repeat !important;background-origin:content-box !important`,
-      );
-    });
+    fill(node, rect, style, media, data);
   }
 
   const all = doc.documentElement.getElementsByTagName("*");
@@ -540,28 +645,68 @@ export function bandMedia(doc: Document, view: Window, span: Span, loaded: () =>
   }
   probes = used;
 
-  const over = pending.length > 0 ? covered(doc, view, own, pending) : new Set<Element>();
+  const { over, above } = pending.length > 0 ? covered(doc, view, own, pending) : { over: new Set<Element>(), above: new Set<Element>() };
   const unread: Unread[] = [];
   for (const one of pending) {
-    if (over.has(one.node)) continue;
     const drawn = one.draw();
-    if (drawn) unread.push(drawn);
+    if (drawn) unread.push(over.has(one.node) ? { ...drawn, covered: true } : drawn);
   }
-  return { fills, unread };
+  return { fills, unread, above };
 }
 
-/** What the frame may not read near the band, drawn by hand, and the stretch of the document it covers. */
+/** What the frame may not read near the band, or a video that plays there, drawn by hand, and the stretch of the document it covers. */
 export interface Overlay {
   canvas: HTMLCanvasElement;
   span: Span;
+  /** The document's width in css px, and the canvas's px to a css px. */
+  width: number;
+  ratio: number;
+  /** The videos on it that play, to draw again at each of their frames. */
+  live: Unread[];
+  /**
+   * What of the page shows over it, to draw back over it once decoded: a
+   * drawing of the copy with all else hidden, and the pictures it shows over.
+   */
+  above: { src: string; parts: Unread[] } | null;
+}
+
+/** Cut `pen` off at the box `one` shows in, and at what holds it, where something does. */
+function clipTo(pen: CanvasRenderingContext2D, one: Pick<Unread, "rect" | "clip">): void {
+  const { rect, clip } = one;
+  if (clip) {
+    pen.beginPath();
+    pen.roundRect(clip.rect.left, clip.rect.top, clip.rect.width, clip.rect.height, clip.radius);
+    pen.clip();
+  }
+  pen.beginPath();
+  pen.rect(rect.left, rect.top, rect.width, rect.height);
+  pen.clip();
+}
+
+/** Draw `one` with `pen`, in its box, cut off where what holds it cuts it off. */
+function drawOne(pen: CanvasRenderingContext2D, one: Unread): void {
+  pen.save();
+  try {
+    if (one.clip) {
+      pen.beginPath();
+      pen.roundRect(one.clip.rect.left, one.clip.rect.top, one.clip.rect.width, one.clip.rect.height, one.clip.radius);
+      pen.clip();
+    }
+    drawMedia(pen, one.media, one.rect, one.style);
+  } catch {
+    // A picture that will not draw is left out.
+  }
+  pen.restore();
 }
 
 /**
  * Draw `unread`, in a document `width` css px wide, on a canvas over `span` of
  * it, `ratio` px to its css px, or null where there is nothing to draw. Only
  * shown, never read, so a picture from another origin draws on it too.
+ * `above`, a drawing of what of the page shows over those covered, is drawn
+ * back over them with `drawAbove`.
  */
-export function overlayOf(unread: Unread[], span: Span, width: number, ratio: number): Overlay | null {
+export function overlayOf(unread: Unread[], span: Span, width: number, ratio: number, above: string | null = null): Overlay | null {
   if (unread.length === 0) return null;
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(width * ratio));
@@ -569,23 +714,71 @@ export function overlayOf(unread: Unread[], span: Span, width: number, ratio: nu
   const pen = canvas.getContext("2d");
   if (!pen) return null;
   pen.setTransform(ratio, 0, 0, ratio, 0, -span.top * ratio);
-  for (const { media, rect, style, made, clip } of unread) {
-    pen.save();
-    try {
-      if (clip) {
-        pen.beginPath();
-        pen.roundRect(clip.rect.left, clip.rect.top, clip.rect.width, clip.rect.height, clip.radius);
-        pen.clip();
-      }
-      drawMedia(pen, media, rect, style);
-    } catch {
-      // A picture that will not draw is left out.
-    }
-    pen.restore();
-    if (made) {
-      made.width = 0;
-      made.height = 0;
+  for (const one of unread) {
+    drawOne(pen, one);
+    if (one.made) {
+      one.made.width = 0;
+      one.made.height = 0;
     }
   }
-  return { canvas, span };
+  const parts = unread.filter((one) => one.covered);
+  return { canvas, span, width, ratio, live: unread.filter((one) => one.live), above: above && parts.length > 0 ? { src: above, parts } : null };
+}
+
+/**
+ * `image`, the drawing `overlay.above` names, drawn once on a canvas as large
+ * as the overlay, over the same stretch: a video that plays has it drawn back
+ * over each of its frames, which the drawing itself is too large to be at
+ * that pace. Null where it will not draw.
+ */
+export function raiseOf(overlay: Overlay, image: CanvasImageSource): HTMLCanvasElement | null {
+  const { span, width, ratio } = overlay;
+  const canvas = document.createElement("canvas");
+  canvas.width = overlay.canvas.width;
+  canvas.height = overlay.canvas.height;
+  const pen = canvas.getContext("2d");
+  if (!pen) return null;
+  const tall = span.bottom - span.top;
+  pen.setTransform(ratio, 0, 0, ratio, 0, -span.top * ratio);
+  try {
+    pen.drawImage(image, 0, span.top, width, tall, 0, span.top, width, tall);
+  } catch {
+    canvas.width = 0;
+    canvas.height = 0;
+    return null;
+  }
+  return canvas;
+}
+
+/** Draw `raised`, from `raiseOf`, over the overlay where what it shows covers a picture drawn on it: over `only` alone where given. */
+export function drawAbove(overlay: Overlay, raised: CanvasImageSource, only?: Unread): void {
+  const { canvas, span, width, ratio, above } = overlay;
+  const pen = above && canvas.getContext("2d");
+  if (!above || !pen) return;
+  pen.setTransform(ratio, 0, 0, ratio, 0, -span.top * ratio);
+  for (const part of above.parts) {
+    if (only && part !== only) continue;
+    pen.save();
+    try {
+      clipTo(pen, part);
+      pen.drawImage(raised, 0, span.top, width, span.bottom - span.top);
+    } catch {
+      // A drawing that will not draw leaves the pictures as they are.
+    }
+    pen.restore();
+  }
+}
+
+/** Draw `one`, a video that plays on the overlay, again as it shows now, and `raised`, what shows over it, back over it. */
+export function redrawLive(overlay: Overlay, one: Unread, raised: CanvasImageSource | null): void {
+  const { canvas, span, ratio } = overlay;
+  const pen = canvas.getContext("2d");
+  if (!pen) return;
+  pen.setTransform(ratio, 0, 0, ratio, 0, -span.top * ratio);
+  pen.save();
+  clipTo(pen, one);
+  pen.clearRect(one.rect.left, one.rect.top, one.rect.width, one.rect.height);
+  pen.restore();
+  drawOne(pen, one);
+  if (raised && one.covered) drawAbove(overlay, raised, one);
 }

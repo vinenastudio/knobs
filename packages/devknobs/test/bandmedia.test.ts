@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { bandSpan, forgetPixels, inSpan, layersOf, readSize, sameOrigin, sizedPicture, urlOf } from "../src/engine/bandmedia";
+import { bandSpan, drawAbove, forgetPixels, inSpan, raiseOf, layersOf, readSize, sameOrigin, sizedPicture, urlOf } from "../src/engine/bandmedia";
 import type { Look } from "../src/engine/browserkit";
 import { blankUrl } from "../src/engine/pageshot";
 import { bodyScroller, createUnderbar, pictureOf, scrollOf } from "../src/engine/underbar";
@@ -170,6 +170,36 @@ class Drawing extends Node {
     public height: number,
   ) {
     super("canvas", { width: String(width), height: String(height) });
+  }
+}
+
+/** A video of the page: its source, its frame's size where it has one, whether it has played, its poster, and whether the frame may read it. */
+class Video extends Node {
+  currentSrc: string;
+  readyState = 4;
+  paused = false;
+  currentTime = 3;
+  played = { length: 1 };
+  /** What it was asked to tell at its next frame. */
+  frames: (() => void)[] = [];
+  constructor(
+    address: string,
+    public videoWidth: number,
+    public videoHeight: number,
+    readonly tainted = false,
+    public poster = "",
+  ) {
+    super("video", { src: address });
+    this.currentSrc = address;
+  }
+  requestVideoFrameCallback(next: () => void): number {
+    this.frames.push(next);
+    return this.frames.length;
+  }
+  /** It has no frame yet: it was not asked for, or has not come. */
+  unready(): this {
+    Object.assign(this, { readyState: 0, videoWidth: 0, videoHeight: 0, paused: true, currentTime: 0, played: { length: 0 } });
+    return this;
   }
 }
 
@@ -556,16 +586,65 @@ describe("pictureOf, with pictures the frame may not read as they are", () => {
     expect(picture?.overlay).toBeNull();
   });
 
-  test("a caption laid over a picture the frame may not read keeps it from being drawn over the copy, which would hide the caption", () => {
+  test("a caption laid over a picture the frame may not read is drawn back over it, from a drawing of the copy with all else hidden", () => {
     const away = new Picture("https://cdn.other.test/x.jpg", 800, 600, true).at(0, 650, 400, 300);
-    const caption = new Node("h1").at(24, 750, 352, 60);
+    const caption = new Node("h1", { id: "caption" }).at(24, 750, 352, 60);
     const { frame } = frameOf([new Node("div", {}, [away, caption]).at(0, 650, 400, 300)]);
-    expect(pictureOf(frame, BAND)?.overlay).toBeNull();
-    // One under it, or hidden, leaves it drawn.
+    const overlay = pictureOf(frame, BAND)?.overlay;
+    expect((overlay?.canvas as unknown as Canvas).calls.some(([name]) => name === "drawImage")).toBe(true);
+    expect(overlay?.above?.parts.map((part) => part.rect)).toEqual([{ left: 0, top: 650, width: 400, height: 300 }]);
+    // The last copy serialized is that drawing's: the root hidden, the caption shown.
+    expect(serialized?.getAttribute("style")).toEndWith(";visibility:hidden !important");
+    expect(copyOf("caption")?.getAttribute("style")).toBe(";visibility:visible !important");
+    expect(decodeURIComponent(overlay?.above?.src ?? "")).toContain('id="caption" style=";visibility:visible !important"');
+    // One off it, or hidden, has nothing drawn back.
     caption.at(24, 960, 352, 60);
-    expect(pictureOf(frame, BAND)?.overlay).not.toBeNull();
+    expect(pictureOf(frame, BAND)?.overlay?.above).toBeNull();
     caption.at(24, 750, 352, 60).shown = false;
-    expect(pictureOf(frame, BAND)?.overlay).not.toBeNull();
+    expect(pictureOf(frame, BAND)?.overlay?.above).toBeNull();
+  });
+
+  test("what paints under a picture the frame may not read is not drawn back over it: earlier in the flow, or stacked below", () => {
+    const away = new Picture("https://cdn.other.test/x.jpg", 800, 600, true).at(0, 650, 400, 300);
+    const before = new Node("h1").at(24, 750, 352, 60);
+    const below = new Node("span").at(24, 820, 100, 40).styled({ position: "absolute", zIndex: "-1" });
+    const { frame } = frameOf([new Node("div", {}, [before, away, below]).at(0, 650, 400, 300)]);
+    expect(pictureOf(frame, BAND)?.overlay?.above).toBeNull();
+    // Positioned, one earlier paints over a picture in the flow.
+    before.styled({ position: "relative" });
+    expect(pictureOf(frame, BAND)?.overlay?.above).not.toBeNull();
+  });
+
+  test("drawn back, the drawing goes over each covered picture only, cut off as the picture is", () => {
+    const away = new Picture("https://cdn.other.test/x.jpg", 800, 400, true).at(-6, 694, 412, 212);
+    const holder = new Node("span", {}, [away, new Node("b").at(300, 860, 40, 40).styled({ position: "absolute" })])
+      .at(0, 700, 400, 200)
+      .styled({ overflowX: "clip", overflowY: "clip", borderTopLeftRadius: "28px" });
+    const { frame } = frameOf([holder]);
+    const overlay = pictureOf(frame, BAND)?.overlay;
+    if (!overlay) throw new Error("no overlay");
+    const canvas = overlay.canvas as unknown as Canvas;
+    const drawn = canvas.calls.length;
+    const image = { label: "above" } as unknown as CanvasImageSource;
+    const span = overlay.span;
+    const tall = span.bottom - span.top;
+    // Drawn once on a canvas as large as the overlay, over the same stretch.
+    const raised = raiseOf(overlay, image) as unknown as Canvas;
+    expect([raised.width, raised.height]).toEqual([canvas.width, canvas.height]);
+    expect(raised.calls.find(([name]) => name === "drawImage")?.[1]).toEqual([image, 0, span.top, 400, tall, 0, span.top, 400, tall]);
+    drawAbove(overlay, raised as unknown as CanvasImageSource);
+    expect(canvas.calls.slice(drawn)).toEqual([
+      ["setTransform", [2, 0, 0, 2, 0, -span.top * 2]],
+      ["save", []],
+      ["beginPath", []],
+      ["roundRect", [0, 700, 400, 200, 28]],
+      ["clip", []],
+      ["beginPath", []],
+      ["rect", [-6, 694, 412, 212]],
+      ["clip", []],
+      ["drawImage", [raised, 0, span.top, 400, tall]],
+      ["restore", []],
+    ]);
   });
 
   test("a hidden picture the frame may not read, as a fading carousel has, is not drawn", () => {
@@ -604,6 +683,121 @@ describe("pictureOf, with pictures the frame may not read as they are", () => {
     expect(probes.every((probe) => probe.heard.length === 0)).toBe(true);
     expect([...Canvas.reads.values()].every((count) => count === 1)).toBe(true);
     expect(Canvas.reads.size).toBe(70);
+  });
+});
+
+describe("pictureOf, with videos near the band", () => {
+  /** What a copy of a video fitted as `contain` shows, `data` stretched over `width` by `height` px. */
+  const shows = (data: string, width: number, height: number) =>
+    `;background-image:url("${sizedPicture(data, width, height)}") !important;background-size:contain !important;` +
+    "background-position:50% 50% !important;background-repeat:no-repeat !important;background-origin:content-box !important";
+
+  test("a paused video the frame may read is in the copy as its frame now, sized as its frame, and read again each picture", () => {
+    const clip = new Video("https://site.test/clip.mp4", 1080, 1920).at(0, 650, 400, 300).styled({ objectFit: "contain" });
+    clip.paused = true;
+    clip.setAttribute("id", "clip");
+    const { frame } = frameOf([clip]);
+    const picture = pictureOf(frame, BAND);
+    expect(copyOf("clip")?.getAttribute("style")).toBe(shows("data:image/webp;base64,https://site.test/clip.mp4@1080x1920", 1080, 1920));
+    expect([copyOf("clip")?.getAttribute("width"), copyOf("clip")?.getAttribute("height")]).toEqual(["1080", "1920"]);
+    expect(picture?.overlay).toBeNull();
+    pictureOf(frame, BAND);
+    expect(Canvas.reads.get("https://site.test/clip.mp4")).toBe(2);
+  });
+
+  test("a video that plays is drawn over the copy, read or not, to draw again at each of its frames, and nothing is read of it", () => {
+    const clip = new Video("https://site.test/clip.mp4", 1080, 1920).at(0, 650, 400, 300).styled({ objectFit: "contain" });
+    clip.setAttribute("id", "clip");
+    const { frame } = frameOf([clip]);
+    const overlay = pictureOf(frame, BAND)?.overlay;
+    expect((overlay?.canvas as unknown as Canvas).drawn).toEqual([clip]);
+    expect(overlay?.live.map((one) => one.live)).toEqual([clip as unknown as HTMLVideoElement]);
+    expect(copyOf("clip")?.hasAttribute("style")).toBe(false);
+    expect(Canvas.reads.has("https://site.test/clip.mp4")).toBe(false);
+  });
+
+  test("a video from another origin the frame may not read is drawn over the copy as its frame now, in its box", () => {
+    const clip = new Video("https://media.other.test/clip.mp4", 1080, 1920, true).at(0, 650, 400, 300).styled({ objectFit: "contain" });
+    clip.setAttribute("id", "clip");
+    const { frame } = frameOf([clip]);
+    const canvas = pictureOf(frame, BAND)?.overlay?.canvas as unknown as Canvas;
+    expect(canvas.drawn).toEqual([clip]);
+    expect(copyOf("clip")?.hasAttribute("style")).toBe(false);
+  });
+
+  test("a video scaled by css is drawn over the copy in the box it shows in, scaled, and fitted there as the page fits it", () => {
+    // 400 by 300 laid out, at `scale: 1.1` from its middle: its box shows 440 by 330, 20 px out each side and 15 up.
+    const clip = new Video("https://media.other.test/clip.mp4", 1080, 1920, true).at(-20, 635, 440, 330).styled({ objectFit: "cover", scale: "1.1" });
+    const { frame } = frameOf([clip]);
+    const canvas = pictureOf(frame, BAND)?.overlay?.canvas as unknown as Canvas;
+    // Cover: the middle 1080 by 810 of the frame, over the whole scaled box.
+    expect(canvas.calls.find(([name]) => name === "drawImage")?.[1]).toEqual([clip, 0, 555, 1080, 810, -20, 635, 440, 330]);
+  });
+
+  test("a video the frame may not read, under a sound button, is drawn over the copy and the button drawn back over it", () => {
+    const clip = new Video("https://media.other.test/clip.mp4", 1080, 1920, true).at(17, 2410, 368, 654).styled({ objectFit: "contain" });
+    const media = new Node("button", { class: "media" }, [clip]).at(17, 2410, 368, 654).styled({ overflowX: "clip", overflowY: "clip", borderTopLeftRadius: "28px" });
+    const sound = new Node("button", { id: "sound" }).at(330, 3010, 44, 44).styled({ position: "absolute" });
+    const { frame } = frameOf([new Node("p", {}, [media, new Node("span", {}, [sound]).at(0, 3064, 400, 0)]).at(17, 2410, 368, 654)]);
+    VIEW.scrollY = 2000;
+    const overlay = pictureOf(frame, BAND)?.overlay;
+    expect((overlay?.canvas as unknown as Canvas).drawn).toEqual([clip]);
+    expect(overlay?.above?.parts.map(({ rect, clip }) => ({ rect, clip }))).toEqual([
+      { rect: { left: 17, top: 2410, width: 368, height: 654 }, clip: { rect: { left: 17, top: 2410, width: 368, height: 654 }, radius: 28 } },
+    ]);
+    expect(copyOf("sound")?.getAttribute("style")).toBe(";visibility:visible !important");
+  });
+
+  test("a video with no frame yet is in the copy as its poster, read as a picture of the page's origin is, sized as the poster", () => {
+    const clip = new Video("https://site.test/clip.mp4", 1080, 1920, false, "https://site.test/still.webp").unready().at(0, 650, 400, 300).styled({ objectFit: "contain" });
+    clip.setAttribute("id", "clip");
+    const { frame, probes } = frameOf([clip], new Map([["https://site.test/still.webp", { width: 540, height: 960 }]]));
+    const picture = pictureOf(frame, BAND);
+    // Same origin: asked for without CORS, once.
+    expect(probes.map((probe) => [probe.currentSrc, probe.crossOrigin])).toEqual([["https://site.test/still.webp", null]]);
+    expect(copyOf("clip")?.getAttribute("style")).toBe(shows("data:image/webp;base64,https://site.test/still.webp@540x960", 540, 960));
+    expect([copyOf("clip")?.getAttribute("width"), copyOf("clip")?.getAttribute("height")]).toEqual(["540", "960"]);
+    expect(picture?.overlay).toBeNull();
+    // Kept as a picture is: a picture taken again reads it no more.
+    pictureOf(frame, BAND);
+    expect(Canvas.reads.get("https://site.test/still.webp")).toBe(1);
+  });
+
+  test("a video that has a frame but has not played shows its poster; one with none shows nothing to read", () => {
+    const clip = new Video("https://site.test/clip.mp4", 1080, 1920, false, "https://site.test/still.webp").at(0, 650, 400, 300).styled({ objectFit: "contain" });
+    Object.assign(clip, { paused: true, currentTime: 0, played: { length: 0 } });
+    clip.setAttribute("id", "clip");
+    const blank = new Video("https://site.test/blank.mp4", 1080, 1920).unready().at(0, 960, 400, 100);
+    blank.setAttribute("id", "blank");
+    const { frame } = frameOf([clip, blank], new Map([["https://site.test/still.webp", { width: 540, height: 960 }]]));
+    expect(pictureOf(frame, BAND)?.overlay).toBeNull();
+    // As large as its frame, which the page lays it out by, the poster fitted in it.
+    expect(copyOf("clip")?.getAttribute("style")).toBe(shows("data:image/webp;base64,https://site.test/still.webp@540x960", 540, 960));
+    expect(copyOf("clip")?.getAttribute("width")).toBe("1080");
+    expect(copyOf("blank")?.hasAttribute("style")).toBe(false);
+    expect(Canvas.reads.has("https://site.test/blank.mp4")).toBe(false);
+  });
+
+  test("a poster of another origin that refuses CORS is asked for without it first, then with it, and drawn over the copy from the plain one", () => {
+    const address = "https://quiet-p.test/still.webp";
+    const clip = new Video("https://quiet-p.test/clip.mp4", 1080, 1920, true, address).unready().at(0, 650, 400, 300).styled({ objectFit: "contain" });
+    clip.setAttribute("id", "clip");
+    const { frame, probes } = frameOf([clip], new Map<string, Loaded>([[address, { width: 540, height: 960, tainted: true, cors: false }]]));
+    const first = pictureOf(frame, BAND)?.overlay?.canvas as unknown as Canvas;
+    // Plain first, then with CORS, which waits on the host; the plain one the page has draws now.
+    expect(probes.map((probe) => [probe.currentSrc, probe.crossOrigin])).toEqual([
+      [address, null],
+      [address, "anonymous"],
+      [address, null],
+    ]);
+    expect(first.drawn).toEqual([probes[2]]);
+    for (const fail of probes[1]?.failed ?? []) fail();
+    const again = pictureOf(frame, BAND)?.overlay?.canvas as unknown as Canvas;
+    // Refused: asked for no more, the plain one kept and drawn again.
+    expect(probes.length).toBe(3);
+    expect(corsAsked(probes)).toEqual([address]);
+    expect(again.drawn).toEqual([probes[2]]);
+    expect(copyOf("clip")?.hasAttribute("style")).toBe(false);
   });
 });
 
@@ -1068,6 +1262,64 @@ describe("createUnderbar", () => {
     expect(cover()?.style.transform).toBe("translate3d(0, -500px, 0)");
   });
 
+  test("the band has the page's color as a picture, which lines up with the px where a color would be smoothed into the frame's last row", () => {
+    const { frame } = frameOf([new Node("p").at(0, 0, 400, 20)]);
+    const glass = new HostNode();
+    createUnderbar(glass as unknown as HTMLElement, frame).show(RECT, 1, LOOK);
+    const band = glass.children[0] as HostNode;
+    expect(band.style.background).toBe(`linear-gradient(${LOOK.background}, ${LOOK.background})`);
+  });
+
+  test("what shows over a picture drawn over the copy is drawn back over it once its drawing decodes", async () => {
+    const away = new Picture("https://cdn.other.test/x.jpg", 800, 400, true).at(0, 700, 400, 200);
+    const { frame } = frameOf([new Node("div", {}, [away, new Node("h1").at(24, 750, 352, 60)]).at(0, 700, 400, 200)]);
+    const { cover } = await shownBand(frame);
+    // From a canvas it was drawn on once, the decoded drawing.
+    const raised = cover()?.drawn.at(-1) as Canvas | undefined;
+    expect(raised).toBeInstanceOf(Canvas);
+    const drawing = raised?.drawn[0] as HostNode | undefined;
+    expect(drawing).toBeInstanceOf(HostNode);
+    expect(decodeURIComponent(drawing?.src ?? "")).toContain("visibility:hidden !important");
+    // No video on it plays, so that canvas is let go of.
+    expect([raised?.width, raised?.height]).toEqual([0, 0]);
+  });
+
+  test("the copy hides the controls a drawing puts on each video, as it runs no script", () => {
+    const { frame } = frameOf([new Video("https://site.test/clip.mp4", 1080, 1920).unready().at(0, 900, 400, 300)]);
+    pictureOf(frame, BAND);
+    expect(serialized?.querySelectorAll("style").map((style) => style.text)).toContain("video::-webkit-media-controls { display: none !important; }");
+  });
+
+  test("a video that plays is drawn again at each of its frames, what shows over it back over it, till a new picture takes the cover", async () => {
+    const clip = new Video("https://media.other.test/clip.mp4", 1080, 1920, true).at(0, 650, 400, 300).styled({ objectFit: "contain" });
+    const sound = new Node("button").at(340, 900, 44, 44).styled({ position: "absolute" });
+    const { frame } = frameOf([new Node("div", {}, [clip, sound]).at(0, 650, 400, 300)]);
+    const { underbar, cover } = await shownBand(frame);
+    const first = cover();
+    const raised = first?.drawn.at(-1) as Canvas | undefined;
+    // Kept, as the video on the cover plays.
+    expect(raised).toBeInstanceOf(Canvas);
+    expect(raised?.width).toBeGreaterThan(0);
+    expect(clip.frames.length).toBe(1);
+    const before = first?.calls.length ?? 0;
+    clip.frames.shift()?.();
+    const names = first?.calls.slice(before).map(([name]) => name);
+    expect(names).toContain("clearRect");
+    expect(first?.drawn.slice(-2)).toEqual([clip, raised]);
+    // It asks for the next frame.
+    expect(clip.frames.length).toBe(1);
+    underbar.refresh();
+    await tick();
+    // The old cover was let go of.
+    expect([first?.width, first?.height]).toEqual([0, 0]);
+    // The old cover's video lets go: its next frame draws nothing on it and asks for no more.
+    const drawnBefore = first?.calls.length;
+    const asked = clip.frames.length;
+    clip.frames.shift()?.();
+    expect(first?.calls.length).toBe(drawnBefore);
+    expect(clip.frames.length).toBe(asked - 1);
+  });
+
   test("a scroll inside the stretch read takes no new picture, one past it takes one", async () => {
     VIEW.scrollY = 1200;
     const away = new Picture("https://cdn.other.test/x.jpg", 800, 400, true).at(0, 1850, 400, 200);
@@ -1102,13 +1354,13 @@ describe("createUnderbar", () => {
   test("a new document in the frame has the listeners, the old one's are taken off, and removing the band takes off the new one's", async () => {
     const first = frameOf([new Picture("https://site.test/hero.jpg", 800, 400).at(0, 700, 400, 200)]);
     const { underbar } = await shownBand(first.frame);
-    expect([...first.heard.keys()].sort()).toEqual(["load", "loadeddata", "scroll"]);
+    expect([...first.heard.keys()].sort()).toEqual(["load", "loadeddata", "playing", "scroll", "seeked"]);
     const next = frameOf([new Picture("https://site.test/next.jpg", 800, 400).at(0, 700, 400, 200)]);
     Reflect.set(first.frame, "contentDocument", next.doc);
     underbar.refresh();
     await tick();
     expect(first.heard.size).toBe(0);
-    expect([...next.heard.keys()].sort()).toEqual(["load", "loadeddata", "scroll"]);
+    expect([...next.heard.keys()].sort()).toEqual(["load", "loadeddata", "playing", "scroll", "seeked"]);
     underbar.remove();
     expect(next.heard.size).toBe(0);
   });

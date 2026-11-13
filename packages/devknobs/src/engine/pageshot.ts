@@ -450,6 +450,13 @@ function blankPictures(live: Element, copy: Element): void {
   });
 }
 
+/**
+ * A drawing runs no script, so Chrome and Safari draw a video's controls on
+ * each video in it, and a loading ring on one with a source, as it never
+ * loads: on the page they do not show.
+ */
+const NO_CONTROLS = "video::-webkit-media-controls { display: none !important; }";
+
 /** Does an element with `overflow` on one axis, as it computes, cut off what overflows it there? */
 export function cuts(overflow: string): boolean {
   return overflow === "hidden" || overflow === "auto" || overflow === "scroll" || overflow === "clip";
@@ -545,9 +552,11 @@ export function copyPage(
   }
   // And nothing devknobs put on the page: what its knobs write is in the rules.
   for (const node of root.querySelectorAll(`script, link, style, noscript, ${ownSelector()}`)) node.remove();
+  const quiet = inert.createElement("style");
+  quiet.textContent = NO_CONTROLS;
   const style = inert.createElement("style");
   style.textContent = frozen.rules.join("\n");
-  (root.querySelector("head") ?? root).append(style);
+  (root.querySelector("head") ?? root).append(style, quiet);
   return root;
 }
 
