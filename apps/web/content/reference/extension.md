@@ -8,7 +8,7 @@ order: 8
 
 the extension puts the knobs panel on any page you open, the same panel as the npm package, with no change to the site's code. every knob, key and view of the panel is knobs' own. some knobs go to the browser instead of being emulated in the page, so Chrome sets them for real.
 
-the toolbar button opens and closes the panel in the tab. closing it from there turns knobs off for the tab: every knob goes back to its default (the panel's place and pinned rows stay), the tab's rules go, a reload brings no device back, and a page that loaded while a user agent rule was on loads again as Chrome. there is no handle on the page's edge, since the button does that job; the panel's [settings](/docs/panel#settings) can show the handle again. the api is on every page for [agents](/docs/agents), as with the npm package: at `window.knobs` from 0.8, and at `window.devknobs` in every version, so use `window.devknobs` where `window.knobs` is not knobs' api.
+the toolbar button opens and closes the panel in the tab. closing it from there turns knobs off for the tab: every knob goes back to its default (the panel's place and pinned rows stay), the tab's rules go, a reload brings no device back, and a page that loaded while a user agent rule was on loads again as Chrome. there is no handle on the page's edge, since the button does that job; the panel's [settings](/docs/panel#settings) can show the handle again. the api is on every page for [agents](/docs/agents), as with the npm package: at `window.knobs` from 0.7.1, and at `window.devknobs` in every version, so use `window.devknobs` where `window.knobs` is not knobs' api.
 
 ## install
 

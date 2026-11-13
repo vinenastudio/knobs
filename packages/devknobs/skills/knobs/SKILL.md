@@ -23,7 +23,7 @@ await window.knobs.ready();
 Every way of mounting knobs puts the api on `window.knobs`: the script
 tag, `mount()` and `<Knobs />`. Inside the width knob's frame the frame's own
 copy has it too. If neither `window.knobs` nor `window.devknobs` is set, knobs is not on this
-page. Where `window.knobs` is not knobs' api (the page has a `knobs` of its own, or knobs is older than 0.8, such as an extension not yet on 0.8), use `window.devknobs`, which every copy sets. The script tag build keeps the api after `unmount()`, so the api alone
+page. Where `window.knobs` is not knobs' api (the page has a `knobs` of its own, or knobs is older than 0.7.1, such as an extension not yet on 0.7.1), use `window.devknobs`, which every copy sets. The script tag build keeps the api after `unmount()`, so the api alone
 does not prove a mount. `ready()` does: it rejects at once with
 `knobs: not mounted` when nothing is mounted.
 
@@ -38,7 +38,7 @@ This note comes from the tab's `sessionStorage`, so it is the user's layout
 only in a fresh tab. In a tab an earlier agent may have used, also read
 `localStorage.getItem("devknobs:place")`. It holds the place the user last
 gave the panel (`side`, `y`, `top`, `edge`, `tab`, `docked`). Use those fields
-over the ones in the note. knobs 0.8 writes `knobs:place` too, with the same value. A later
+over the ones in the note. knobs 0.7.1 writes `knobs:place` too, with the same value. A later
 release reads `knobs:place` instead.
 
 ## Learn the knobs

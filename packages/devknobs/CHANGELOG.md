@@ -1,6 +1,6 @@
 # changelog
 
-## 0.8.0
+## 0.7.1
 
 - new names, beside the old ones, which still work for now:
   - the api is on `window.knobs` too, beside `window.devknobs`. a page that has a `knobs` of its own keeps it
@@ -15,6 +15,7 @@
 - `npx @vinena/knobs init` writes `Knobs` in the component it makes for next
 - the changes' note says `agents read and apply edits: knobs.edits() / setEdits()`
 - the chrome extension's upload is `knobs-<version>.zip`
+- the chrome extension has a new store name and summary
 - the readme, the skill and the docs use the new names
 
 ## 0.7.0
