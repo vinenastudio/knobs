@@ -4,7 +4,7 @@ import { jsonLd, ORGANIZATION } from '../lib/schema.ts';
 import { IMAGE, shareMeta } from '../lib/share.ts';
 import type { Page } from './pages.ts';
 
-/** The page `/docs` shows. */
+/** The page `/docs` redirects to (a 301 in the worker); `routes/docs.index.tsx` shows it as a client-side fallback. */
 export const FIRST = 'start';
 
 export type DocMeta = Pick<Page, 'description' | 'faq' | 'metaTitle' | 'title' | 'updated'>;
@@ -33,7 +33,8 @@ export async function loadDoc(slug: string): Promise<DocMeta> {
  * The `<head>` of a docs page: its `meta_title` and its description, from its
  * frontmatter, its share card, its canonical address, the text for agents, and
  * its schema: a TechArticle, and a FAQPage built from the questions the page
- * shows. `/docs` shows the first page, so its canonical address is that page's.
+ * shows. `/docs` 301s to the first page in the worker; its client-side fallback
+ * shows that page, so its canonical address is that page's.
  */
 export function docHead(doc: DocMeta | undefined, slug: string) {
   if (doc === undefined) {

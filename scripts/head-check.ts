@@ -1,6 +1,6 @@
 /**
  * Fails when a page's `<head>` breaks the share rules: the home, `/blog`,
- * every post and every docs page, each merged under the root's head the way
+ * every post, every docs page, `/use`, every use page, `/compare` and every comparison page, each merged under the root's head the way
  * TanStack merges them (the deepest route's tag of each name or property
  * wins). Each route's own list holds each tag once, posts are articles, `og:image` comes before its size, type and
  * alt, the X tags repeat the page's title and description, the title is 50 to
@@ -11,10 +11,13 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { postFrontmatter } from '../apps/web/src/blog/frontmatter.ts';
 import { blogIndexHead, postHead } from '../apps/web/src/blog/head.ts';
+import { compareIndexHead, comparePageHead } from '../apps/web/src/compare/head.ts';
 import { docFrontmatter } from '../apps/web/src/docs/frontmatter.ts';
 import { docHead } from '../apps/web/src/docs/head.ts';
 import { shareMeta } from '../apps/web/src/lib/share.ts';
 import { m } from '../apps/web/src/paraglide/messages.js';
+import { pageTerms } from '../apps/web/src/use/frontmatter.ts';
+import { knobIndexHead, knobPageHead } from '../apps/web/src/use/head.ts';
 
 type Meta = { content?: string; name?: string; property?: string; title?: string };
 
@@ -63,6 +66,18 @@ const pages: Array<[string, Array<Meta>]> = [
   ...read('docs').map(({ slug, source }): [string, Array<Meta>] => [
     `/docs/${slug}`,
     docHead({ ...docFrontmatter(slug, source), faq: [] }, slug).meta ?? [],
+  ]),
+  ['/use', knobIndexHead().meta],
+  ...read('use').map(({ slug, source }): [string, Array<Meta>] => [
+    `/use/${slug}`,
+    knobPageHead({ ...docFrontmatter(slug, source), terms: pageTerms(slug, source) }, slug).meta ??
+      [],
+  ]),
+  ['/compare', compareIndexHead().meta],
+  ...read('compare').map(({ slug, source }): [string, Array<Meta>] => [
+    `/compare/${slug}`,
+    comparePageHead({ ...docFrontmatter(slug, source), terms: pageTerms(slug, source) }, slug)
+      .meta ?? [],
   ]),
 ];
 

@@ -3,8 +3,8 @@ import { create, defaultMarker, props, type StyleXStyles, when } from '@stylexjs
 import { m } from '../paraglide/messages.js';
 import { track } from './analytics.ts';
 
-/** Where the credit is: the landing's footer, or the foot of a docs or blog page. */
-type Placement = 'blog' | 'docs' | 'footer';
+/** Where the credit is: the landing's footer, or the foot of a docs, blog, use or comparison page. */
+type Placement = 'blog' | 'compare' | 'docs' | 'footer' | 'use';
 
 const vinena = (placement: Placement) =>
   `https://vinena.studio/?utm_source=knobs.dev&utm_medium=referral&utm_campaign=${placement}`;
@@ -85,7 +85,7 @@ export function CraftedAtVinena({
   );
 }
 
-/** The credit as the whole foot of a docs or blog page. Site chrome, so left out of llms-full.txt. */
+/** The credit as the whole foot of a docs, blog, use or comparison page. Site chrome, so left out of llms-full.txt. */
 export function CraftedFoot({ placement }: { placement: Exclude<Placement, 'footer'> }) {
   return (
     <footer data-llms="skip" {...props(styles.foot)}>

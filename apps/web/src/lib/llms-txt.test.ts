@@ -233,3 +233,39 @@ test('textResponse is plain text with a cache header', async () => {
   expect(response.headers.get('cache-control')).toBe('public, max-age=3600');
   expect(await response.text()).toBe('hi');
 });
+
+test('the use pages are listed, under their own section', async () => {
+  const slugs = Object.keys(import.meta.glob('../../content/use/*.md')).map((path) =>
+    path.slice(path.lastIndexOf('/') + 1, -'.md'.length),
+  );
+  expect(slugs).toEqual(expect.arrayContaining(['dark-mode', 'pseudolocalization']));
+  const paths = (await llmsTxtConfig.extraPaths?.()) ?? [];
+  expect(paths).toEqual(expect.arrayContaining(slugs.map((slug) => `/use/${slug}`)));
+  expect(llmsTxtConfig.sections).toContainEqual({ prefix: '/use', title: 'Use cases' });
+  const index = formatLlmsTxt(
+    llmsTxtConfig,
+    slugs.map((slug) => page(`/use/${slug}`, slug)),
+  );
+  expect(index).toContain(`## Use cases\n\n- [${slugs[0]}](${url(`/use/${slugs[0]}`)})`);
+});
+
+test('the comparison pages are listed, under their own section', async () => {
+  const slugs = Object.keys(import.meta.glob('../../content/compare/*.md')).map((path) =>
+    path.slice(path.lastIndexOf('/') + 1, -'.md'.length),
+  );
+  expect(slugs.toSorted()).toEqual([
+    'chrome-devtools',
+    'polypane',
+    'responsive-viewer',
+    'responsively',
+    'sizzy',
+  ]);
+  const paths = (await llmsTxtConfig.extraPaths?.()) ?? [];
+  expect(paths).toEqual(expect.arrayContaining(slugs.map((slug) => `/compare/${slug}`)));
+  expect(llmsTxtConfig.sections).toContainEqual({ prefix: '/compare', title: 'Comparisons' });
+  const index = formatLlmsTxt(
+    llmsTxtConfig,
+    slugs.map((slug) => page(`/compare/${slug}`, slug)),
+  );
+  expect(index).toContain(`## Comparisons\n\n- [${slugs[0]}](${url(`/compare/${slugs[0]}`)})`);
+});
