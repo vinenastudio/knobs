@@ -40,6 +40,7 @@ await window.knobs.ready();
 every way in puts the api on `window.knobs` while knobs is mounted: the
 script tag, `mount()` and `<Knobs />`. so does the copy inside the width
 knob's frame, and the [chrome extension](/docs/extension) on any page it runs on.
+where `window.knobs` is not knobs' api (the page has a `knobs` of its own, or knobs is older than 0.8, such as an extension not yet on 0.8), use `window.devknobs`, which every copy sets.
 
 ## the agent skill
 

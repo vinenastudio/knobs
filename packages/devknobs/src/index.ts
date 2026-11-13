@@ -631,7 +631,7 @@ export function forceState(target: Element | string | null, states: readonly str
 
 const api = { mount, unmount, getState, setState, reset, replay, grab, describe, ready, edits, setEdits, undoEdit, forceState };
 
-/** What `mount` puts at `window.devknobs`, for agents that run code in the page. */
+/** What `mount` puts at `window.knobs` and `window.devknobs`, for agents that run code in the page. */
 export type KnobsApi = typeof api;
 
 /** @deprecated use KnobsApi */

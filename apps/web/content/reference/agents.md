@@ -93,6 +93,7 @@ after `unmount()`, so it can mount again: `ready()` tells whether it is mounted.
 the [chrome extension](/docs/extension) puts the same api on `window.knobs`
 on any page it runs on.
 the old names, `window.devknobs` and `<DevKnobs />`, still work for now.
+where `window.knobs` is not knobs' api (the page has a `knobs` of its own, or knobs is older than 0.8, such as an extension not yet on 0.8), use `window.devknobs`, which every copy sets.
 
 ## the agent skill
 

@@ -24,8 +24,9 @@ function promptIn(file: string) {
 }
 
 describe('install prompt', () => {
-  test('the message, the README and the start reference hold the same prompt', () => {
+  test('the message, the READMEs and the start reference hold the same prompt', () => {
     expect(m.install_prompt().startsWith('Read https://knobs.dev/llms-full.txt')).toBe(true);
+    expect(promptIn('README.md')).toBe(m.install_prompt());
     expect(promptIn('packages/devknobs/README.md')).toBe(m.install_prompt());
     expect(promptIn('apps/web/content/reference/start.md')).toBe(m.install_prompt());
   });

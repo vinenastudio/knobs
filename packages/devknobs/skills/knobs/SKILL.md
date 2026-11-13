@@ -23,7 +23,7 @@ await window.knobs.ready();
 Every way of mounting knobs puts the api on `window.knobs`: the script
 tag, `mount()` and `<Knobs />`. Inside the width knob's frame the frame's own
 copy has it too. If `window.knobs` is undefined, knobs is not on this
-page, or it is a copy before 0.8, which has the api on `window.devknobs` only. The script tag build keeps the api after `unmount()`, so the api alone
+page. Where `window.knobs` is not knobs' api (the page has a `knobs` of its own, or knobs is older than 0.8, such as an extension not yet on 0.8), use `window.devknobs`, which every copy sets. The script tag build keeps the api after `unmount()`, so the api alone
 does not prove a mount. `ready()` does: it rejects at once with
 `knobs: not mounted` when nothing is mounted.
 
@@ -129,7 +129,7 @@ await window.knobs.ready();
    const frame = document
      .querySelector('[data-knobs="viewport"]')
      ?.shadowRoot?.querySelector("iframe[data-knobs-frame]");
-   await frame?.contentWindow?.knobs?.ready();
+   await (frame?.contentWindow?.knobs ?? frame?.contentWindow?.devknobs)?.ready();
    frame?.contentDocument;
    ```
 

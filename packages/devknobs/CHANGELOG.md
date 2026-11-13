@@ -11,6 +11,7 @@
   - a grab puts `application/x-knobs-grab` on the clipboard, beside `application/x-devknobs-grab`
   - the attributes knobs puts on the page are written as `data-knobs…` and `data-devknobs…`
   - knobs' own items in web storage are written as `knobs` and `knobs:…` too, beside `devknobs` and `devknobs:…`, which are still the ones read
+- an element with `id="knobs"` or `name="knobs"` does not keep the api off `window.knobs`; a page's `var knobs`, `function knobs` or `window.knobs =` does
 - `npx @vinena/knobs init` writes `Knobs` in the component it makes for next
 - the changes' note says `agents read and apply edits: knobs.edits() / setEdits()`
 - the chrome extension's upload is `knobs-<version>.zip`
