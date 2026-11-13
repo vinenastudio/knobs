@@ -3,17 +3,25 @@ import { FRAME_NAME, isDevknobsFrame } from "./frame";
 import { newer, stamped } from "./stored";
 
 /**
- * Fresh mode, and the one way to web storage. With `devknobs=fresh` in the
- * page's address, devknobs shows what a first visit sees: it leaves
+ * Fresh mode, and the one way to web storage. With `knobs=fresh` (or the old
+ * `devknobs=fresh`) in the page's address, devknobs shows what a first visit
+ * sees: it leaves
  * `localStorage` alone, and a load of the page it did not ask for starts with
  * none of its items in `sessionStorage`. Every read and write devknobs makes
  * for itself goes through `webStorage`, so the rule holds in one place. The
  * storage view shows the page's own items, and reaches those directly.
  */
 
-/** The address parameter and the value that turn fresh mode on. */
+/**
+ * The address parameter and the value that turn fresh mode on. `withFresh`
+ * writes this one, the old name, so a copy older than 0.8 in the width knob's
+ * frame still reads it. Until 1.0.
+ */
 export const FRESH_PARAM = "devknobs";
 export const FRESH_VALUE = "fresh";
+
+/** The parameter's new name, which turns fresh mode on as well. */
+export const KNOBS_FRESH_PARAM = "knobs";
 
 /** On the width knob's frame while the page above is in fresh mode. */
 export const FRESH_ATTRIBUTE = "data-devknobs-fresh";
@@ -46,7 +54,10 @@ const MODE = Symbol.for("devknobs.fresh");
 /** Does this address query turn fresh mode on? */
 export function freshIn(search: string): boolean {
   try {
-    return new URLSearchParams(search).getAll(FRESH_PARAM).includes(FRESH_VALUE);
+    const query = new URLSearchParams(search);
+    return [KNOBS_FRESH_PARAM, FRESH_PARAM].some((name) =>
+      query.getAll(name).includes(FRESH_VALUE),
+    );
   } catch {
     return false;
   }
