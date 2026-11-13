@@ -933,6 +933,35 @@ describe("pictureOf, asking for pictures quietly", () => {
     expect(corsAsked(next.probes)).toEqual(["https://quiet-z.test/1.png"]);
   });
 
+  test("a request of an old document that fails leaves alone the queue a new document's request holds", () => {
+    const rows = () => [1, 2, 3].map((at) => new Node("div").at(0, 600 + at * 50, 400, 50).styled({ backgroundImage: `url("https://quiet-v.test/${at}.png")` }));
+    const first = frameOf(rows());
+    let heard = 0;
+    pictureOf(first.frame, BAND, () => heard++);
+    const next = frameOf(rows());
+    pictureOf(next.frame, BAND);
+    expect(next.probes.map((probe) => probe.currentSrc)).toEqual(["https://quiet-v.test/1.png"]);
+    failPlain(first.probes[0]);
+    pictureOf(next.frame, BAND);
+    // The old document is told nothing; the new one's 2.png still waits on its 1.png.
+    expect(heard).toBe(0);
+    expect(next.probes.map((probe) => probe.currentSrc)).toEqual(["https://quiet-v.test/1.png"]);
+  });
+
+  test("a request that comes, where the browser has the file for a request with CORS too, tells at once", () => {
+    const row = new Node("div").at(0, 650, 400, 50).styled({ backgroundImage: 'url("https://quiet-w.test/1.png")' });
+    const loaded = new Map<string, Loaded>();
+    const { frame, probes } = frameOf([row], loaded);
+    let heard = 0;
+    pictureOf(frame, BAND, () => heard++);
+    expect(probes[0]?.complete).toBe(false);
+    loaded.set("https://quiet-w.test/1.png", { width: 400, height: 50 });
+    for (const come of probes[0]?.heard ?? []) come();
+    expect(corsAsked(probes)).toEqual(["https://quiet-w.test/1.png"]);
+    expect(probes.at(-1)?.complete).toBe(true);
+    expect(heard).toBe(1);
+  });
+
   test("a request with CORS of an old document that fails counts at once, but leaves alone the queue a new document's request holds", () => {
     const rows = () => [1, 2, 3].map((at) => new Node("div").at(0, 600 + at * 50, 400, 50).styled({ backgroundImage: `url("https://quiet-y.test/${at}.png")` }));
     const first = frameOf(rows());
