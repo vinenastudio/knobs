@@ -4,6 +4,8 @@
  * that asked for it, and a `copy` handler fills in the types. Where that
  * fails, only the text goes, through the async api.
  */
+
+import { markOwn } from "../mark";
 export async function copyText(
   text: string,
   data: Record<string, string> = { "text/plain": text },
@@ -14,7 +16,7 @@ export async function copyText(
   };
   const textarea = document.createElement("textarea");
   textarea.value = text;
-  textarea.setAttribute("data-devknobs", "grab");
+  markOwn(textarea, "grab");
   textarea.setAttribute("aria-hidden", "true");
   textarea.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0";
   document.addEventListener("copy", onCopy);

@@ -1,5 +1,6 @@
 import { isOwn, walk } from "./tree";
 import { addStyle, type OwnStyle, styleNode } from "./style";
+import { markOwn } from "../mark";
 
 /** Under the width knob's frame and the panel, so both stay on top. */
 const Z_INDEX = 2147483644;
@@ -187,7 +188,7 @@ function onMutation(records: MutationRecord[]): void {
 function start(): void {
   if (host || !document.body) return;
   host = document.createElement("div");
-  host.setAttribute("data-devknobs", "overflow");
+  markOwn(host, "overflow");
   host.style.cssText = `position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:${Z_INDEX}`;
   layer = host.attachShadow({ mode: "open" });
   sheet = addStyle(layer, CSS);

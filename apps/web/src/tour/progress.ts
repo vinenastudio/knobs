@@ -55,7 +55,7 @@ const WATCH_FOR = 1000;
 const EXPLORE_FOR = 4000;
 
 // The field grab copies from: its value is the text that goes to the clipboard.
-const GRAB_FIELD = 'textarea[data-devknobs="grab"]';
+const GRAB_FIELD = 'textarea[data-knobs="grab"],textarea[data-devknobs="grab"]';
 
 // Where a closed or finished tour is remembered, so a visitor who comes back is not asked again.
 const REMEMBER = 'knobs:tour';

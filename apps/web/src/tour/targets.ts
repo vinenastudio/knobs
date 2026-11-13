@@ -28,13 +28,13 @@ const HOOKS = {
   // The device row's fold slider, inside the device knob's line.
   foldSlider: '[role="slider"][aria-label="fold"]',
   // The page in a device's frame, inside the frame host's shadow root.
-  frame: 'iframe[data-devknobs-frame]',
+  frame: 'iframe[data-knobs-frame], iframe[data-devknobs-frame]',
   // The device's screen around that page, bars and all. No stable hook: a class.
   glass: '.glass',
   // The footer's grab button.
   grab: 'button[data-command="grab"]',
   // Grab's overlay, on the page for as long as grab is on, in the document grab runs in.
-  grabOverlay: 'div[data-devknobs="grab"]',
+  grabOverlay: 'div[data-knobs="grab"], div[data-devknobs="grab"]',
   // The handle on the window's edge, by the start of its aria-label.
   handle: 'button[aria-label^="knobs"], button[aria-label^="devknobs"]',
   // One knob's line inside an open row's editor.
@@ -47,7 +47,7 @@ const HOOKS = {
   // A value in a list, and an entry of the search results.
   option: '[role="option"]',
   // The panel's host in the page. Its shadow root is open.
-  panel: '[data-devknobs="panel"]',
+  panel: '[data-knobs="panel"], [data-devknobs="panel"]',
   // The open panel's own box, for the final bubble. No stable hook: a class.
   panelBox: '.panel',
   // The search results' list.
@@ -63,7 +63,7 @@ const HOOKS = {
   // The mat's swatches, inside the mat knob's line.
   swatches: '[role="radiogroup"]',
   // The frame host in the page, there for as long as a device or a width is up.
-  viewport: '[data-devknobs="viewport"]',
+  viewport: '[data-knobs="viewport"], [data-devknobs="viewport"]',
   // The panel's wrapper, which says the view shown: rows, results, browse or keys.
   wrap: '[data-mode]',
 } as const;

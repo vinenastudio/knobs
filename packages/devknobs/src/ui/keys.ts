@@ -1,4 +1,5 @@
 import { type KeyAction, post, type ZoomAction } from "../engine/frame";
+import { ATTRIBUTES, hasMark } from "../mark";
 
 /** The parts of a keydown that decide what it asks of the panel. */
 export type KeyLike = Pick<
@@ -171,7 +172,7 @@ export function defaultKeys(options: { hotkey?: string; grabKey?: string } = {})
  * Marks the panel's own field where the shift letters are the panel's keys
  * and not text. Its search is one: it finds in lower case anyway.
  */
-export const KEYS_FIELD = "data-devknobs-keys";
+export const KEYS_FIELD = ATTRIBUTES.keys;
 
 /** A field that takes typing. */
 function isTyping(node: EventTarget | null): boolean {
@@ -221,7 +222,8 @@ export function inField(event: Pick<KeyLike, "target" | "composedPath">): boolea
 export function typesInField(event: Pick<KeyLike, "target" | "composedPath">): boolean {
   const target = event.composedPath?.()[0] ?? event.target;
   if (!isEditable(target)) return false;
-  return (target as HTMLElement | null)?.hasAttribute?.(KEYS_FIELD) !== true;
+  const element = target as Element | null;
+  return typeof element?.hasAttribute !== "function" || !hasMark(element, KEYS_FIELD);
 }
 
 /**

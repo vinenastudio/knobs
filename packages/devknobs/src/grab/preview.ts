@@ -1,5 +1,7 @@
 // adapted from react-grab (MIT, Copyright (c) 2025 Aiden Bai)
 
+import { isOwnName } from "../mark";
+
 /** Node types, as numbers, so elements from another realm read the same. */
 const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
@@ -76,7 +78,7 @@ export function truncateEscaped(html: string, max: number): string {
 
 /** Attributes of devknobs and react-grab themselves. */
 function isInternal(name: string): boolean {
-  return name.startsWith("data-devknobs") || name.startsWith("data-react-grab-");
+  return isOwnName(name) || name.startsWith("data-react-grab-");
 }
 
 /** Class names a tool wrote, which say nothing a reader can search the source for. */

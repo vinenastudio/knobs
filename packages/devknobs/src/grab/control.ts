@@ -20,6 +20,7 @@ import {
 import type { Mode, ModeOptions, Purpose } from "./mode";
 import { type GrabPlace, grabStep } from "./place";
 import { addStyle } from "../engine/style";
+import { markOwn } from "../mark";
 
 export interface GrabControlOptions {
   /**
@@ -80,7 +81,7 @@ function systemScheme(): "light" | "dark" {
   const own = systemMedia();
   if (own) return own.scheme;
   const host = document.createElement("div");
-  host.setAttribute("data-devknobs", "probe");
+  markOwn(host, "probe");
   host.style.cssText = "position:fixed;width:0;height:0;overflow:hidden;pointer-events:none";
   const root = host.attachShadow({ mode: "open" });
   addStyle(root, "i{display:block;width:0}@media (prefers-color-scheme: dark){i{width:1px}}");

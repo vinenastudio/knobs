@@ -155,6 +155,8 @@ describe("htmlPreview", () => {
       "data-react-grab-frozen": "true",
     });
     expect(htmlPreview(input)).toBe("<input disabled />");
+    expect(htmlPreview(el("input", { disabled: "", "data-knobs": "panel", "data-knobs-force": "hover" }))).toBe("<input disabled />");
+    expect(htmlPreview(el("div", { "data-knobs-theme": "dark" }))).toBe('<div data-knobs-theme="dark" />');
   });
 
   test("collapses white space and cuts text to 100", () => {

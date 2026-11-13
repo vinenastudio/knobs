@@ -88,6 +88,13 @@ describe("a move", () => {
     const holder = elem("div", {}, elem("i", { "data-devknobs": "" }));
     body.append(holder);
     expect(movable(as(holder))).toBe(false);
+    // A newer copy's mark alone, and another tool's names, which are the page's.
+    expect(movable(as(elem("div", { "data-knobs": "panel" })))).toBe(false);
+    const newer = elem("div", {}, elem("i", { "data-knobs": "" }));
+    const other = elem("div", { "data-knobs-theme": "dark" }, elem("i", { "data-knobs-font": "serif" }));
+    body.append(newer, other);
+    expect(movable(as(newer))).toBe(false);
+    expect(movable(as(other))).toBe(true);
     expect(movable(as(list))).toBe(true);
     expect(canHold(as(a), el(list))).toBe(false);
     expect(canHold(as(list), el(list))).toBe(false);

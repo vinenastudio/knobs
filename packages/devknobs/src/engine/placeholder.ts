@@ -6,6 +6,7 @@ import { webStorage } from "./fresh";
 import { matGradient, matStops } from "./matcolors";
 import { newer, stamped } from "./stored";
 import { addStyle, ensureStyle, findStyle, removeStyle } from "./style";
+import { findOwn, markOwn, ownSelector } from "../mark";
 
 /**
  * What stands in for the frame from a reload's first paint until devknobs
@@ -43,7 +44,7 @@ let earlyWait = 0;
  */
 export function coverCss(mat: MatColorValue | null): string {
   const hide = `html{overflow:hidden!important}
-body>:not([data-devknobs]){content-visibility:hidden!important}`;
+body>:not(${ownSelector()}){content-visibility:hidden!important}`;
   if (!mat) return hide;
   const paint = matStops(mat);
   return `${hide}
@@ -218,12 +219,12 @@ export function clearSnapshot(): void {
 
 /** The stand-in the early script put up, if it is still there. */
 export function earlyHost(): HTMLElement | null {
-  return document.querySelector<HTMLElement>(`div[data-devknobs="${EARLY}"]`);
+  return findOwn<HTMLElement>(document, EARLY, "div");
 }
 
 /** Take the stand-in and its style away, which gives the page back unless the frame covers it. */
 export function dropEarly(): void {
-  for (const node of Array.from(document.querySelectorAll(`[data-devknobs="${EARLY}"]`))) {
+  for (const node of Array.from(document.querySelectorAll(ownSelector(EARLY)))) {
     node.remove();
   }
   removeStyle(EARLY);
@@ -279,7 +280,7 @@ export function showEarly(knobs: Drawn): void {
   const snapshot = readSnapshot(knobs, window);
   if (!snapshot) return;
   const host = document.createElement("div");
-  host.setAttribute("data-devknobs", EARLY);
+  markOwn(host, EARLY);
   host.style.cssText = `position:fixed;inset:0;z-index:${Z_INDEX}`;
   const root = host.attachShadow({ mode: "open" });
   root.innerHTML = snapshot.html;

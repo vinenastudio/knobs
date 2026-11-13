@@ -102,7 +102,16 @@ describe("an attribute edit", () => {
     page(() => [elem("body", {}, link)]);
     expect(attrEdit(AT, el(link), "class", "cta")).toBeNull();
     expect(attrEdit(AT, el(link), "data-devknobs-hide", "")).toBeNull();
+    expect(attrEdit(AT, el(link), "data-knobs-hide", "")).toBeNull();
+    expect(attrEdit(AT, el(link), "data-knobs", "panel")).toBeNull();
     expect(attrEdit(AT, el(link), "  ", "x")).toBeNull();
+  });
+
+  test("sets the page's own data-knobs-… attributes, which another tool on the page writes", () => {
+    const link = elem("a", { class: "cta" });
+    page(() => [elem("body", {}, link)]);
+    expect(attrEdit(AT, el(link), "data-knobs-theme", "dark")).not.toBeNull();
+    expect(attrEdit(AT, el(link), "data-knobs-font", "serif")).not.toBeNull();
   });
 
   test("whose value the page set since is left as the page set it on undo", () => {
@@ -143,6 +152,10 @@ describe("an html edit", () => {
     expect(htmlEdit(AT, el(old), "<div></div>", [as(elem("p")), as(text(" a < b & c > d"))])?.edit.after).toBe("<p></p> a &lt; b &amp; c &gt; d");
     expect(htmlEdit(AT, el(old), "<div></div>", [as(elem("p", {}, elem("b", { "data-devknobs-hide": "" })))])).toBeNull();
     expect(htmlEdit(AT, el(old), "<div></div>", [as(elem("p", { "data-devknobs": "x" }))])).toBeNull();
+    expect(htmlEdit(AT, el(old), "<div></div>", [as(elem("p", { "data-knobs": "x" }))])).toBeNull();
+    expect(htmlEdit(AT, el(old), "<div></div>", [as(elem("p", {}, elem("b", { "data-knobs-hide": "" })))])).toBeNull();
+    // Another tool's names are the page's.
+    expect(htmlEdit(AT, el(old), "<div></div>", [as(elem("p", { "data-knobs-theme": "dark", "data-knobs-font": "serif" }))])?.edit.after).toBe('<p data-knobs-theme="dark" data-knobs-font="serif"></p>');
   });
 
   test("whose element the page moved since changes nothing, and is dropped", () => {
@@ -202,15 +215,34 @@ describe("a hide", () => {
     const log = createEditLog();
     expect(log.record(hideEdit(AT, el(ad), (element) => styled.push(element)))).toMatchObject({ kind: "hide", property: "hidden", before: null, after: "hidden" });
     expect(ad.hasAttribute(HIDE_ATTRIBUTE)).toBe(true);
+    expect(ad.hasAttribute("data-knobs-hide")).toBe(true);
     expect(ad.getAttribute("style")).toBe("color: red");
     expect(styled).toEqual([el(ad)]);
     expect(log.record(hideEdit(AT, el(ad), () => undefined))).toMatchObject({ before: "hidden", after: null });
     expect(ad.hasAttribute(HIDE_ATTRIBUTE)).toBe(false);
+    expect(ad.hasAttribute("data-knobs-hide")).toBe(false);
     log.undo();
     expect(ad.hasAttribute(HIDE_ATTRIBUTE)).toBe(true);
     log.undoAll();
     expect(ad.hasAttribute(HIDE_ATTRIBUTE)).toBe(false);
     expect(netChanges(log.list())).toEqual([]);
+  });
+
+  test("shows again an element an older copy hid, which has only the old name", () => {
+    const ad = elem("p", { "data-devknobs-hide": "" });
+    page(() => [elem("body", {}, ad)]);
+    const log = createEditLog();
+    expect(log.record(hideEdit(AT, el(ad), () => undefined))).toMatchObject({ before: "hidden", after: null });
+    expect(ad.hasAttribute(HIDE_ATTRIBUTE)).toBe(false);
+  });
+
+  test("an older copy that shows it again takes off only the old name: the element is not hidden", () => {
+    const ad = elem("p", { "data-devknobs-hide": "", "data-knobs-hide": "" });
+    page(() => [elem("body", {}, ad)]);
+    ad.removeAttribute(HIDE_ATTRIBUTE);
+    const log = createEditLog();
+    expect(log.record(hideEdit(AT, el(ad), () => undefined))).toMatchObject({ before: null, after: "hidden" });
+    expect(ad.hasAttribute(HIDE_ATTRIBUTE)).toBe(true);
   });
 });
 
@@ -462,5 +494,6 @@ describe("the tree's edit keys", () => {
     expect(textOf(line(loose, "text"))).toBeNull();
     expect(actionsFor(line((host.shadowRoot as PageNode).childNodes[1] as PageNode, "comment"))).toEqual([]);
     expect(HIDE_CSS).toContain(`[${HIDE_ATTRIBUTE}] *`);
+    expect(HIDE_CSS).not.toContain("data-knobs-hide");
   });
 });

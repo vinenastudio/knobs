@@ -53,6 +53,7 @@ import { createStorageControl } from "./storageaction";
 import { CSS } from "./styles";
 import { createTips } from "./tooltip";
 import { addStyle } from "../engine/style";
+import { markOwn, setMark } from "../mark";
 
 export { wallInput } from "./catalog";
 
@@ -180,7 +181,7 @@ export function createPanel(options: PanelOptions = {}): Panel {
   );
 
   const host = document.createElement("div");
-  host.setAttribute("data-devknobs", "panel");
+  markOwn(host, "panel");
   host.style.cssText = HOST_STYLE;
   const root = host.attachShadow({ mode: "open" });
   addStyle(root, HOST_RESET);
@@ -204,7 +205,7 @@ export function createPanel(options: PanelOptions = {}): Panel {
   searchInput.placeholder = "search knobs";
   searchInput.autocomplete = "off";
   searchInput.spellcheck = false;
-  searchInput.setAttribute(KEYS_FIELD, "");
+  setMark(searchInput, KEYS_FIELD);
   searchInput.setAttribute("role", "combobox");
   searchInput.setAttribute("aria-label", "find a knob");
   searchInput.setAttribute("aria-autocomplete", "list");

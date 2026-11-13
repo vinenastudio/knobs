@@ -1,9 +1,10 @@
 import { collect, onDocumentTimeline, targetOf } from "./animations";
 import { walk } from "./tree";
 import { addStyle } from "./style";
+import { ATTRIBUTES, removeMark, setMark } from "../mark";
 
 /** Marks the boxes whose finished CSS animations replay restarts. */
-const MARK = "data-devknobs-replay";
+const MARK = ATTRIBUTES.replay;
 
 /** The boxes a CSS animation can run on, and the token each one goes by in the mark. */
 const BOXES: [pseudo: string, token: string][] = [
@@ -67,7 +68,7 @@ function restartFinished(live: Map<Element, Set<string>>): void {
       ([, token]) => token,
     );
     if (tokens.length === 0) return;
-    element.setAttribute(MARK, tokens.join(" "));
+    setMark(element, MARK, tokens.join(" "));
     marked.push(element);
     roots.add(element.getRootNode() as Document | ShadowRoot);
   });
@@ -76,7 +77,7 @@ function restartFinished(live: Map<Element, Set<string>>): void {
   // One forced style pass sees `none`, so the next one starts each animation over.
   void document.documentElement.offsetHeight;
   for (const style of styles) style.remove();
-  for (const element of marked) element.removeAttribute(MARK);
+  for (const element of marked) removeMark(element, MARK);
 }
 
 /**
