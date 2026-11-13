@@ -1,4 +1,4 @@
-import type { DevknobsState } from "../types";
+import type { KnobsState } from "../types";
 import { type Identity, identityOf, patchedAs, patchWindow, stale } from "./identity";
 import { handing } from "./native";
 import { keep } from "./scrollkeep";
@@ -25,7 +25,7 @@ export interface Frame {
 }
 
 let frame: Frame | null = null;
-let latest: DevknobsState | null = null;
+let latest: KnobsState | null = null;
 /** What the frame's page loaded as, or null while a new one is on the way. */
 let identity: Identity | null = null;
 /** The reload a new identity asked for, once the knobs settle. */
@@ -184,7 +184,7 @@ function onHide(event: PageTransitionEvent): void {
 }
 
 /** Keep the knobs, and reload the frame if its page loaded as another device. */
-export function knobs(state: DevknobsState): void {
+export function knobs(state: KnobsState): void {
   latest = state;
   follow();
 }
@@ -234,7 +234,7 @@ function reload(): void {
  * browser's own agent and no touch screen, and a reload patches it. One still
  * unpatched after that reload is left as it is.
  */
-function unpatched(view: Window, state: DevknobsState): Identity {
+function unpatched(view: Window, state: KnobsState): Identity {
   const had = patchedAs(view);
   if (had || repatched) {
     repatched = false;

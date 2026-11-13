@@ -1,4 +1,4 @@
-import type { DevknobsState, OrientationValue } from "../types";
+import type { KnobsState, OrientationValue } from "../types";
 import { hush } from "../requests/quiet";
 import { BEZEL_URLS, DUO_FOLD } from "./bezelurls";
 import { deviceOf, formId, screenOf, turn } from "./devices";
@@ -675,7 +675,7 @@ export function foldShotsDue(): boolean {
 }
 
 /** What picks the body drawn around the frame. */
-export type BodyKnobs = Pick<DevknobsState, "mock" | "device" | "orientation" | "posture">;
+export type BodyKnobs = Pick<KnobsState, "mock" | "device" | "orientation" | "posture">;
 
 /**
  * The picture a foldable shows in its other posture, held the other way, as

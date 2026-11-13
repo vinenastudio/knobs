@@ -1,6 +1,6 @@
 import type {
-  DevknobsState,
-  DevknobsStatePatch,
+  KnobsState,
+  KnobsStatePatch,
   OrientationValue,
   PostureValue,
 } from "../types";
@@ -403,7 +403,7 @@ export function turn(
 }
 
 /** A device names its own browser in the ua knob, unless the patch names one. */
-function withUa(patch: DevknobsStatePatch, preset: string): DevknobsStatePatch {
+function withUa(patch: KnobsStatePatch, preset: string): KnobsStatePatch {
   return { ...patch, ua: { preset, ...patch.ua } };
 }
 
@@ -411,7 +411,7 @@ function withUa(patch: DevknobsStatePatch, preset: string): DevknobsStatePatch {
  * A device taken away takes its browser along, while the ua knob still has
  * the one the device brought and the patch names none.
  */
-function withoutUa(state: DevknobsState, patch: DevknobsStatePatch): DevknobsStatePatch {
+function withoutUa(state: KnobsState, patch: KnobsStatePatch): KnobsStatePatch {
   const before = deviceOf(state.device);
   if (!before || patch.ua !== undefined || state.ua.preset !== before.ua) return patch;
   return { ...patch, ua: { preset: "system" } };
@@ -422,7 +422,7 @@ function withoutUa(state: DevknobsState, patch: DevknobsStatePatch): DevknobsSta
  * it goes to is held the other way, at that screen's size. A dpr and a browser
  * the last screen brought go with it. Null for a patch that does not fold it.
  */
-function fold(state: DevknobsState, patch: DevknobsStatePatch): DevknobsStatePatch | null {
+function fold(state: KnobsState, patch: KnobsStatePatch): KnobsStatePatch | null {
   const { posture } = patch;
   const same = patch.device === undefined || patch.device === state.device;
   if (!same || posture === undefined || posture === state.posture) return null;
@@ -443,7 +443,7 @@ function fold(state: DevknobsState, patch: DevknobsStatePatch): DevknobsStatePat
  * the patch says how. A new orientation alone turns a frame that has both a
  * width and a height. What the patch sets itself wins over all of it.
  */
-export function hold(state: DevknobsState, patch: DevknobsStatePatch): DevknobsStatePatch {
+export function hold(state: KnobsState, patch: KnobsStatePatch): KnobsStatePatch {
   const folded = fold(state, patch);
   if (folded) return folded;
   const picked = patch.device === undefined ? undefined : deviceOf(patch.device);
@@ -474,7 +474,7 @@ export function hold(state: DevknobsState, patch: DevknobsStatePatch): DevknobsS
  * brought, unless the change named a browser itself (`dropUa` false). Without a foldable,
  * the posture is the first, so one picked next comes up in it.
  */
-export function settle(state: DevknobsState, dropUa = true): DevknobsState {
+export function settle(state: KnobsState, dropUa = true): KnobsState {
   const { width, height } = state;
   const sized = typeof width === "number" && typeof height === "number";
   const orientation: OrientationValue = sized && width > height ? "landscape" : "portrait";

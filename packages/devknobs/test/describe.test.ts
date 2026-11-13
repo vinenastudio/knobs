@@ -33,8 +33,8 @@ import type {
   ClockMode,
   ConnectionValue,
   ContrastValue,
-  DevknobsState,
-  DevknobsStatePatch,
+  KnobsState,
+  KnobsStatePatch,
   DevIconValue,
   DirValue,
   GeoErrorValue,
@@ -53,7 +53,7 @@ import type {
 const FOLDABLE = DEVICES.find((device) => device.postures);
 
 /** What a knob's value needs set beside it to hold. */
-function contextFor(key: keyof DevknobsState): DevknobsStatePatch {
+function contextFor(key: keyof KnobsState): KnobsStatePatch {
   if (key === "orientation") return { width: 400, height: 800 };
   if (key === "posture") return { device: FOLDABLE?.id ?? "none" };
   return {};
@@ -72,8 +72,8 @@ function samples(shape: KnobShape): (string | number | boolean)[] {
 }
 
 /** Set a value the way an agent does, and read it back. */
-function roundTrip(key: keyof DevknobsState, value: KnobValue): DevknobsState {
-  const patch = { [key]: value } as DevknobsStatePatch;
+function roundTrip(key: keyof KnobsState, value: KnobValue): KnobsState {
+  const patch = { [key]: value } as KnobsStatePatch;
   return merge(merge(DEFAULT_STATE, contextFor(key)), patch);
 }
 

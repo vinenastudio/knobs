@@ -1,4 +1,4 @@
-import type { DevknobsState } from "../types";
+import type { KnobsState } from "../types";
 import { deviceOf, formOf } from "./devices";
 import { type Framing, needsFrame } from "./frame";
 import type { Rect } from "./mock";
@@ -298,7 +298,7 @@ export function folds(from: string, to: string): boolean {
  * device, or the device and the way it is held, and a foldable's posture.
  */
 export function shapeOf(
-  knobs: Framing & Pick<DevknobsState, "device" | "orientation" | "posture">,
+  knobs: Framing & Pick<KnobsState, "device" | "orientation" | "posture">,
 ): string {
   if (!needsFrame(knobs)) return "closed";
   const device = deviceOf(knobs.device);

@@ -1,4 +1,4 @@
-import type { DevknobsState } from "../types";
+import type { KnobsState } from "../types";
 import { CLOCK_SPEED_MAX, CLOCK_SPEED_MIN } from "./clock";
 import { DEVICES, POSTURES } from "./devices";
 import { DPR_MAX, DPR_MIN, SIZE_MAX, SIZE_MIN } from "./frame";
@@ -55,7 +55,7 @@ export type KnobValue = string | number | boolean | Record<string, string | numb
 
 export interface KnobDescription {
   /** The key in a `setState` patch. An object knob may be patched field by field. */
-  key: keyof DevknobsState;
+  key: keyof KnobsState;
   description: string;
   value: KnobShape;
   /** The value `reset()` goes back to, or for `panel`, which `reset()` leaves as it is, the first mount's. */
@@ -79,7 +79,7 @@ function field(description: string, value: KnobShape): KnobField {
   return { description, value };
 }
 
-function knobs(): { [K in Exclude<keyof DevknobsState, Skipped>]: Spec } {
+function knobs(): { [K in Exclude<keyof KnobsState, Skipped>]: Spec } {
   return {
     scheme: spec("prefers-color-scheme.", oneOf(SCHEMES)),
     motion: spec("prefers-reduced-motion.", oneOf(MOTIONS)),
@@ -265,7 +265,7 @@ export function describe(): KnobDescription[] {
 }
 
 /** A knob's default, trimmed to the fields it lists. */
-function defaultOf(key: keyof DevknobsState): KnobValue {
+function defaultOf(key: keyof KnobsState): KnobValue {
   if (key === "panel") {
     const { open, docked, handle, devIcon, realPhone } = DEFAULT_STATE.panel;
     return { open, docked, handle, devIcon, realPhone };

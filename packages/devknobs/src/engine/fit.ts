@@ -1,4 +1,4 @@
-import type { DevknobsState, PostureValue, SideValue } from "../types";
+import type { KnobsState, PostureValue, SideValue } from "../types";
 import { formOf } from "./devices";
 import type { Sides } from "./mock";
 import { type Point, ZOOM_MAX } from "./zoom";
@@ -36,7 +36,7 @@ export interface Fit {
 }
 
 /** Does the letterbox read the frame out? A frame the window's size, fitted, is the window. */
-export function hasStrip(knobs: Pick<DevknobsState, "width" | "height" | "zoom">): boolean {
+export function hasStrip(knobs: Pick<KnobsState, "width" | "height" | "zoom">): boolean {
   const sized = typeof knobs.width === "number" || typeof knobs.height === "number";
   return sized || knobs.zoom !== "fit";
 }
@@ -64,7 +64,7 @@ function margin(size: number): number {
  * screen is a whole number of the `ratio`'s device pixels tall.
  */
 export function fit(
-  knobs: Pick<DevknobsState, "width" | "height" | "zoom">,
+  knobs: Pick<KnobsState, "width" | "height" | "zoom">,
   size: { width: number; height: number },
   options: { frameZoom?: number; aside?: number; side?: SideValue; mock?: Sides; ratio?: number } = {},
 ): Fit {
@@ -130,7 +130,7 @@ export function origin(place: Fit, room: { width: number; height: number }): Poi
  */
 export function label(
   place: Fit,
-  knobs: Pick<DevknobsState, "dpr" | "height" | "device"> & { posture?: PostureValue },
+  knobs: Pick<KnobsState, "dpr" | "height" | "device"> & { posture?: PostureValue },
   page: { width: number; height: number } = place,
 ): string {
   const name = formOf(knobs.device, knobs.posture)?.label;

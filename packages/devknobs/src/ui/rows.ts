@@ -1,5 +1,5 @@
 import * as engine from "../engine";
-import type { DevknobsState } from "../types";
+import type { KnobsState } from "../types";
 import {
   isActive,
   type Knob,
@@ -120,9 +120,9 @@ export interface Rows {
   focusCustom(knob: Knob): void;
   showRow(id: RowId, knob: Knob): void;
   /** Draw the rows for a state, and say whether any shows. */
-  renderRows(state: DevknobsState, live: Live): boolean;
+  renderRows(state: KnobsState, live: Live): boolean;
   /** Draw the readouts that run with the clock. */
-  tick(state: DevknobsState, live: Live): void;
+  tick(state: KnobsState, live: Live): void;
   /** Show the keys in force on the actions' rows. */
   drawKeys(now: Keys): void;
   /** Whether a row is being dragged by its grip. */
@@ -219,7 +219,7 @@ export function createRows(context: RowsContext): Rows {
    * focus and its lists' scroll, so the row with the focus and the open row
    * stay put and the others move around them.
    */
-  function orderRows(state: DevknobsState): void {
+  function orderRows(state: KnobsState): void {
     const boxes = rowOrder(state).flatMap((id) => viewOf(id)?.box ?? []);
     const focused = root.activeElement;
     const keep = views.flatMap((view) => (focused && view.box.contains(focused) ? [view.box] : []));
@@ -459,7 +459,7 @@ export function createRows(context: RowsContext): Rows {
     openEditor,
     focusCustom,
     showRow,
-    renderRows(state: DevknobsState, live: Live): boolean {
+    renderRows(state: KnobsState, live: Live): boolean {
       let anyShown = false;
       orderRows(state);
       for (const view of views) {
@@ -484,7 +484,7 @@ export function createRows(context: RowsContext): Rows {
       }
       return anyShown;
     },
-    tick(state: DevknobsState, live: Live): void {
+    tick(state: KnobsState, live: Live): void {
       for (const view of views) {
         if (view.box.hidden) continue;
         // A write of the same text would still replace the node, a mutation for every observer.

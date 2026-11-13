@@ -1,4 +1,4 @@
-import type { DevknobsState } from "../types";
+import type { KnobsState } from "../types";
 import { foldRest, holdingHinge, releaseFold, scrubFold, watchFold, watchHinge } from "./foldrun";
 import { running, still } from "./morphrun";
 import { merge } from "./store";
@@ -19,7 +19,7 @@ export { foldRest, holdingHinge, watchFold, watchHinge };
  * of one toward its other posture, which stays shut or open till the hand
  * moves. False where it cannot, as while a device turns or changes.
  */
-export function takeHinge(state: DevknobsState): boolean {
+export function takeHinge(state: KnobsState): boolean {
   if (running() || turning()) return false;
   return foldDevice(merge(state, { posture: state.posture === "open" ? "closed" : "open" }), true);
 }

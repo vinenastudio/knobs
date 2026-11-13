@@ -2,11 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { identityOf, patchedAs, patchWindow, stale } from "../src/engine/identity";
 import { DEFAULT_STATE, merge } from "../src/engine/store";
 import { reset, uaPreset } from "../src/engine/ua";
-import type { DevknobsStatePatch } from "../src/types";
+import type { KnobsStatePatch } from "../src/types";
 
 const REAL_AGENT = "Mozilla/5.0 (Macintosh) Chrome/1.0.0.0 Safari/537.36";
 
-function state(patch: DevknobsStatePatch) {
+function state(patch: KnobsStatePatch) {
   return merge(DEFAULT_STATE, patch);
 }
 

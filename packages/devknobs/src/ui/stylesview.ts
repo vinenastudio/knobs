@@ -49,7 +49,7 @@ import type {
   StyleDeclaration,
 } from "../styles/types";
 import type { BoxRing } from "../grab/boxmodel";
-import type { DevknobsState } from "../types";
+import type { KnobsState } from "../types";
 import { type BoxReading, createBoxDiagram, readBox } from "./boxdiagram";
 import { createCssEditor, newRuleSelector, offDeclaration, type Place, styleOf } from "./cssedit";
 import { button, el } from "./dom";
@@ -147,8 +147,8 @@ const MODES: readonly StylesMode[] = ["simple", "advanced"];
 export interface StylesPage {
   inspect: typeof inspect;
   invalidate: typeof invalidate;
-  getState(): DevknobsState;
-  subscribe(listener: (state: DevknobsState) => void): () => void;
+  getState(): KnobsState;
+  subscribe(listener: (state: KnobsState) => void): () => void;
   /** The browser's word on whether a text is a color. */
   isColor(text: string): boolean;
   /** The element's box, or null where it has none to read. */
@@ -281,7 +281,7 @@ function isOwn(record: MutationRecord): boolean {
 }
 
 /** The knobs as one text, the panel's own state aside: it moves nothing on the page. */
-function knobsOf(state: DevknobsState): string {
+function knobsOf(state: KnobsState): string {
   return JSON.stringify({ ...state, panel: null });
 }
 

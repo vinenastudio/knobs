@@ -17,7 +17,7 @@ import {
 } from "../src/engine/store";
 import { MAT_COLOR_NAMES } from "../src/engine/matcolors";
 import { ZOOM_MAX, ZOOM_MIN } from "../src/engine/zoom";
-import type { ClockValue, DevknobsState } from "../src/types";
+import type { ClockValue, KnobsState } from "../src/types";
 
 describe("parse", () => {
   test("falls back to the defaults", () => {
@@ -381,7 +381,7 @@ describe("parse", () => {
   });
 
   test("reads back every valid value it was given", () => {
-    const state: DevknobsState = {
+    const state: KnobsState = {
       ...DEFAULT_STATE,
       motion: "reduce",
       speed: 0.1,

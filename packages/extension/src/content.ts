@@ -1,7 +1,7 @@
 // The page world: the devknobs panel itself, with text size, offline, the
 // prefers knobs, a plain viewport and the user agent handed to the service worker, which sets them for real.
 import {
-  type DevknobsStatePatch,
+  type KnobsStatePatch,
   type EditsStore,
   type FrameRefusal,
   getState,
@@ -589,7 +589,7 @@ function onMessage(event: Event) {
     void ask({ state: { ...getState() }, type: 'carry' });
   } else if (message.type === 'detached') {
     // The tab's own size is back too, so a size the tab had goes with it.
-    const sized: DevknobsStatePatch = knobs.viewport
+    const sized: KnobsStatePatch = knobs.viewport
       ? { device: 'none', dpr: 'system', height: 'full', width: 'full' }
       : {};
     setState({ ...patchOf(DEFAULT_STATE), ...sized });
@@ -621,7 +621,7 @@ function onMessage(event: Event) {
     // The knobs of the page on another origin the tab followed its frame from.
     if (message.carry) {
       try {
-        setState(message.carry as DevknobsStatePatch);
+        setState(message.carry as KnobsStatePatch);
       } catch {
         // Knobs this copy of devknobs does not take: the page keeps its own.
       }

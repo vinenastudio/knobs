@@ -1,6 +1,6 @@
 import * as engine from "../engine";
 import { dockRoom, dockWidth } from "../engine/dock";
-import type { DevknobsStatePatch, PanelValue } from "../types";
+import type { KnobsStatePatch, PanelValue } from "../types";
 import type { Action } from "./catalog";
 
 /**
@@ -10,7 +10,7 @@ import type { Action } from "./catalog";
  */
 
 /** The patch that pins a floating panel and lets a pinned one float. Nothing else of it changes. */
-export function pinPatch(panel: Pick<PanelValue, "docked">): DevknobsStatePatch {
+export function pinPatch(panel: Pick<PanelValue, "docked">): KnobsStatePatch {
   return { panel: { docked: !panel.docked } };
 }
 

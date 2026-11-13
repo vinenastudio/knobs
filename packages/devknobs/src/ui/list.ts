@@ -1,5 +1,5 @@
 import { DEFAULT_PINNED } from "../engine/store";
-import type { DevknobsState, DevknobsStatePatch } from "../types";
+import type { KnobsState, KnobsStatePatch } from "../types";
 import {
   combine,
   isActive,
@@ -33,14 +33,14 @@ import {
  * or dragged to, then the rest in the catalog's, so a row listed for being off
  * its default stands at the end.
  */
-export function rowOrder(state: DevknobsState): RowId[] {
+export function rowOrder(state: KnobsState): RowId[] {
   const ids = ROWS.map((row) => row.id);
   const first = state.panel.pinned.flatMap((id) => ids.filter((entry) => entry === id));
   return [...first, ...ids.filter((id) => !first.includes(id))];
 }
 
 /** The rows listed, in the order they stand. */
-export function listedOrder(state: DevknobsState): RowId[] {
+export function listedOrder(state: KnobsState): RowId[] {
   return rowOrder(state).filter((id) => ROWS.some((row) => row.id === id && isListed(row, state)));
 }
 
@@ -103,16 +103,16 @@ export function arrange<T>(
  * as it then stands, so a row listed only for being off its default is
  * pinned where it was put.
  */
-export function movePatch(state: DevknobsState, from: number, to: number): DevknobsStatePatch {
+export function movePatch(state: KnobsState, from: number, to: number): KnobsStatePatch {
   return { panel: { pinned: moveItem(listedOrder(state), from, to) } };
 }
 
 /** The patch that sets knobs from the panel and pins their row. */
 export function pinPatch(
-  state: DevknobsState,
+  state: KnobsState,
   id: RowId,
-  patch: DevknobsStatePatch,
-): DevknobsStatePatch {
+  patch: KnobsStatePatch,
+): KnobsStatePatch {
   const { pinned } = state.panel;
   return { ...patch, panel: { pinned: pinned.includes(id) ? pinned : [...pinned, id] } };
 }
@@ -122,7 +122,7 @@ export function pinPatch(
  * default. A knob already there is left alone, so a reset that spans other
  * rows' values, as the device's does, takes nothing it did not bring.
  */
-function undo(knob: Knob, state: DevknobsState): DevknobsStatePatch {
+function undo(knob: Knob, state: KnobsState): KnobsStatePatch {
   if (!offDefault(knob, state)) return {};
   const base = knob.base?.(state);
   return base === undefined ? knob.reset : knob.write(base, state);
@@ -133,7 +133,7 @@ function undo(knob: Knob, state: DevknobsState): DevknobsStatePatch {
  * and the row pinned, so it stays listed. A value another knob brought stays,
  * so the viewport's `×` leaves a device its size.
  */
-export function resetRowPatch(state: DevknobsState, row: Row): DevknobsStatePatch {
+export function resetRowPatch(state: KnobsState, row: Row): KnobsStatePatch {
   return pinPatch(state, row.id, combine(row.knobs.map((id) => undo(knobOf(id), state))));
 }
 
@@ -141,7 +141,7 @@ export function resetRowPatch(state: DevknobsState, row: Row): DevknobsStatePatc
  * The patch a hold on a row's `×` sends: its knobs back as a click puts them,
  * and the row off the list.
  */
-export function removePatch(state: DevknobsState, row: Row): DevknobsStatePatch {
+export function removePatch(state: KnobsState, row: Row): KnobsStatePatch {
   const pinned = state.panel.pinned.filter((id) => id !== row.id);
   return { ...combine(row.knobs.map((id) => undo(knobOf(id), state))), panel: { pinned } };
 }
@@ -151,7 +151,7 @@ export function removePatch(state: DevknobsState, row: Row): DevknobsStatePatch 
  * rows listed alone, in their order? An id no row has here, such as one an
  * older or a newer version kept, is not listed and counts for nothing.
  */
-export function isReset(state: DevknobsState): boolean {
+export function isReset(state: KnobsState): boolean {
   const pinned = state.panel.pinned.filter((id) =>
     ROWS.some((row) => row.id === id && rowHere(row)),
   );
@@ -162,7 +162,7 @@ export function isReset(state: DevknobsState): boolean {
   );
 }
 
-export function isListed(row: Row, state: DevknobsState): boolean {
+export function isListed(row: Row, state: KnobsState): boolean {
   return rowHere(row) && (isActive(row, state) || state.panel.pinned.includes(row.id));
 }
 
@@ -179,7 +179,7 @@ export function showsLabel(row: Row, knob: Knob): boolean {
  * back at. An action's says what it emulates, else whether its mode is on,
  * and nothing with no mode.
  */
-export function rowText(row: Row, state: DevknobsState, live: Live): string {
+export function rowText(row: Row, state: KnobsState, live: Live): string {
   if (row.action) return row.action.value?.() || (row.action.state?.() ?? "");
   const text = summary(row, state, live);
   if (text) return text;

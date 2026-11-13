@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { join } from "node:path";
 import { pageChoices } from "../src/host";
 import { claim, expose, free, hostOf, owned, pin, superseded, withdraw } from "../src/instance";
 
@@ -248,5 +249,133 @@ describe("expose", () => {
     expose(scope, api);
     withdraw(scope, api);
     expect(Reflect.get(scope, "devknobs")).toBe(api);
+  });
+});
+
+describe("window.knobs", () => {
+  test("is the same api as devknobs", () => {
+    const scope = {};
+    const api = {};
+    expose(scope, api);
+    expect(Reflect.get(scope, "knobs")).toBe(api);
+    expect(Reflect.get(scope, "devknobs")).toBe(api);
+  });
+
+  test("a page's own knobs, set before, stays, and devknobs still works", () => {
+    const own = { synth: true };
+    const scope = { knobs: own };
+    const api = {};
+    expose(scope, api);
+    expect(scope.knobs).toBe(own);
+    expect(Reflect.get(scope, "devknobs")).toBe(api);
+    withdraw(scope, api);
+    expect(scope.knobs).toBe(own);
+  });
+
+  test("a knobs the scope inherits stays the page's", () => {
+    const own = {};
+    const scope: object = Object.create({ knobs: own });
+    expose(scope, {});
+    expect(Reflect.get(scope, "knobs")).toBe(own);
+    expect(Object.hasOwn(scope, "knobs")).toBe(false);
+  });
+
+  test("the page setting knobs after takes the name over", () => {
+    const scope = {};
+    const api = {};
+    expose(scope, api);
+    const own = {};
+    Reflect.set(scope, "knobs", own);
+    expect(Reflect.get(scope, "knobs")).toBe(own);
+    expect(Object.getOwnPropertyDescriptor(scope, "knobs")).toEqual({
+      value: own,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+    withdraw(scope, api);
+    expect(Reflect.get(scope, "knobs")).toBe(own);
+    expect("devknobs" in scope).toBe(false);
+  });
+
+  test("is enumerable, as a plain assignment would be", () => {
+    const scope = {};
+    expose(scope, {});
+    expect(Object.keys(scope)).toEqual(["devknobs", "knobs"]);
+  });
+
+  test("the copy that set it takes it away", () => {
+    const scope = {};
+    const api = {};
+    expose(scope, api);
+    withdraw(scope, api);
+    expect("knobs" in scope).toBe(false);
+  });
+
+  test("a second copy's api takes the place of the first's", () => {
+    const scope = {};
+    const first = {};
+    const second = {};
+    expose(scope, first);
+    expose(scope, second);
+    expect(Reflect.get(scope, "knobs")).toBe(second);
+    withdraw(scope, first);
+    expect(Reflect.get(scope, "knobs")).toBe(second);
+    withdraw(scope, second);
+    expect("knobs" in scope).toBe(false);
+  });
+
+  test("a pinned api keeps both names after unmount", () => {
+    const scope = {};
+    const api = {};
+    pin(scope);
+    expose(scope, api);
+    withdraw(scope, api);
+    expect(Reflect.get(scope, "knobs")).toBe(api);
+    expect(Reflect.get(scope, "devknobs")).toBe(api);
+  });
+});
+
+/**
+ * Run a page's classic script on a real global, in a process of its own: a
+ * `vm` context's global is not one, and a function declaration on this
+ * process's global could not be taken back. `before` runs before the copy
+ * exposes its api, `after` after it; the copy then withdraws it.
+ */
+function page(before: string, after: string): Record<string, unknown> {
+  const instance = join(import.meta.dir, "..", "src", "instance.ts");
+  const script = `
+    import vm from "node:vm";
+    import { expose, withdraw } from ${JSON.stringify(instance)};
+    const api = { agent: true };
+    const read = (code) => vm.runInThisContext(code);
+    vm.runInThisContext(${JSON.stringify(before)});
+    expose(globalThis, api);
+    const exposed = read("knobs") === api;
+    vm.runInThisContext(${JSON.stringify(after)});
+    const seen = read("typeof knobs === 'function' ? knobs() : knobs");
+    const devknobs = read("devknobs") === api;
+    withdraw(globalThis, api);
+    const left = read("typeof globalThis.knobs === 'function' ? globalThis.knobs() : globalThis.knobs");
+    console.log(JSON.stringify({ exposed, seen, devknobs, left, devknobsLeft: "devknobs" in globalThis }));
+  `;
+  const child = Bun.spawnSync([process.execPath, "-e", script]);
+  expect(child.stderr.toString()).toBe("");
+  return JSON.parse(child.stdout.toString()) as Record<string, unknown>;
+}
+
+describe("window.knobs and a page's classic script", () => {
+  for (const code of ["var knobs = 1;", "knobs = 1;", "globalThis.knobs = 1;", "function knobs() { return 1; }"]) {
+    test(`${code} after the copy wins`, () => {
+      expect(page("", code)).toEqual({ exposed: true, seen: 1, devknobs: true, left: 1, devknobsLeft: false });
+    });
+  }
+
+  test("a page's knobs set before the copy stays, and devknobs still works", () => {
+    expect(page("var knobs = 1;", "")).toEqual({ exposed: false, seen: 1, devknobs: true, left: 1, devknobsLeft: false });
+  });
+
+  test("with no page knobs, the copy takes its knobs away", () => {
+    expect(page("", "")).toEqual({ exposed: true, seen: { agent: true }, devknobs: true, devknobsLeft: false });
   });
 });

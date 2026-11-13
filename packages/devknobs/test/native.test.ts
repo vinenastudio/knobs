@@ -35,7 +35,7 @@ import * as touchPointer from "../src/engine/touchpointer";
 import * as ua from "../src/engine/ua";
 import * as width from "../src/engine/frames";
 import * as requests from "../src/requests";
-import type { DevknobsState, NetworkValue, TextValue } from "../src/types";
+import type { KnobsState, NetworkValue, TextValue } from "../src/types";
 
 /** A driver that notes every call, per part. */
 function recorder() {
@@ -58,7 +58,7 @@ function recorder() {
   return { calls, driver };
 }
 
-const SET: DevknobsState = merge(DEFAULT_STATE, {
+const SET: KnobsState = merge(DEFAULT_STATE, {
   text: 48,
   network: { online: "offline", type: "3g" },
   scheme: "dark",
@@ -170,7 +170,7 @@ describe("release", () => {
 });
 
 /** A phone picked with the device knob, as the store has it. */
-function phone(patch: Parameters<typeof merge>[1] = {}): DevknobsState {
+function phone(patch: Parameters<typeof merge>[1] = {}): KnobsState {
   return merge(DEFAULT_STATE, {
     device: "iphone-17",
     width: 402,

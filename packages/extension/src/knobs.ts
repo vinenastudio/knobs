@@ -1,4 +1,4 @@
-import type { DevknobsStatePatch, NativeMedia, NativeViewport, TextValue } from '@vinena/knobs';
+import type { KnobsStatePatch, NativeMedia, NativeViewport, TextValue } from '@vinena/knobs';
 
 /** The knobs devknobs hands its native driver, as one tab's state. */
 export interface KnobState extends NativeMedia {
@@ -153,7 +153,7 @@ export function commands(state: KnobState, tab: TabSize): Array<Command> {
  * The devknobs patch that puts its native knobs where a tab has them. The
  * viewport stays the page's: its size knobs say more than the tab keeps.
  */
-export function patchOf(state: KnobState): DevknobsStatePatch {
+export function patchOf(state: KnobState): KnobsStatePatch {
   const { contrast, motion, scheme, transparency } = state;
   return {
     contrast,

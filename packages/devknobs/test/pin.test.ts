@@ -2,7 +2,7 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import * as engine from "../src/engine";
 import { DOCK_WIDTH, setDockWidth } from "../src/engine/dock";
 import { DEFAULT_STATE, merge, resetState } from "../src/engine/store";
-import type { DevknobsState } from "../src/types";
+import type { KnobsState } from "../src/types";
 import { runAction, stopAction } from "../src/ui/actions";
 import { type Action, ACTIONS, isActive, type Live, ROWS, type Row, type RowId } from "../src/ui/catalog";
 import { ICONS } from "../src/ui/icons";
@@ -108,7 +108,7 @@ function row(id: Action["id"]): Row {
  * The engine's knobs kept here, with no page behind them: what the pin reads
  * and sets, and what running an action from the panel pins its row in.
  */
-function fakeEngine(start: DevknobsState = DEFAULT_STATE) {
+function fakeEngine(start: KnobsState = DEFAULT_STATE) {
   let state = start;
   const spies = [
     spyOn(engine, "getState").mockImplementation(() => state),

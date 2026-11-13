@@ -3,7 +3,7 @@ import { now, realNow } from "../engine/clock";
 import { deviceOf } from "../engine/devices";
 import { resolveTimeZone } from "../engine/time";
 import { userAgentOf } from "../engine/ua";
-import type { DevknobsState, DevknobsStatePatch } from "../types";
+import type { KnobsState, KnobsStatePatch } from "../types";
 import {
   type Knob,
   type KnobId,
@@ -31,7 +31,7 @@ import { createRefusal, type Tips } from "./tooltip";
  */
 
 /** What an editor control keeps in step with the knobs. */
-export type Update = (state: DevknobsState) => void;
+export type Update = (state: KnobsState) => void;
 
 const CUSTOM_DEBOUNCE = 200;
 
@@ -47,7 +47,7 @@ function toNumber(value: string): number {
 }
 
 /** Set knobs from the panel. Their row stays listed from here on. */
-export function commit(row: RowId, patch: DevknobsStatePatch): void {
+export function commit(row: RowId, patch: KnobsStatePatch): void {
   engine.setState(pinPatch(engine.getState(), row, patch));
 }
 
@@ -199,7 +199,7 @@ export function createEditors(context: EditorsContext): Editors {
     box.append(filter, items);
     let shown: Option[] = [];
     let at = -1;
-    const draw = (state: DevknobsState) => {
+    const draw = (state: KnobsState) => {
       const current = knob.read(state);
       shown = filterOptions(knob, filter.value);
       if (filter.value.trim() === "" && !shown.some((option) => option.value === current)) {

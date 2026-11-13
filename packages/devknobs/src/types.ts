@@ -212,7 +212,7 @@ export interface PanelValue {
   pinned: string[];
 }
 
-export interface DevknobsState {
+export interface KnobsState {
   scheme: SchemeValue;
   motion: MotionValue;
   speed: SpeedValue;
@@ -268,10 +268,10 @@ export interface DevknobsState {
 }
 
 /** A partial state update. Object knobs may be patched field by field. */
-export type DevknobsStatePatch = {
-  [K in keyof DevknobsState]?: DevknobsState[K] extends object
-    ? Partial<DevknobsState[K]>
-    : DevknobsState[K];
+export type KnobsStatePatch = {
+  [K in keyof KnobsState]?: KnobsState[K] extends object
+    ? Partial<KnobsState[K]>
+    : KnobsState[K];
 };
 
 /** Every knob module applies a value and can put the page back the way it was. */

@@ -1,6 +1,6 @@
 import type {
   ContrastValue,
-  DevknobsState,
+  KnobsState,
   MotionValue,
   SchemeValue,
   TextValue,
@@ -150,7 +150,7 @@ const SYSTEM_MEDIA: NativeMedia = {
 };
 
 /** Does the frame draw something around the page, beside giving it a size? */
-export function drawnAround(state: DevknobsState): boolean {
+export function drawnAround(state: KnobsState): boolean {
   if (state.panel.docked || state.frame || state.vision !== "none" || state.zoom !== "fit") return true;
   const device = deviceOf(state.device);
   if (!device) return false;
@@ -162,7 +162,7 @@ export function drawnAround(state: DevknobsState): boolean {
 }
 
 /** The viewport a host can set for these knobs, null where they need no size or the frame draws. */
-export function nativeViewport(state: DevknobsState): NativeViewport | null {
+export function nativeViewport(state: KnobsState): NativeViewport | null {
   if (!knobFrame(state) || drawnAround(state)) return null;
   const device = deviceOf(state.device);
   const touch = device?.touch === true;
@@ -188,7 +188,7 @@ export function nativeUa(value: UaValue): NativeUa | null {
 }
 
 /** The state the page's own emulation runs with: each knob the driver takes is left at system. */
-export function inPage(state: DevknobsState, driver: NativeDriver | null): DevknobsState {
+export function inPage(state: KnobsState, driver: NativeDriver | null): KnobsState {
   if (!driver) return state;
   let next = state;
   if (driver.text) next = { ...next, text: "system" };
@@ -198,7 +198,7 @@ export function inPage(state: DevknobsState, driver: NativeDriver | null): Devkn
 }
 
 /** The state the frame runs with: no size of its own while the driver sets the viewport. */
-export function framing(state: DevknobsState, driver: NativeDriver | null): DevknobsState {
+export function framing(state: KnobsState, driver: NativeDriver | null): KnobsState {
   if (!driver?.viewport || !nativeViewport(state)) return state;
   return { ...state, width: "full", height: "full", dpr: "system" };
 }
@@ -253,7 +253,7 @@ export function settles(result: unknown): Promise<void> | null {
 }
 
 /** Hand the driver the knobs it takes, those that changed since. */
-export function drive(driver: NativeDriver, state: DevknobsState): void {
+export function drive(driver: NativeDriver, state: KnobsState): void {
   hand(driver, "text", state.text);
   hand(driver, "offline", state.network.online === "offline");
   const { scheme, motion, contrast, transparency } = state;
@@ -269,7 +269,7 @@ export function drive(driver: NativeDriver, state: DevknobsState): void {
  * once. A host sizing the whole tab as the device (`sized`) sends it too. In
  * real phone mode the device's goes out for the frame's page loads alone.
  */
-export function hostUa(state: DevknobsState, sized: boolean): NativeUa | null {
+export function hostUa(state: KnobsState, sized: boolean): NativeUa | null {
   const brought = [deviceOf(state.device)?.ua, formOf(state.device, state.posture)?.ua];
   if (sized || !brought.includes(state.ua.preset)) return nativeUa(state.ua);
   const ua = state.panel.realPhone ? nativeUa(state.ua) : null;
@@ -277,7 +277,7 @@ export function hostUa(state: DevknobsState, sized: boolean): NativeUa | null {
 }
 
 /** Hand the driver the ua knob, which it takes with its switch off too. */
-export function driveUa(driver: NativeDriver, state: DevknobsState, sized = false): void {
+export function driveUa(driver: NativeDriver, state: KnobsState, sized = false): void {
   if (driver.ua) hand(driver, "ua", hostUa(state, sized));
 }
 

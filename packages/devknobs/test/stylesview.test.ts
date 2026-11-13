@@ -6,7 +6,7 @@ import type {
   StyleBlock,
   StyleDeclaration,
 } from "../src/styles/types";
-import type { DevknobsState } from "../src/types";
+import type { KnobsState } from "../src/types";
 import { createEditLog, type EditLog } from "../src/edit/log";
 import { parseDeclarations } from "../src/styles/declarations";
 import { ADD, HOLD, NEW_RULE } from "../src/ui/cssedit";
@@ -81,7 +81,7 @@ let answer: (element: Element, pseudo?: string) => Inspection;
 let invalidated: number;
 /** What the view calls as it goes, in order, to tell an invalidate came before a read. */
 let calls: string[];
-let knobs: ((state: DevknobsState) => void)[];
+let knobs: ((state: KnobsState) => void)[];
 let titles: string[];
 let outlined: (Element | null)[];
 /** What the view said it holds, in order. */
