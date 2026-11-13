@@ -43,8 +43,8 @@ the pin button in the footer docks the panel to its side, the way devtools dock.
 
 ## fresh mode
 
-add `devknobs=fresh` to the address to see the page and the panel as a first visit does. nothing is kept while it is on.
+add `knobs=fresh` to the address to see the page and the panel as a first visit does. nothing is kept while it is on.
 
 ```
-http://localhost:3000/?devknobs=fresh
+http://localhost:3000/?knobs=fresh
 ```

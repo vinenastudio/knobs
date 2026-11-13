@@ -114,7 +114,7 @@ We make [knobs](/), an open source, dev-only panel that runs inside your own pag
 - **Devices in your page.** Pick an iPhone, Pixel, iPad or laptop preset, and the page loads in a real viewport of that size, inside a drawing of the phone with Safari's or Chrome's bars, so media queries and `vw` follow. See [devices](/docs/devices).
 - **The rest of the conditions.** The same panel sets dark mode, reduced motion, text size, locale and right-to-left, time zone and clock, and offline. See [all knobs](/docs/knobs).
 - **Any browser, or any site.** The npm package `@vinena/knobs` works in your own app in any browser, and the [Chrome extension](/docs/extension) puts the panel on any site, with the viewport set for real by Chrome.
-- **For coding agents.** An agent can set a device, wait for the page and grab what broke through `window.devknobs`. See [agents](/docs/agents).
+- **For coding agents.** An agent can set a device, wait for the page and grab what broke through `window.knobs`. See [agents](/docs/agents).
 
 It has the same limit as device mode: it runs in your desktop browser. Our [limits page](/docs/limits) lists what it cannot fake, such as real touch with pinch and network throttling. Keep the simulator and your phone for the last pass.
 

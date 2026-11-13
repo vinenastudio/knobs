@@ -48,8 +48,8 @@ For a phone or tablet with its body and browser, see [mobile simulator](/use/mob
 A coding agent can set the knobs through any browser tool that runs JavaScript in the page, such as Playwright's `page.evaluate` or the Chrome DevTools MCP's `evaluate_script`:
 
 ```js
-window.devknobs.setState({ width: 390, height: 844 });
-await window.devknobs.ready();
+window.knobs.setState({ width: 390, height: 844 });
+await window.knobs.ready();
 ```
 
 `ready()` resolves with the state once the frame has caught up. To check several sizes, repeat with each one and take a screenshot after each `ready()`. `setState({ width: 'full', height: 'full' })` or `reset()` gives the page the window back. See [agents](/docs/agents).

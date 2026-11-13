@@ -51,8 +51,8 @@ The page runs in your own browser, in a frame, with the phone drawn around it:
 A coding agent can set the knob through any browser tool that runs JavaScript in the page, such as Playwright's `page.evaluate` or the Chrome DevTools MCP's `evaluate_script`:
 
 ```js
-window.devknobs.setState({ device: 'iphone-17', orientation: 'landscape' });
-await window.devknobs.ready();
+window.knobs.setState({ device: 'iphone-17', orientation: 'landscape' });
+await window.knobs.ready();
 ```
 
 To leave the device, call `reset()` or set `{ device: 'none', width: 'full', height: 'full', dpr: 'system' }`. `device: 'none'` alone keeps the device's size, so the frame stays up. See [agents](/docs/agents).

@@ -23,10 +23,11 @@ const ECHO_HEADERS = [
   'content-length',
   'content-type',
   'x-api-key',
+  'x-knobs-now',
   'x-devknobs-now',
 ];
-/** The clock devknobs sends with "send to server" on: an instant, the way `toISOString` writes it. */
-const NOW_HEADER = 'x-devknobs-now';
+/** The clock knobs sends with "send to server" on, under its new and its old name: an instant, the way `toISOString` writes it. */
+const NOW_HEADERS = new Set(['x-knobs-now', 'x-devknobs-now']);
 const INSTANT = /^[+-]?\d{4,6}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 /** The ones whose value is safe to send back as it came. */
 const ECHO_VALUES = new Set(['accept', 'content-type']);
@@ -145,7 +146,7 @@ async function echo(request: Request): Promise<Response> {
       const known =
         value === FAKE_SECRET ||
         value === `Bearer ${FAKE_SECRET}` ||
-        (name === NOW_HEADER && INSTANT.test(value));
+        (NOW_HEADERS.has(name) && INSTANT.test(value));
       headers[name] = known ? value : 'sent';
     }
   }

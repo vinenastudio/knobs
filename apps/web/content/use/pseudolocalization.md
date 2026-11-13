@@ -45,8 +45,8 @@ Use it with the locale knob, which takes any BCP 47 language tag and a direction
 A coding agent can set the knob through any browser tool that runs JavaScript in the page, such as Playwright's `page.evaluate` or the Chrome DevTools MCP's `evaluate_script`:
 
 ```js
-window.devknobs.setState({ pseudo: true });
-await window.devknobs.ready();
+window.knobs.setState({ pseudo: true });
+await window.knobs.ready();
 ```
 
 `ready()` resolves with the state once the page has caught up with the knobs. The agent skill that ships with the package uses `{ pseudo: true }` to find text that is cut off or not translated. Then the agent can `grab()` the broken elements, fix the code and check again. `reset()` sets the knobs back. See [agents](/docs/agents).

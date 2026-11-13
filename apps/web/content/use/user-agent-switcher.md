@@ -50,8 +50,8 @@ With the npm package, the knob changes what page code reads, not what goes over 
 A coding agent can set the knob through any browser tool that runs JavaScript in the page, such as Playwright's `page.evaluate` or the Chrome DevTools MCP's `evaluate_script`:
 
 ```js
-window.devknobs.setState({ ua: { preset: 'googlebot' } });
-await window.devknobs.ready();
+window.knobs.setState({ ua: { preset: 'googlebot' } });
+await window.knobs.ready();
 ```
 
 For a string of your own, set `{ ua: { preset: 'custom', custom: 'MyBot/1.0' } }`. `ready()` resolves with the state once the page has caught up with the knobs. `setState()` throws a `TypeError` at a value the state does not take, and then changes nothing. `reset()` sets the knobs back. See [agents](/docs/agents).

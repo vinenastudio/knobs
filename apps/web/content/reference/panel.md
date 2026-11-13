@@ -8,9 +8,9 @@ order: 2
 
 the panel starts closed, as a handle on the right edge of the window, 128px below its top, and opens from that height. a window too short for that has the panel rise until it fits. click it or press shift and the hotkey (`⇧K`) to open it, and it stays open across reloads. opening it puts the focus on its add knob button, where typing a knob's name opens the search with it, so `⇧K` then `dark` works in one go, and closing it gives the focus back to what had it before. a panel that comes back open after a reload leaves the focus on the page.
 
-drag the handle to move the panel and the handle together up and down the edge of the window. hold shift while dragging to move the handle alone along the panel. with the panel closed, a drag moves the handle, and the panel opens beside it where it left it. drag the panel's edge on the page's side to change its width, which is kept in `localStorage` under `devknobs:prefs`. the panel has one width: the rows, the settings and every view, such as inspect's elements, the requests and the storage, show at it, so opening or leaving a view never changes it.
+drag the handle to move the panel and the handle together up and down the edge of the window. hold shift while dragging to move the handle alone along the panel. with the panel closed, a drag moves the handle, and the panel opens beside it where it left it. drag the panel's edge on the page's side to change its width, which is kept in `localStorage` under `devknobs:prefs` and `knobs:prefs`. the panel has one width: the rows, the settings and every view, such as inspect's elements, the requests and the storage, show at it, so opening or leaving a view never changes it.
 
-the handle follows the pointer sideways too. let go past the middle of the window, or fling it toward the other edge, and the panel moves to the left or the right edge; anywhere else it glides back to its own. each time you let go of it, its side and where it sits on it are also kept in `localStorage` under `devknobs:place`, so a new tab starts with the panel where you last put it. a tab you did not drag in never writes it.
+the handle follows the pointer sideways too. let go past the middle of the window, or fling it toward the other edge, and the panel moves to the left or the right edge; anywhere else it glides back to its own. each time you let go of it, its side and where it sits on it are also kept in `localStorage` under `devknobs:place` and `knobs:place`, so a new tab starts with the panel where you last put it. a tab you did not drag in never writes it.
 
 within 24px of an edge, the panel snaps flush with the top or the bottom of the window, and the handle with the top or the bottom corner of the panel, or of the window while the panel is closed. each stays with the edge it snapped to: a panel at the bottom grows upward as rows and editors open, and keeps to the bottom when the window resizes.
 
@@ -68,11 +68,11 @@ it is one column, as wide as the panel is, whatever the panel shows. the page's 
 
 the page never gets narrower than 320px, so the edge stops there. in a window too narrow to leave it that beside the panel (under 640px for a panel 320px wide), the panel lies over the page instead, and the pin's tooltip says so.
 
-the pin is kept with the panel's place, in `localStorage` under `devknobs:place`, so a new tab starts pinned too. reset all leaves it, as it leaves the side.
+the pin is kept with the panel's place, in `localStorage` under `devknobs:place` and `knobs:place`, so a new tab starts pinned too. reset all leaves it, as it leaves the side.
 
 ## settings
 
-the gear button at the end of the footer opens the settings, in place of the rows. the show handle switch there hides the handle while the panel is closed, so nothing of knobs sits on the edge of the page; the panel key (`⇧K`) still opens it, and an open panel shows its handle as ever, to drag it or click it closed. turning the switch off says which key brings the panel back. the choice is kept in `localStorage` under `devknobs:prefs`, for every tab of the origin, and wins over the `handle` option. reset all leaves it.
+the gear button at the end of the footer opens the settings, in place of the rows. the show handle switch there hides the handle while the panel is closed, so nothing of knobs sits on the edge of the page; the panel key (`⇧K`) still opens it, and an open panel shows its handle as ever, to drag it or click it closed. turning the switch off says which key brings the panel back. the choice is kept in `localStorage` under `devknobs:prefs` and `knobs:prefs`, for every tab of the origin, and wins over the `handle` option. reset all leaves it.
 
 the dev tab icon switch draws a yellow `DEV` ribbon on every icon link of the page, the apple touch icon too, from the icon's own picture. an icon the page cannot read, from another origin that does not allow it (CORS), keeps its own picture, and below 32px the ribbon has no `DEV` text. it is `panel.devIcon`: `auto`, the default, shows it on a local host only (localhost, `*.localhost`, `*.local`, `0.0.0.0`, a loopback or private network address), `on` on any host, `off` on none, and it holds for this tab. turned off, or with knobs unmounted, every link has its own address back.
 
@@ -88,14 +88,14 @@ the panel, grab, inspect, replay, requests, storage, elements, settings and rese
 - a key with shift alone, like the defaults, is the panel's in its search and the page's in a field of the page, and so is one with alt, ctrl or meta; a function key works in fields too.
 - a grab key with meta, ctrl or alt turns grab on with a hold, as [grab](/docs/grab) explains, and any other with a press.
 
-the keys set are kept in `localStorage` under `devknobs:keys`, for every tab of the origin, the width knob's frame included at once, and win over the `hotkey` and `grabKey` options. reset all leaves them; the x by a key puts that one back. the extension keeps them in its own storage instead, the same on every site: see [the extension](/docs/extension#how-it-differs-from-the-npm-package).
+the keys set are kept in `localStorage` under `devknobs:keys` and `knobs:keys`, for every tab of the origin, the width knob's frame included at once, and win over the `hotkey` and `grabKey` options. reset all leaves them; the x by a key puts that one back. the extension keeps them in its own storage instead, the same on every site: see [the extension](/docs/extension#how-it-differs-from-the-npm-package).
 
 ## fresh mode
 
-to see the page and the panel as a first visit does, add `devknobs=fresh` to the address:
+to see the page and the panel as a first visit does, add `knobs=fresh` to the address:
 
 ```
-http://localhost:3000/?devknobs=fresh
+http://localhost:3000/?knobs=fresh
 ```
 
 while it is on, knobs leaves `localStorage` alone: the panel's place, its settings and the keys read as their defaults, nothing is written, and what was kept there is back as soon as the parameter goes. every load of the page starts with no knobs set, a reload too. the knobs still hold inside a visit and in the frame, and across the two loads knobs asks for itself: the locale knob's reload, and the frame handing the address it went to back to the page as it goes. the parameter stays in the address while the frame navigates, so that load and a reload after it are in fresh mode too.

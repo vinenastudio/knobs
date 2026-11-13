@@ -134,7 +134,7 @@ The steps above are spread across the Rendering tab, a settings page, the Sensor
 - **Color scheme.** Light or dark, in your CSS, in `matchMedia` and in `light-dark()`, next to reduced motion, contrast and text size.
 - **Locale and direction.** Any language tag with a direction. It sets `lang` and `dir` on `<html>`, patches `navigator.language`, makes the tag the default for `Intl`, and writes the tag into the stores that common i18n libraries read (paraglide, i18next, `NEXT_LOCALE`), so your app switches its own language too.
 - **Time zone and clock.** Any IANA zone, and a clock you can move ahead, freeze or speed up, so "tomorrow 9 AM in Tokyo" is one search away. With "send to server" on, requests to your own origin carry the clock's time in a header your dev server can read.
-- **Agents.** A coding agent can set `{ scheme: 'dark' }` or a locale through `window.devknobs.setState()`, wait with `ready()`, and check the page. See [agents](/docs/agents).
+- **Agents.** A coding agent can set `{ scheme: 'dark' }` or a locale through `window.knobs.setState()`, wait with `ready()`, and check the page. See [agents](/docs/agents).
 
 It has limits: the zone and the clock live in the page, so workers and your server keep the real ones, and `forced-colors` and print still need DevTools. [Limits and FAQ](/docs/limits) lists them all. Add it with `npm i -D @vinena/knobs` and mount it in development only, see [start](/docs/start), or use the [Chrome extension](/docs/extension) on any site.
 

@@ -227,10 +227,10 @@ export const COMPONENT = [
   "",
   'import dynamic from "next/dynamic";',
   "",
-  'const DevKnobs = process.env.NODE_ENV === "development" ? dynamic(() => import("@vinena/knobs/react").then((m) => m.DevKnobs), { ssr: false }) : null;',
+  'const Knobs = process.env.NODE_ENV === "development" ? dynamic(() => import("@vinena/knobs/react").then((m) => m.Knobs), { ssr: false }) : null;',
   "",
   "export function DevPanel() {",
-  "  return <>{DevKnobs && <DevKnobs />}</>;",
+  "  return <>{Knobs && <Knobs />}</>;",
   "}",
   "",
 ].join("\n");

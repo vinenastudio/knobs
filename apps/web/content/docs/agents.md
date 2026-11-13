@@ -33,12 +33,12 @@ the page, such as playwright's `page.evaluate` or the chrome devtools mcp's
 - `reset()` sets the knobs back and leaves the panel as it is.
 
 ```js
-window.devknobs.setState({ scheme: 'dark', panel: { open: false, handle: false } });
-await window.devknobs.ready();
+window.knobs.setState({ scheme: 'dark', panel: { open: false, handle: false } });
+await window.knobs.ready();
 ```
 
-every way in puts the api on `window.devknobs` while knobs is mounted: the
-script tag, `mount()` and `<DevKnobs />`. so does the copy inside the width
+every way in puts the api on `window.knobs` while knobs is mounted: the
+script tag, `mount()` and `<Knobs />`. so does the copy inside the width
 knob's frame, and the [chrome extension](/docs/extension) on any page it runs on.
 
 ## the agent skill

@@ -31,7 +31,7 @@ export type Copy = (text: string) => boolean | Promise<boolean>;
 const COPIED_FOR = 1200;
 
 /** What the line under the buttons says, for agents that run code in the page. */
-export const AGENT_NOTE = "agents read and apply edits: devknobs.edits() / setEdits()";
+export const AGENT_NOTE = "agents read and apply edits: knobs.edits() / setEdits()";
 
 /** What the line about edits made again as the page loaded says. */
 export function keptLine(kept: number, missed: number): string {
