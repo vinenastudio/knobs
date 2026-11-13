@@ -1,4 +1,5 @@
 import { posts } from '../blog/posts.ts';
+import { comparePages } from '../compare/pages.ts';
 import { CANONICAL_ORIGIN } from '../lib/canonical.ts';
 import { knobPages } from '../use/pages.ts';
 import { pages } from './pages.ts';
@@ -8,11 +9,12 @@ import { pages } from './pages.ts';
  * address. `/docs` is left out, since the worker 301s it to `/docs/start`.
  * A docs page's `<lastmod>` is its frontmatter's `updated`; the landing has no
  * content date, so it has none. `/blog` changes with its newest post, and a post's
- * `<lastmod>` is its `updated`. `/use` and its pages go the same way.
+ * `<lastmod>` is its `updated`. `/use`, `/compare` and their pages go the same way.
  */
 const latest = (days: Array<string>) => days.toSorted().at(-1);
 const newest = latest(posts.map((post) => post.updated));
 const newestUse = latest(knobPages.map((page) => page.updated));
+const newestCompare = latest(comparePages.map((page) => page.updated));
 
 const entries: ReadonlyArray<{ lastmod?: string; path: string }> = [
   { path: '/' },
@@ -21,6 +23,8 @@ const entries: ReadonlyArray<{ lastmod?: string; path: string }> = [
   ...posts.map((post) => ({ lastmod: post.updated, path: `/blog/${post.slug}` })),
   ...(newestUse === undefined ? [] : [{ lastmod: newestUse, path: '/use' }]),
   ...knobPages.map((page) => ({ lastmod: page.updated, path: `/use/${page.slug}` })),
+  ...(newestCompare === undefined ? [] : [{ lastmod: newestCompare, path: '/compare' }]),
+  ...comparePages.map((page) => ({ lastmod: page.updated, path: `/compare/${page.slug}` })),
 ];
 
 export const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>

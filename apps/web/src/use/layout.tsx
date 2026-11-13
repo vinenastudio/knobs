@@ -47,6 +47,9 @@ export function UseIndex() {
           </li>
         ))}
       </ul>
+      <p {...props(styles.description, styles.after)}>
+        <Link to="/compare">{m.use_compare_link()}</Link>
+      </p>
     </main>
   );
 }

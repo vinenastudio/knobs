@@ -16,7 +16,8 @@
  *
  * The use pages in `content/use` have the docs pages' frontmatter and rules,
  * plus `terms`, the search terms each is written for, and a description of
- * at most 155 characters.
+ * at most 155 characters. The comparison pages in `content/compare` follow
+ * the use pages' rules.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -28,6 +29,7 @@ const docs = path.resolve(import.meta.dirname, '../apps/web/content/docs');
 const blog = path.resolve(import.meta.dirname, '../apps/web/content/blog');
 const og = path.resolve(import.meta.dirname, '../apps/web/public/og/blog');
 const use = path.resolve(import.meta.dirname, '../apps/web/content/use');
+const compare = path.resolve(import.meta.dirname, '../apps/web/content/compare');
 
 let bad = 0;
 function fail(message: string) {
@@ -98,10 +100,14 @@ for (const name of postFiles) {
 }
 
 const useFiles = readdirSync(use).filter((name) => name.endsWith('.md'));
-for (const name of useFiles) {
+const compareFiles = readdirSync(compare).filter((name) => name.endsWith('.md'));
+for (const [dir, name] of [
+  ...useFiles.map((name) => [use, name] as const),
+  ...compareFiles.map((name) => [compare, name] as const),
+]) {
   try {
     const slug = name.slice(0, -'.md'.length);
-    const source = readFileSync(path.join(use, name), 'utf8');
+    const source = readFileSync(path.join(dir, name), 'utf8');
     const { description, metaTitle } = docFrontmatter(slug, source);
     pageTerms(slug, source);
     checkTitle(name, metaTitle);
@@ -117,5 +123,5 @@ if (bad > 0) {
   process.exit(1);
 }
 process.stdout.write(
-  `docs-check: ${files.length} docs pages, ${postFiles.length} blog posts and ${useFiles.length} use pages have valid frontmatter.\n`,
+  `docs-check: ${files.length} docs pages, ${postFiles.length} blog posts, ${useFiles.length} use pages and ${compareFiles.length} comparison pages have valid frontmatter.\n`,
 );

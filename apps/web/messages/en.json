@@ -317,5 +317,10 @@
   "link_use": "use cases",
   "use_meta_title": "knobs use cases: what each knob tests and how to set it",
   "use_description": "One page per knob: what it does, how to turn it on in the Chrome extension or in your own app, its options and limits, and how an agent drives it.",
-  "use_heading": "Use cases"
+  "use_heading": "Use cases",
+  "use_compare_link": "How knobs compares with Polypane, Responsively App, Sizzy, Responsive Viewer and Chrome DevTools",
+  "link_compare": "comparisons",
+  "compare_meta_title": "knobs comparisons: facts beside five other dev tools",
+  "compare_description": "Facts on knobs beside Polypane, Responsively App, Sizzy, Responsive Viewer and Chrome DevTools: price, platform, license and each feature, with sources.",
+  "compare_heading": "Comparisons"
 }
