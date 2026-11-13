@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { setClock } from "../src/engine/clock";
-import { apply, NOW_HEADER, reset, sameOrigin, sends } from "../src/engine/header";
+import { apply, NOW_HEADER, OLD_NOW_HEADER, reset, sameOrigin, sends } from "../src/engine/header";
 import { DEFAULT_STATE } from "../src/engine/store";
 import type { ClockValue } from "../src/types";
 
@@ -108,6 +108,16 @@ describe("fetch", () => {
     }
   });
 
+  test("sends the new header and the old one, with the same instant", async () => {
+    turnOn();
+    await fetch("/api/now");
+    await fetch(new Request("http://app.test/api/now"));
+    for (let index = 0; index < 2; index++) {
+      const { headers } = received(index);
+      expect([headers.get("x-knobs-now"), headers.get("x-devknobs-now")]).toEqual([STAMP, STAMP]);
+    }
+  });
+
   test("the page's own headers, method and body stay", async () => {
     turnOn();
     await fetch("/a", { method: "POST", headers: { "x-a": "1" }, body: "hi" });
@@ -135,6 +145,8 @@ describe("fetch", () => {
     expect(calls[0]![1]).toBe(init);
     expect(calls[1]![1]).toBeUndefined();
     expect(received(0).headers.has(NOW_HEADER)).toBe(false);
+    expect(received(0).headers.has(OLD_NOW_HEADER)).toBe(false);
+    expect(received(1).headers.has(OLD_NOW_HEADER)).toBe(false);
   });
 
   test("follows the clock as it moves", async () => {
@@ -172,7 +184,7 @@ describe("XMLHttpRequest", () => {
   test("same-origin requests carry the header, other origins do not", () => {
     turnOn();
     const own = send("/api/now");
-    expect(own.headers).toEqual({ [NOW_HEADER]: STAMP });
+    expect(own.headers).toEqual({ "x-knobs-now": STAMP, "x-devknobs-now": STAMP });
     expect(own.body).toBe("body");
     expect(send("https://api.other.test/now").headers).toEqual({});
   });

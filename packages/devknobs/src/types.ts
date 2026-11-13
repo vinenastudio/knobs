@@ -64,7 +64,7 @@ export interface ClockValue {
   since: number;
   /** Clock ms per real ms while it runs. */
   speed: number;
-  /** Send the clock's instant to the page's own origin, in an `x-devknobs-now` header. */
+  /** Send the clock's instant to the page's own origin, in an `x-knobs-now` header, and the old `x-devknobs-now`. */
   header: boolean;
 }
 

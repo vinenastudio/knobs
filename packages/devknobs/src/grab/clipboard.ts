@@ -3,6 +3,9 @@ import { copyText } from "./copy";
 import { escapeText } from "./preview";
 import type { GrabEntry, GrabPayload } from "./types";
 
+export const KNOBS_TYPE = "application/x-knobs-grab";
+
+/** The type's old name, written beside it with the same payload until 1.0. */
 export const DEVKNOBS_TYPE = "application/x-devknobs-grab";
 
 /** react-grab's own type, which agents that paste from it already read. */
@@ -27,10 +30,12 @@ export function clipboardData(payload: GrabPayload, now = Date.now()): Record<st
     stackContext: entry.stackContext,
     frames: entry.frames,
   }));
+  const own = JSON.stringify({ ...payload, timestamp: now });
   return {
     "text/plain": payload.content,
     "text/html": `<meta charset='utf-8'><pre><code>${escapeText(payload.content)}</code></pre>`,
-    [DEVKNOBS_TYPE]: JSON.stringify({ ...payload, timestamp: now }),
+    [KNOBS_TYPE]: own,
+    [DEVKNOBS_TYPE]: own,
     [REACT_GRAB_TYPE]: JSON.stringify({
       version: "devknobs",
       content: payload.content,

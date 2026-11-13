@@ -146,6 +146,7 @@ describe("withFresh", () => {
     for (const target of [
       "http://app.test/a?devknobs=fresh",
       "http://app.test/a?x=1&devknobs=fresh&y=2#top",
+      "http://app.test/a?knobs=fresh",
     ]) {
       expect(withFresh(target, ORIGIN)).toBe(target);
     }
@@ -189,6 +190,14 @@ describe("freshIn", () => {
     expect(freshIn("devknobs=fresh")).toBe(true);
     expect(freshIn("?a=1&devknobs=fresh&b=2")).toBe(true);
     expect(freshIn("?devknobs=other&devknobs=fresh")).toBe(true);
+  });
+
+  test("is on for the new name, knobs=fresh, too", () => {
+    expect(freshIn("?knobs=fresh")).toBe(true);
+    expect(freshIn("?a=1&knobs=fresh")).toBe(true);
+    expect(freshIn("?knobs=other&devknobs=fresh")).toBe(true);
+    expect(freshIn("?knobs=Fresh")).toBe(false);
+    expect(freshIn("?xknobs=fresh")).toBe(false);
   });
 
   test("is off for anything else", () => {
@@ -250,6 +259,14 @@ describe("fresh mode and localStorage", () => {
     expect(webStorage("local")).toBeNull();
     expect(localCalls()).toBe(0);
     expect(local).toEqual(before);
+  });
+
+  test("the new name, knobs=fresh, starts it too", () => {
+    local.set(PLACE_KEY, LEFT);
+    open({ search: "?knobs=fresh" });
+    expect(load()).toEqual(DEFAULT_STATE);
+    expect(webStorage("local")).toBeNull();
+    expect(localCalls()).toBe(0);
   });
 });
 
