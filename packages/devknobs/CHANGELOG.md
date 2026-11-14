@@ -1,5 +1,10 @@
 # changelog
 
+## 0.7.2
+
+- Safari's bottom bar in the phone frame shows the whole host: the address shrinks to fit, then fades at its start, as Safari does, with no "…"
+- the page under Safari's bottom bar shows its pictures and videos, not a blank or cut copy
+
 ## 0.7.1
 
 - new names, beside the old ones, which still work for now:
