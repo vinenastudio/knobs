@@ -359,7 +359,10 @@ function inlineElement(node: HtmlElement, context: Context): string {
     case 'br':
       return '\n';
     case 'a': {
-      const text = inline(node.children, context).replaceAll(/\s+/g, ' ').trim();
+      const text = linkParts(node.children, context).reduce(
+        (label, part) => (label ? `${label}${/[.!?:]$/.test(label) ? ' ' : ': '}${part}` : part),
+        '',
+      );
       const href = node.attrs['href'];
       const url = href === undefined ? undefined : absolute(href, context.base);
       return text && url ? `[${text.replaceAll(/([[\]])/g, String.raw`\$1`)}](${url})` : text;
@@ -387,6 +390,29 @@ function inlineElement(node: HtmlElement, context: Context): string {
         ? ` ${inline(node.children, context)} `
         : inline(node.children, context);
   }
+}
+
+/** A link's text, one part per block inside it, so a card's quote and its byline read "quote: name". */
+function linkParts(nodes: ReadonlyArray<HtmlNode>, context: Context): Array<string> {
+  const parts: Array<string> = [];
+  let run: Array<HtmlNode> = [];
+  const flush = () => {
+    const text = inline(run, context).replaceAll(/\s+/g, ' ').trim();
+    if (text) {
+      parts.push(text);
+    }
+    run = [];
+  };
+  for (const node of nodes) {
+    if (typeof node === 'string' || !BLOCK_TAGS.has(node.tag)) {
+      run.push(node);
+    } else {
+      flush();
+      parts.push(...linkParts(node.children, context));
+    }
+  }
+  flush();
+  return parts;
 }
 
 function inline(nodes: ReadonlyArray<HtmlNode>, context: Context): string {

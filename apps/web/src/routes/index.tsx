@@ -11,6 +11,7 @@ import { CraftedAtVinena } from '../lib/crafted-at-vinena.tsx';
 import { FeedbackLink } from '../lib/feedback-link.tsx';
 import { GitHubButton, onGitHub, REPO, StarLink } from '../lib/github.tsx';
 import { type PanelTour, usePanel } from '../lib/panel.ts';
+import { Praise } from '../lib/praise.tsx';
 import { jsonLd, ORGANIZATION } from '../lib/schema.ts';
 import { IMAGE } from '../lib/share.ts';
 import { m } from '../paraglide/messages.js';
@@ -309,6 +310,8 @@ function Landing() {
           <Stage />
         </div>
       </section>
+
+      <Praise />
 
       {/* Site links, not page content: left out of llms-full.txt. */}
       <footer data-llms="skip" {...props(styles.footer)}>

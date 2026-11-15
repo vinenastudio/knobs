@@ -32,6 +32,26 @@ describe('toMarkdown', () => {
     );
   });
 
+  test('a link holding blocks joins their text with a colon', () => {
+    expect(
+      markdown(
+        '<main><a href="/q"><figure><blockquote><p>Great tool</p></blockquote><figcaption><img alt=""><div><div>Ada</div><div>@ada</div></div></figcaption></figure></a></main>',
+      ),
+    ).toBe('[Great tool: Ada: @ada](https://example.com/q)');
+  });
+
+  test('a link block part ending in a stop joins with a space', () => {
+    expect(markdown('<main><a href="/q"><div><p>So useful.</p><p>Ada</p></div></a></main>')).toBe(
+      '[So useful. Ada](https://example.com/q)',
+    );
+  });
+
+  test('an inline link keeps its text as is', () => {
+    expect(markdown('<main><p><a href="/a">One <em>two</em>  three</a></p></main>')).toBe(
+      '[One *two* three](https://example.com/a)',
+    );
+  });
+
   test('links side by side with no space between them get one', () => {
     expect(markdown('<main><div><a href="/a">A</a><a href="/b">B</a></div></main>')).toBe(
       '[A](https://example.com/a) [B](https://example.com/b)',
@@ -40,7 +60,7 @@ describe('toMarkdown', () => {
 
   test('a card link around blocks stays one link', () => {
     expect(markdown('<main><a href="/blog/a"><h3>Post</h3><p>About it</p></a></main>')).toBe(
-      '[Post About it](https://example.com/blog/a)',
+      '[Post: About it](https://example.com/blog/a)',
     );
   });
 
@@ -165,7 +185,7 @@ describe('toMarkdown', () => {
       markdown(
         '<main><a href="/a"><h3>Title</h3><p>Text</p></a><p><b>bo</b><i>ld</i>, <span>x</span>.</p></main>',
       ),
-    ).toBe('[Title Text](https://example.com/a)\n\n**bo***ld*, x.');
+    ).toBe('[Title: Text](https://example.com/a)\n\n**bo***ld*, x.');
   });
 
   test('aria-hidden content is left out of inline code and code blocks', () => {
