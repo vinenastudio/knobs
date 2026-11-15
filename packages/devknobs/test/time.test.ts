@@ -373,9 +373,11 @@ describe("Date in an emulated zone", () => {
       expect(lmt.toString()).toBe("Thu May 31 1900 20:29:08 GMT-0330 (Newfoundland Standard Time)");
     });
     emulated("Europe/London", () => {
-      expect(new Date(0).toString()).toBe(
-        "Thu Jan 01 1970 01:00:00 GMT+0100 (Greenwich Mean Time)",
-      );
+      const winter = Date.UTC(new Date().getUTCFullYear(), 0, 1);
+      const name = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/London", timeZoneName: "long" })
+        .formatToParts(winter)
+        .find((part) => part.type === "timeZoneName")?.value;
+      expect(new Date(0).toString()).toBe(`Thu Jan 01 1970 01:00:00 GMT+0100 (${name})`);
     });
   });
 

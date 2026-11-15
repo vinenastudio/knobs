@@ -113,6 +113,8 @@ export default defineConfig({
       strategy: ['cookie', 'preferredLanguage', 'baseLocale'],
     }),
   ],
+  // Prerender fetches the preview server's resolved URL; Linux runners resolve localhost to ::1 first.
+  preview: { host: '127.0.0.1' },
   server: {
     // Vite ignores PORT by default; portless assigns one when proxying https://knobs.localhost.
     port: process.env.PORT ? Number(process.env.PORT) : 3000,
