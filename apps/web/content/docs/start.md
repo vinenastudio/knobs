@@ -1,5 +1,5 @@
 ---
-title: start
+title: start guide
 meta_title: Install knobs: set up the knobs dev panel in your app
 description: Install @vinena/knobs from npm, mount the knobs panel in development only, and load the early script for pages that read media queries or the time on load.
 order: 1
