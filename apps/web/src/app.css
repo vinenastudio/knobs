@@ -25,3 +25,14 @@ footer a,
 footer a:visited {
   color: var(--foreground);
 }
+
+/* A half card left alone in its row, the last before the wide cards, takes the whole row
+   on the two-column grid. Here, not in StyleX: it counts siblings with `of` and `:has`. */
+@media (min-width: 640px) {
+  [data-card='half']:nth-child(odd of [data-card='half']):is(
+      :has(+ [data-card='wide']),
+      :last-child
+    ) {
+    grid-column: 1 / -1;
+  }
+}
