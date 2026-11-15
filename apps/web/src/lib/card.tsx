@@ -46,6 +46,7 @@ const styles = create({
     fontSize: '0.8125rem',
     lineHeight: 1.5,
     margin: 0,
+    maxWidth: '65ch',
   },
   // The name takes the room beside a value that fits, so the value sits at the row's end.
   name: {
@@ -108,7 +109,8 @@ export function Cards({ children }: { children: ReactNode }) {
 
 /**
  * The page's card. On the stage its title names what to move in the panel, in
- * the panel's own words. `wide` takes the whole row of the grid.
+ * the panel's own words. `wide` takes the whole row of the grid, and so does a
+ * card left alone in the last row before the wide ones (see `app.css`).
  */
 export function Card({
   children,
@@ -123,7 +125,12 @@ export function Card({
 }) {
   const id = useId();
   return (
-    <section {...props(styles.card, wide && styles.wide)} aria-labelledby={id} ref={ref}>
+    <section
+      {...props(styles.card, wide && styles.wide)}
+      aria-labelledby={id}
+      data-card={wide ? 'wide' : 'half'}
+      ref={ref}
+    >
       <h3 {...props(styles.title)} id={id}>
         {title}
       </h3>
