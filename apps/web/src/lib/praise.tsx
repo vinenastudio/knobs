@@ -174,10 +174,10 @@ export function Praise() {
                     width={48}
                     {...props(styles.avatar)}
                   />
-                  <span {...props(styles.who)}>
-                    <span {...props(styles.name)}>{item.name}</span>
-                    <span {...props(styles.line)}>{item.line}</span>
-                  </span>
+                  <div {...props(styles.who)}>
+                    <div {...props(styles.name)}>{item.name}</div>
+                    <div {...props(styles.line)}>{item.line}</div>
+                  </div>
                   <span aria-label={SOURCE_LABEL[item.source]} role="img" {...props(styles.icon)}>
                     {item.source === 'x' ? <XMark /> : <ChromeMark />}
                   </span>
