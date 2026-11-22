@@ -65,7 +65,7 @@ export function isStableId(id: string): boolean {
   );
 }
 
-function isShadowRoot(node: Node): node is ShadowRoot {
+export function isShadowRoot(node: Node): node is ShadowRoot {
   return "host" in node;
 }
 

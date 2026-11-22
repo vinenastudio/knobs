@@ -2,9 +2,13 @@
 import type { Fiber } from "bippy";
 import type { StackFrame } from "bippy/source";
 import { componentNames, getFiber, listKey, nearestFiberElement } from "./fiber";
+import { keptAny } from "./annotations";
+import { pageHints } from "./hints";
+import { markupTrace } from "./markup";
+import { type MarkLookup, pageMarks } from "./pagemarks";
 import { htmlPreview } from "./preview";
 import { elementSelector, nearestSemanticSelector, selectorTarget } from "./selector";
-import { EMPTY, type Resolution, resolve } from "./source";
+import { EMPTY, type Resolution, resolve, settle, TIMEOUT } from "./source";
 import {
   formatStack,
   HARD_MAX_LINES,
@@ -125,14 +129,23 @@ function entryFrom(
   next: boolean,
   { fiberSource, stack }: Resolution,
   options: GrabOptions,
+  marks: MarkLookup | null = null,
 ): GrabEntry {
   const ancestors = (max: number, accept: (name: string) => boolean) =>
     componentNames(fiber, max, (name) => isUsefulName(name, next) && accept(name));
-  const trace = buildTrace(stack, fiberSource, ancestors, { maxLines: options.maxLines, next });
+  const fiberTrace = buildTrace(stack, fiberSource, ancestors, {
+    maxLines: options.maxLines,
+    next,
+  });
+  // Off React, the source Astro, Svelte or Vue marks the element with in development.
+  const markup = fiber ? null : markupTrace(element, options.maxLines, marks);
+  const trace = markup ? { text: markup.text, needsSelector: false } : fiberTrace;
+  // With nothing to name the element, where it sits on the page says what it is.
+  const hints = fiber || trace.text ? "" : pageHints(element);
   const found =
     (trace.needsSelector ? null : nearestSemanticSelector(element)) ??
     elementSelector(selectorTarget(element));
-  const source = selectSource(fiberSource, stack, next);
+  const source = selectSource(fiberSource, stack, next) ?? markup?.source ?? null;
   const componentName =
     componentNames(fiber, 1, (name) => isUsefulName(name, next))[0] ??
     source?.componentName ??
@@ -142,7 +155,7 @@ function entryFrom(
     componentName,
     content: formatEntry(
       htmlPreview(element),
-      trace.text,
+      `${trace.text}${hints}`,
       fiber ? listKey(fiber) : null,
       found.semantic ? found.selector : null,
     ),
@@ -158,7 +171,12 @@ export async function grabEntry(element: Element, options: GrabOptions = {}): Pr
   const next = isNext(element.ownerDocument);
   const fiber = getFiber(nearestFiberElement(element));
   const resolution = fiber ? await resolve(fiber, next, options.signal) : EMPTY;
-  return entryFrom(element, fiber, next, resolution, options);
+  // Off React on an Astro page, the marks its dev toolbar took before devknobs mounted.
+  const marks =
+    fiber || keptAny(element.ownerDocument)
+      ? null
+      : await settle(pageMarks(element.ownerDocument), null, TIMEOUT, options.signal);
+  return entryFrom(element, fiber, next, resolution, options, marks);
 }
 
 /**

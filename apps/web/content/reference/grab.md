@@ -80,6 +80,28 @@ dropped. where a dev
 server's source map has no place for an element, as a route split from its
 file can, the place is looked up in the source the map carries.
 
+off React, grab reads the source places that Astro, Svelte and Vue put on the
+page in development: the element's file and line (Svelte adds the column, Vue
+has no line), then the files above it, such as the layout that uses the
+component:
+
+```
+[<section class="lib-filters" aria-label="Filters" /> in Filters (at src/components/Filters.astro:1) in Base (at src/layouts/Base.astro:5) selector: [aria-label="Filters"]]
+```
+
+Astro's dev toolbar takes these places off the page once it loads. knobs
+keeps them when it mounts before the toolbar loads, as the extension does.
+mounted later, knobs loads the page's own address once more and reads them
+from its html.
+
+where nothing names the element, as on a built or a plain html page, the line
+says where it sits instead: its text when the html shows none, the nearest
+heading and the landmark around it:
+
+```
+[<section class="lib-filters" aria-label="Filters" /> text: "All Buttons Inputs" heading: "Library" landmark: main selector: [aria-label="Filters"]]
+```
+
 grab is adapted from [react-grab](https://github.com/aidenybai/react-grab) and
 reads React's internals through [bippy](https://github.com/aidenybai/bippy),
 both by Aiden Bai and MIT, see

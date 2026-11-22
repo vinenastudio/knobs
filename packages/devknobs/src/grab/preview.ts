@@ -76,9 +76,11 @@ export function truncateEscaped(html: string, max: number): string {
   return `${whole}${SUFFIX}`.slice(0, max);
 }
 
-/** Attributes of devknobs and react-grab themselves. */
+/** Attributes of devknobs and react-grab themselves, and the source marks a grab reads anyway. */
 function isInternal(name: string): boolean {
-  return isOwnName(name) || name.startsWith("data-react-grab-");
+  return (
+    isOwnName(name) || name.startsWith("data-react-grab-") || name.startsWith("data-astro-source-")
+  );
 }
 
 /** Class names a tool wrote, which say nothing a reader can search the source for. */
@@ -157,7 +159,7 @@ function attributes(element: Element): string {
     .join("");
 }
 
-function collapse(text: string): string {
+export function collapse(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
@@ -177,7 +179,7 @@ function directText(element: Element): string {
 }
 
 /** Collect text depth first until the budget is spent, and hand back what is left of it. */
-function descendantText(node: Node, parts: string[], budget: number): number {
+export function descendantText(node: Node, parts: string[], budget: number): number {
   if (node.nodeType === TEXT_NODE) {
     const text = collapse(node.textContent ?? "");
     if (!text) return budget;
@@ -193,7 +195,7 @@ function descendantText(node: Node, parts: string[], budget: number): number {
   return left;
 }
 
-function previewText(element: Element, tag: string): string {
+export function previewText(element: Element, tag: string): string {
   if (skipsText(element)) return "";
   const direct = directText(element);
   if (!DESCENDANT_TEXT.has(tag)) return direct;

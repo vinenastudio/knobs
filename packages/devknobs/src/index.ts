@@ -12,6 +12,7 @@ import { UA_PRESETS } from "./engine/ua";
 import { type EditsStore, forgetReplay, framedPage, pageSettled, pathNow, type Replayed, startKeep, stopKeep } from "./edit/keep";
 import { type Edit, edits as editLog } from "./edit/log";
 import { clearForced, type ForcedState, forceState as forceOn } from "./styles/force";
+import { watchAnnotations } from "./grab/annotations";
 import { createGrab, type GrabControl } from "./grab/control";
 import { createInspect, type InspectControl, oneAtATime } from "./grab/inspect";
 import type { GrabOptions, GrabResult } from "./grab/types";
@@ -214,6 +215,8 @@ let beaten: { other: HostRank | null } | null = null;
  */
 export function mount(options: MountOptions = {}): void {
   if (panel || stopKeys) return;
+  // Before Astro's dev toolbar takes its source marks off the page, which grab reads.
+  watchAnnotations();
   const host = options.host ? null : hostOf(window);
   if (host) {
     handedPrefer = null;
