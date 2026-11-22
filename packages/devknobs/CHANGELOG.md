@@ -1,6 +1,6 @@
 # changelog
 
-## Unreleased
+## 0.7.3
 
 - grab names elements off react too: the file and line astro, svelte and vue put on the page in development, then the files above it, such as the layout
 - where nothing names the element, grab copies its text, the nearest heading and the landmark around it
