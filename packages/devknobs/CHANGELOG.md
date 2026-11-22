@@ -1,5 +1,11 @@
 # changelog
 
+## Unreleased
+
+- grab names elements off react too: the file and line astro, svelte and vue put on the page in development, then the files above it, such as the layout
+- where nothing names the element, grab copies its text, the nearest heading and the landmark around it
+- on an astro dev page where knobs mounts after the dev toolbar, grab loads the page's address once more to read the places from its html
+
 ## 0.7.2
 
 - Safari's bottom bar in the phone frame shows the whole host: the address shrinks to fit, then fades at its start, as Safari does, with no "…"

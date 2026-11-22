@@ -12,6 +12,7 @@ the only requests it makes for itself:
 
 - the device images (bezels and the iPhone Duo's fold frames) load from beside knobs' own script: your dev server, or unpkg when you use the script tag from there.
 - grab reads the page's own bundles and source maps, from the page's own origin only, to find where a component lives.
+- on an Astro dev page with its dev toolbar, where knobs mounted after the toolbar took the source places off the page, grab loads the page's own address once more, to read them from its html.
 - the picture of the page that the fold and the frame draw loads the fonts the page itself uses.
 - the width knob, a device and a pinned panel load your page a second time, in a frame.
 - send feedback opens our feedback page (feedback.vinena.studio) in a new tab with the current page address attached, without its query or fragment; that address reaches us only when you send the feedback.
