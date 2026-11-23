@@ -1,5 +1,10 @@
 # changelog
 
+## 0.7.4
+
+- the page under Safari's bottom bar lines up with the page above it on sites that style `:root` with a theme or look attribute, such as `:root[data-theme=dark]`
+- the page under the bar shows sprite icons and web components at their real size, and no longer plays entrance animations again
+
 ## 0.7.3
 
 - grab names elements off react too: the file and line astro, svelte and vue put on the page in development, then the files above it, such as the layout
