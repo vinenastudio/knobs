@@ -8,10 +8,13 @@
 // paints sharp, is checked with the bars on too. A page that scrolls in its body, not its
 // document, is scrolled there. The console of the page is read throughout, the frame
 // loaded again once, and each address the console tells of a failed CORS request for may
-// show there once at most.
+// show there once at most. First, the copy in the band's picture is laid out on its own and
+// a sample of its elements must lie within a px of the page's, all the way down.
 // Build first, then: pnpm --filter @vinena/knobs underbar-oracle [index.global.js] [screenshot dir] [--url URL] [--scroll PX] [--dark]
 // With --url and no --scroll it puts the page's first large picture across the band.
-// Without --url it serves its own page: a picture in a round clip, a background picture, a
+// Without --url it serves its own page: a rule for its root with more to it than `:root`, an
+// icon from a sprite file, a number in a shadow root, a margin a script animates, a
+// picture in a round clip, a background picture, a
 // drawing, and a picture from another origin that the frame may not read. And videos, of a
 // clip the browser records first, whose frames are all the same, so one that plays shows the
 // same in the band and in the frame: one that loops under a sound button, one from another
@@ -75,6 +78,12 @@ const striped = (width: number, height: number) =>
     Math.floor((y / height) * 24) % 2 ? 210 : 50,
     Math.round((x / width) * 255),
   ]);
+/**
+ * A sprite file, whose dot the page shows through a `use`, in a color from the file's own
+ * gradient and a ring from its own style, which also names a class the page has: that one
+ * must not reach the page.
+ */
+const SPRITE = `<svg xmlns="http://www.w3.org/2000/svg"><style>.spr { fill: url(#g); color: #e5484d; } #dot circle { stroke: #111; stroke-width: 4px; } @keyframes paint { from, to { background-color: rgb(0, 0, 255); } } @font-face { font-family: system-ui; src: local(Courier); }</style><script>document.title = "ran"</script><defs><linearGradient id="g"><stop offset="0" stop-color="#f5d90a"/><stop offset="1" stop-color="#e5484d"/></linearGradient></defs><symbol id="dot" viewBox="0 0 40 40"><circle class="spr" cx="20" cy="20" r="16"/></symbol><symbol id="unused"><rect width="40" height="40"/></symbol></svg>`;
 const pictures: Record<string, Buffer> = {
   '/hero.png': striped(400, 500),
   '/hero@2x.png': striped(800, 1000),
@@ -85,10 +94,12 @@ const pictures: Record<string, Buffer> = {
 /** The clip the videos show, recorded in the browser before the page loads. */
 let clip: Buffer | null = null;
 
-const page = (away: string) => `<!doctype html><html><head><meta charset="utf-8">
+const page = (away: string) => `<!doctype html><html data-look="a"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>band oracle</title>
 <style>
 html { color-scheme: dark; }
+html:root[data-look=a] { --space: 8rem; font-size: 17px; }
+.spaced { margin: var(--space, 0) 0 0; font: 600 1.5rem/40px system-ui; }
 body { margin: 0; background: #1b1b18; color: #ddd; font: 16px/1.5 system-ui; }
 .col { padding: 0 24px; }
 .lead { height: 420px; }
@@ -106,8 +117,23 @@ canvas { display: block; width: 100%; height: 200px; margin: 0 0 40px; }
 .case video { display: block; top: 0; left: 0; width: 100%; height: 160px; object-fit: cover; }
 .case p, .case h2 { width: 70%; height: 60px; margin: 0; background: #f5d90a; color: #111; font: 600 28px/60px system-ui; text-align: center; }
 .tail { height: 1400px; }
+.icon { display: block; margin: 0 auto; }
+@scope (:root[data-look=a]) { .spaced { padding-bottom: 24px; } }
+/* No element of this page has an animation in its own style, so the copy's still layer alone holds these where the page has them. */
+.still { height: 24px; margin: 0 0 8px; background: rgb(229, 72, 77); }
+@keyframes fadein { from { opacity: 0; } }
+@keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes paint { from, to { background-color: rgb(229, 72, 77); } }
+@layer utilities { .gone-layer { animation: fadein 400ms !important; } }
+body .col .gone-specific { animation: fadein 400ms !important; }
+.bar { position: relative; background: rgb(0, 0, 255); }
+.bar::before { content: ""; position: absolute; inset: 0; background: rgb(229, 72, 77); transform-origin: left; animation: grow 100s linear -30s paused; }
+.painted { background: none; animation: paint 1s both; }
 </style><script src="/devknobs.js"></script></head><body><div class="col">
 <div class="lead"></div>
+<h2 class="spaced" id="spaced">Spaced by the root's look</h2>
+<count-up id="count">7</count-up>
+<p id="lift" style="margin: 0; height: 40px">moved by a script</p>
 <span class="media"><img id="hero" loading="lazy" src="/hero.png" srcset="/hero.png 1x, /hero@2x.png 2x" alt=""></span>
 <div class="paper" id="paper"></div>
 <canvas id="chart" width="708" height="400"></canvas>
@@ -122,6 +148,12 @@ canvas { display: block; width: 100%; height: 200px; margin: 0 0 40px; }
 <section class="case" id="paint-e"><p style="z-index: 5; margin-top: 50px">under</p><video style="position: relative; margin-top: -110px" src="${away}/clip.webm" muted playsinline preload="auto"></video></section>
 <section class="case" id="paint-h"><div style="position: sticky; top: 0; height: 0"><p style="position: absolute; z-index: 50; top: 50px">under</p></div><video style="position: relative" src="${away}/clip.webm" muted playsinline preload="auto"></video></section>
 <section class="case" id="paint-s"><div style="position: sticky; top: 0; height: 0"><video style="position: absolute; z-index: 3" src="${away}/clip.webm" muted playsinline preload="auto"></video></div><p style="position: relative; z-index: 1; margin-top: 50px">over</p></section>
+<svg class="icon" id="icon" viewBox="0 0 40 40" width="40" height="40"><use href="/sprite.svg#dot"/></svg>
+<p class="spr" style="margin: 0; height: 24px; font: 600 20px/24px system-ui">the sprite's own style reaches only the sprite</p>
+<div class="still gone-layer" data-oracle-color="229,72,77"></div>
+<div class="still gone-specific" data-oracle-color="229,72,77"></div>
+<div class="still bar" data-oracle-color="0,0,255"></div>
+<div class="still painted" data-oracle-color="229,72,77"></div>
 <div class="tail"></div>
 </div><script>
 const pen = document.getElementById('chart').getContext('2d');
@@ -129,6 +161,13 @@ for (let x = 0; x < 708; x += 12) {
   pen.fillStyle = 'hsl(' + x / 2 + ' 80% 55%)';
   pen.fillRect(x, 400 - ((x * 37) % 380), 10, 400);
 }
+// A number drawn in a shadow root, which lays its host out, and a margin a script animates.
+customElements.define('count-up', class extends HTMLElement {
+  connectedCallback() {
+    this.attachShadow({ mode: 'open' }).innerHTML = '<style>:host { display: block; height: 48px; font: 600 32px/48px system-ui; }</style><slot></slot>';
+  }
+});
+document.getElementById('lift').animate([{ marginTop: '0px' }, { marginTop: '40px' }], { duration: 1, fill: 'forwards' });
 // The turns the looping video took, each a seek back to its start.
 window.turns = 0;
 document.getElementById('loop').addEventListener('seeked', () => window.turns++);
@@ -200,6 +239,9 @@ const serve = (html: () => string) => (request: IncomingMessage, response: Serve
   } else if (path === '/devknobs.js') {
     response.setHeader('content-type', 'text/javascript');
     response.end(code);
+  } else if (path === '/sprite.svg') {
+    response.setHeader('content-type', 'image/svg+xml');
+    response.end(SPRITE);
   } else {
     response.setHeader('content-type', 'text/html');
     response.end(html());
@@ -231,6 +273,14 @@ const EDGE = 2;
  * apart.
  */
 const close = (gap: { mean: number; off: number }) => gap.mean < 12 && gap.off < 0.1;
+/**
+ * The spots whose band holds only flat color, text and the sprite's icon, nothing a picture
+ * of the page draws at another size: they must match but for the screen's edge and font
+ * antialias, about 1 in 100 px on a Mac and 3 in 100 on Linux, so an icon drawn with the
+ * sprite file's style leaking into the page, about 9 in 100, shows.
+ */
+const EXACT = new Set(['icon']);
+const exact = (gap: { mean: number; off: number }) => gap.mean < 5 && gap.off < 0.05;
 /** How many px of a shot a css px of the top page takes. */
 const SHOT = 2;
 
@@ -368,7 +418,7 @@ async function places(tab: Page, least: number): Promise<{ name: string; top: nu
         return rect ? [{ name, top: rect.top + scrolled, height: rect.height }] : [];
       };
       if (fixture) {
-        const ids = ['hero', 'paper', 'chart', 'away', 'loop', 'cors', 'wait', 'scaled', 'paint-a', 'paint-b', 'paint-c', 'paint-e', 'paint-h', 'paint-s'];
+        const ids = ['icon', 'hero', 'paper', 'chart', 'away', 'loop', 'cors', 'wait', 'scaled', 'paint-a', 'paint-b', 'paint-c', 'paint-e', 'paint-h', 'paint-s'];
         return ids.flatMap((id) => at(id, view.document.getElementById(id)));
       }
       const picture = [...view.document.querySelectorAll('img')].find((node) => {
@@ -379,6 +429,181 @@ async function places(tab: Page, least: number): Promise<{ name: string; top: nu
     },
     [!target, least] as const,
   );
+}
+
+/** How many of the page's elements the layout of the copy is checked at, at most. */
+const SAMPLE = 400;
+/** How far an element of the copy may lie from the page's, in css px. */
+const DRIFT = 1;
+
+/**
+ * How many elements were marked and found in the copy, how many of those the page moved on
+ * its own while it was measured, and each of the rest, its top and height on the page and in
+ * the copy, the worst apart first.
+ */
+interface Drift {
+  marked: number;
+  found: number;
+  moved: number;
+  rows: { name: string; top: number; height: number; copyTop: number; copyHeight: number; off: number }[];
+}
+
+/**
+ * The page's elements against their copies in the band's picture, laid out on their own: a
+ * sample of the elements of the frame's document gets a mark the copy takes along, the band
+ * takes a new picture, and that is laid out in a frame of the top page. Each element's top in
+ * the document and its height, the page's and the copy's, the worst apart first.
+ */
+/**
+ * The band's picture drawn as a new picture is, at its first frame, against what the page
+ * shows: each element of the page with a `data-oracle-color` must draw that color at its
+ * middle there. A picture runs its animations from their start, so one the page has run, or
+ * holds part way, shows otherwise there at once. The picture is drawn from a url of its own,
+ * so the browser runs it from its start and not on from one it drew before.
+ */
+async function firstFrame(tab: Page): Promise<{ name: string; want: string; drawn: string }[]> {
+  return tab.evaluate(async () => {
+    const shadow = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot;
+    const view = shadow?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')?.contentWindow;
+    const picture = shadow?.querySelector<HTMLImageElement>('.underbar > img');
+    if (!view || !picture) return [{ name: 'the band', want: 'a picture', drawn: 'none' }];
+    const image = new Image();
+    image.src = `${picture.src}${encodeURIComponent(`<!-- ${performance.now()} -->`)}`;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const pen = canvas.getContext('2d', { willReadFrequently: true });
+    if (!pen) return [{ name: 'the band', want: 'a canvas', drawn: 'none' }];
+    pen.drawImage(image, 0, 0);
+    const body = view.document.body;
+    const down = view.scrollY + (body && view.document.scrollingElement !== body ? body.scrollTop : 0);
+    const wrong = [];
+    for (const node of view.document.querySelectorAll('[data-oracle-color]')) {
+      const box = node.getBoundingClientRect();
+      const want = (node.getAttribute('data-oracle-color') ?? '').split(',').map(Number);
+      const drawn = [...pen.getImageData(Math.round(box.left + box.width / 2), Math.round(box.top + down + box.height / 2), 1, 1).data].slice(0, 3);
+      if (drawn.some((value, at) => Math.abs(value - (want[at] ?? 0)) > 40)) {
+        wrong.push({ name: `${node.localName}.${[...node.classList].join('.')}${node.getAttribute('style') ? '[style]' : ''}`, want: want.join(','), drawn: drawn.join(',') });
+      }
+    }
+    return wrong;
+  });
+}
+
+async function layoutDrift(tab: Page): Promise<Drift> {
+  let drift: Drift = { marked: 0, found: 0, moved: 0, rows: [] };
+  // A page that draws its elements again drops the marks, so it is marked again, a few times at most.
+  for (let turn = 0; turn < 3 && (drift.marked === 0 || drift.found === 0); turn++) {
+    const marked = await tab.evaluate(([most, round]) => {
+      const shadow = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot;
+      const view = shadow?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')?.contentWindow;
+      if (!view?.document.body) return 0;
+      for (const node of view.document.querySelectorAll('[data-oracle-at]')) node.removeAttribute('data-oracle-at');
+      // The page holds still while it is measured, as the picture does: what an animation moves is where it is now in both.
+      const held = view.document.getAnimations().filter((animation) => animation.playState === 'running');
+      for (const animation of held) animation.pause();
+      Reflect.set(view, 'oracleHeld', [...((Reflect.get(view, 'oracleHeld') as Animation[] | undefined) ?? []), ...held]);
+      // What the page does not show, as the content of a closed details, is laid out only when asked, so it is left out.
+      const shown = [...view.document.body.querySelectorAll('*')].filter((node) => {
+        if (['script', 'style', 'link', 'noscript', 'template'].includes(node.localName)) return false;
+        if (node.closest('[data-devknobs]') || !node.checkVisibility()) return false;
+        for (let at: Element | null = node; at; at = at.parentElement) {
+          if (view.getComputedStyle(at).position === 'fixed') return false;
+        }
+        return node.getBoundingClientRect().height > 0;
+      });
+      const step = Math.max(1, shown.length / most);
+      let count = 0;
+      // Where each was as it was marked, to tell one the page moves on its own, which no still picture follows.
+      const places: Record<string, [number, number]> = {};
+      const down = view.scrollY + (view.document.scrollingElement !== view.document.body ? view.document.body.scrollTop : 0);
+      for (let at = 0; at < shown.length && count < most; at += step) {
+        const node = shown[Math.floor(at)];
+        if (!node) continue;
+        const mark = `${round}-${count++}`;
+        const box = node.getBoundingClientRect();
+        places[mark] = [box.top + down, box.height];
+        node.setAttribute('data-oracle-at', mark);
+      }
+      Reflect.set(view, 'oraclePlaces', places);
+      return count;
+    }, [SAMPLE, turn] as const);
+    if (marked === 0) continue;
+    // The marks change the page, so the band takes a new picture of it, with this turn's.
+    const taken = await tab
+      .waitForFunction(
+        (round) => document.querySelector('[data-devknobs="viewport"]')?.shadowRoot?.querySelector<HTMLImageElement>('.underbar > img')?.src.includes(`data-oracle-at%3D%22${round}-`),
+        turn,
+        { timeout: 10000 },
+      )
+      .catch(() => null);
+    if (!taken) continue;
+    await tab.waitForTimeout(800);
+    drift = await measureDrift(tab);
+  }
+  return drift;
+}
+
+/** The marked elements of the page against their copies in the band's picture, as `layoutDrift` tells. */
+async function measureDrift(tab: Page): Promise<Drift> {
+  return tab.evaluate(async () => {
+    const shadow = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot;
+    const view = shadow?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')?.contentWindow;
+    const picture = shadow?.querySelector<HTMLImageElement>('.underbar > img');
+    if (!view || !picture) return { marked: 0, found: 0, rows: [] };
+    const svg = decodeURIComponent(picture.src.slice(picture.src.indexOf(',') + 1));
+    const probe = document.createElement('iframe');
+    // A picture is laid out at one device pixel a px, whatever the screen's, so the frame that lays it out here is too: its zoom takes the screen's ratio back out.
+    probe.style.cssText = `position: fixed; left: -100000px; top: 0; width: ${picture.naturalWidth}px; height: ${picture.naturalHeight}px; border: 0; zoom: ${1 / (window.devicePixelRatio || 1)}`;
+    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+    const loaded = new Promise((done) => probe.addEventListener('load', done, { once: true }));
+    probe.src = url;
+    document.body.append(probe);
+    await loaded;
+    await new Promise((done) => setTimeout(done, 500));
+    // The copy's animations stand where the picture starts them, which is where the page held them.
+    for (const animation of probe.contentDocument?.getAnimations() ?? []) {
+      animation.pause();
+      animation.currentTime = 0;
+    }
+    const copied = new Map<string, Element>();
+    for (const node of probe.contentDocument?.querySelectorAll('[data-oracle-at]') ?? []) copied.set(node.getAttribute('data-oracle-at') ?? '', node);
+    const body = view.document.body;
+    const scrolled = view.scrollY + (body && view.document.scrollingElement !== body ? body.scrollTop : 0);
+    const name = (node: Element) => node.localName + (node.id ? `#${node.id}` : '') + (node.classList.length > 0 ? `.${[...node.classList].slice(0, 2).join('.')}` : '');
+    const rows = [];
+    const places = (Reflect.get(view, 'oraclePlaces') as Record<string, [number, number]> | undefined) ?? {};
+    let moved = 0;
+    const marked = view.document.querySelectorAll('[data-oracle-at]');
+    for (const node of marked) {
+      const mark = node.getAttribute('data-oracle-at') ?? '';
+      const copy = copied.get(mark);
+      if (!copy) continue;
+      const live = node.getBoundingClientRect();
+      const drawn = copy.getBoundingClientRect();
+      const top = live.top + scrolled;
+      const was = places[mark];
+      if (was && (Math.abs(was[0] - top) > 0.5 || Math.abs(was[1] - live.height) > 0.5)) {
+        moved++;
+        continue;
+      }
+      rows.push({
+        name: `${node.parentElement ? `${name(node.parentElement)} > ` : ''}${name(node)}`,
+        top,
+        height: live.height,
+        copyTop: drawn.top,
+        copyHeight: drawn.height,
+        off: Math.max(Math.abs(drawn.top - top), Math.abs(drawn.height - live.height)),
+      });
+    }
+    for (const node of marked) node.removeAttribute('data-oracle-at');
+    for (const animation of (Reflect.get(view, 'oracleHeld') as Animation[] | undefined) ?? []) animation.play();
+    Reflect.set(view, 'oracleHeld', []);
+    probe.remove();
+    URL.revokeObjectURL(url);
+    return { marked: marked.length, found: rows.length + moved, moved, rows: rows.sort((a, b) => b.off - a.off) };
+  });
 }
 
 if (out) await mkdir(out, { recursive: true });
@@ -421,6 +646,26 @@ try {
   await tab.waitForTimeout(800);
   const first = await measure(tab);
   if (!first) throw new Error('no band under the bars');
+  // The copy in the band's picture lays the page out as the page does, all the way down, so it moves with the page.
+  const drift = await layoutDrift(tab);
+  const worst = drift.rows.filter((row) => row.off > DRIFT).slice(0, 8);
+  check(
+    `the copy lays the page out as the page does, ${DRIFT} px at most apart`,
+    drift.marked > 0 && drift.found === drift.marked && worst.length === 0,
+    `${drift.found} of ${drift.marked} elements found in the copy, ${drift.moved} the page moved on its own left out, most ${(drift.rows[0]?.off ?? 0).toFixed(1)} px apart` +
+      worst
+        .map((row) => `\n       ${row.name}: top ${row.top.toFixed(1)} height ${row.height.toFixed(1)}, copy top ${row.copyTop.toFixed(1)} height ${row.copyHeight.toFixed(1)}`)
+        .join(''),
+  );
+  // Its own page has animations the copy must not run again, nor run on from their start.
+  if (!target) {
+    const wrong = await firstFrame(tab);
+    check(
+      'a new picture draws what the page shows at once: animations run, held part way, and named as the sprite names its own',
+      wrong.length === 0,
+      wrong.length === 0 ? 'each case as the page shows it' : wrong.map((one) => `\n       ${one.name}: ${one.drawn} for ${one.want}`).join(''),
+    );
+  }
   const bandDoc = first.band.height / first.scale;
   const spots = scrollAt !== null
     ? [{ name: 'page', scroll: Number(scrollAt) }]
@@ -464,14 +709,14 @@ try {
     const whole = await difference(tab, under, live, inset, Math.ceil(EDGE * SHOT));
     check(
       `${spot.name}: the band shows what the page paints there (scroll ${at.scrollY}, bars hidden)`,
-      close(whole),
+      EXACT.has(spot.name) ? exact(whole) : close(whole),
       `mean channel gap ${whole.mean.toFixed(2)}, px off ${(whole.off * 100).toFixed(2)}%, closest at ${whole.shift} px down (${whole.shifted.toFixed(2)})`,
     );
     if (stripUnder && stripLive) {
       const sharp = await difference(tab, stripUnder, stripLive, inset);
       check(
         `${spot.name}: the strip over the capsules (${strip} px) is sharp page`,
-        close(sharp),
+        EXACT.has(spot.name) ? exact(sharp) : close(sharp),
         `mean channel gap ${sharp.mean.toFixed(2)}, px off ${(sharp.off * 100).toFixed(2)}%, closest at ${sharp.shift} px down (${sharp.shifted.toFixed(2)})`,
       );
     }

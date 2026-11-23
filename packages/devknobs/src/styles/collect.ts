@@ -8,6 +8,7 @@ import {
   splitList,
   type Subject,
 } from "./selector";
+import { isKind } from "../rulekind";
 import { isShadowRoot, label, type Scope } from "./tree";
 import type { HiddenSheet, RuleOrigin, Specificity } from "./types";
 import { isOwnSheet } from "../engine/style";
@@ -66,24 +67,6 @@ export interface Flat {
   registered: Map<string, boolean>;
   /** Rules that threw as they were read. */
   skipped: number;
-}
-
-/** The rule classes the walk tells apart, by name: `instanceof` fails across windows. */
-interface Kinds {
-  CSSStyleRule: CSSStyleRule;
-  CSSNestedDeclarations: CSSNestedDeclarations;
-  CSSImportRule: CSSImportRule;
-  CSSMediaRule: CSSMediaRule;
-  CSSSupportsRule: CSSSupportsRule;
-  CSSContainerRule: CSSContainerRule;
-  CSSLayerBlockRule: CSSLayerBlockRule;
-  CSSLayerStatementRule: CSSLayerStatementRule;
-  CSSScopeRule: CSSScopeRule;
-  CSSPropertyRule: CSSPropertyRule;
-}
-
-function isKind<K extends keyof Kinds>(rule: CSSRule, kind: K): rule is Kinds[K] {
-  return rule.constructor.name === kind;
 }
 
 /** What surrounds the rules being walked. */

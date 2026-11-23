@@ -34,6 +34,7 @@
 import { addStyle, ensureStyle, isOwnSheet, type OwnStyle, removeStyle } from "../engine/style";
 import { isNewRuleSheet } from "../edit/rule";
 import { isDevknobs } from "../grab/hit";
+import { isKind } from "../rulekind";
 import { resolveNesting, splitList } from "./selector";
 import { flatParent, isShadowRoot, type Scope, scopeOf } from "./tree";
 import { ATTRIBUTES, getMark, removeMark, setMark } from "../mark";
@@ -149,22 +150,6 @@ export function forcing(): boolean {
 /** The element whose states are forced, and the states. Null with none. */
 export function forcedState(): { element: Element; states: ForcedState[] } | null {
   return current ? { element: current.element, states: [...current.states] } : null;
-}
-
-/** The rule classes copied, by name: `instanceof` fails across windows. */
-interface Kinds {
-  CSSStyleRule: CSSStyleRule;
-  CSSNestedDeclarations: CSSNestedDeclarations;
-  CSSImportRule: CSSImportRule;
-  CSSMediaRule: CSSMediaRule;
-  CSSSupportsRule: CSSSupportsRule;
-  CSSContainerRule: CSSContainerRule;
-  CSSLayerBlockRule: CSSLayerBlockRule;
-  CSSScopeRule: CSSScopeRule;
-}
-
-function isKind<K extends keyof Kinds>(rule: CSSRule, kind: K): rule is Kinds[K] {
-  return rule.constructor.name === kind;
 }
 
 /** The selector list of a rule, standing alone, `&` put in for the rule it is nested in. */

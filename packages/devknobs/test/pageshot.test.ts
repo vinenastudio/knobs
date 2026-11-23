@@ -3,6 +3,7 @@ import {
   blankUrl,
   blurMargin,
   blurPictures,
+  COPY_ROOT,
   copyPage,
   drawing,
   drawMedia,
@@ -17,6 +18,8 @@ import {
   shootPage,
   shotKey,
   svgUrl,
+  unroot,
+  unrootRules,
 } from "../src/engine/pageshot";
 import * as outlines from "../src/engine/outlines";
 import * as spacing from "../src/engine/spacing";
@@ -40,6 +43,9 @@ class FakeNode {
     readonly tag: string,
     readonly owner: FakeDocument,
   ) {}
+  matches(): boolean {
+    return false;
+  }
   querySelectorAll(): FakeNode[] {
     return [];
   }
@@ -51,6 +57,10 @@ class FakeNode {
   }
   remove(): void {
     this.removed = true;
+  }
+  readonly attributes = new Map<string, string>();
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
   }
   /** What was written into it: a style's rules. */
   text = "";
@@ -108,6 +118,9 @@ describe("copyPage", () => {
     // Its styles come along inline, made in the copy's own document too.
     const style = copy?.querySelector("head")?.children.find((child) => child.tag === "style");
     expect(style?.owner).toBe(copy?.owner);
+    // A drawing runs each animation from its start: in the copy each is past its end, and no transition runs.
+    const own = copy?.querySelector("head")?.children.filter((child) => child.tag === "style").at(-1)?.text ?? "";
+    expect(own).toContain("*, ::before, ::after { transition: none !important; animation-delay: -1000000000ms !important; }");
   });
 
   test("takes the rules the knobs wrote into the page along: text spacing's and outlines', as the knobs write them", () => {
@@ -147,11 +160,208 @@ describe("copyPage", () => {
     ];
     const copy = copyPage(frameOf(page)) as unknown as FakeNode | null;
     const style = copy?.querySelector("head")?.children.find((child) => child.tag === "style");
-    expect(style?.text.split("\n")).toEqual(["p { color: red }", rewritten, ...knobs]);
+    expect(style?.text.split("\n")).toEqual(["@layer knobs-still;", "p { color: red }", rewritten, ...knobs]);
   });
 
   test("has nothing to copy without a page", () => {
     expect(copyPage(frameOf(null))).toBeNull();
+  });
+
+  test("marks the copy's root, which stands for the page's root in its rules", () => {
+    const copy = copyPage(frameOf(new FakeDocument(true))) as unknown as FakeNode | null;
+    expect(copy?.attributes.get(COPY_ROOT)).toBe("");
+  });
+});
+
+describe("unroot", () => {
+  test("makes each :root a pseudo-class the copy's root attribute, so a rule with more to it than :root still matches the copy's html", () => {
+    expect(unroot(':root[data-theme="dark"]')).toBe('[data-knobs-root][data-theme="dark"]');
+    expect(unroot("html:root.a p")).toBe("html[data-knobs-root].a p");
+    expect(unroot(":root:not(.b) > body")).toBe("[data-knobs-root]:not(.b) > body");
+    expect(unroot(":root")).toBe("[data-knobs-root]");
+    expect(unroot(":ROOT.dark, :Root")).toBe("[data-knobs-root].dark, [data-knobs-root]");
+    expect(unroot(":root::before")).toBe("[data-knobs-root]::before");
+  });
+
+  test("reaches :root inside :is, :where, :not and :has", () => {
+    expect(unroot(":is(:root, .x) :where(:root) p:not(:root *) :has(> :root)")).toBe(
+      ":is([data-knobs-root], .x) :where([data-knobs-root]) p:not([data-knobs-root] *) :has(> [data-knobs-root])",
+    );
+  });
+
+  test("leaves :root in a string, in an escaped name, in a longer name and after a pseudo-element's colons as it is", () => {
+    for (const selector of ['[title=":root"]', "[title=':root']", '[title="a\\":root"]', ".md\\:root", ".a\\:root p", ":rooted", ":root-x", "p::root", "p::before"]) {
+      expect(unroot(selector)).toBe(selector);
+    }
+    expect(unroot('[title=":root"]:root')).toBe('[title=":root"][data-knobs-root]');
+  });
+});
+
+/** Rules that hold rules, which may be put in and taken out, as a sheet's and a group's may. */
+class Holding {
+  cssRules: SheetRule[] = [];
+  insertRule(text: string, index = 0): number {
+    this.cssRules.splice(index, 0, ...parseRules(text));
+    return index;
+  }
+  deleteRule(index: number): void {
+    this.cssRules.splice(index, 1);
+  }
+  inner(): string {
+    return this.cssRules.map((rule) => rule.cssText).join(" ");
+  }
+}
+
+/** A style rule whose selector may be set, its declarations, and the rules nested in it. Named as the browser's, as rules are told apart by their class's name. */
+class CSSStyleRule extends Holding {
+  constructor(
+    public selectorText: string,
+    private declarations: string,
+  ) {
+    super();
+  }
+  get cssText(): string {
+    return `${this.selectorText} { ${[this.declarations, this.inner()].filter(Boolean).join(" ")} }`;
+  }
+}
+
+/** A group of rules under a condition. */
+class CSSMediaRule extends Holding {
+  constructor(private condition: string) {
+    super();
+  }
+  get cssText(): string {
+    return `@media ${this.condition} { ${this.inner()} }`;
+  }
+}
+
+/** A scope, its ends read only, as the browser has them. */
+class CSSScopeRule extends Holding {
+  constructor(
+    readonly start: string | null,
+    readonly end: string | null,
+  ) {
+    super();
+  }
+  get cssText(): string {
+    return `@scope${this.start === null ? "" : ` (${this.start})`}${this.end === null ? "" : ` to (${this.end})`} { ${this.inner()} }`;
+  }
+}
+
+/** A statement, as a namespace is. */
+class CSSNamespaceRule {
+  constructor(readonly cssText: string) {}
+}
+
+type SheetRule = CSSStyleRule | CSSMediaRule | CSSScopeRule | CSSNamespaceRule;
+
+/** The rule with `head` and `body`, its nested rules parsed. */
+function ruleOf(head: string, body: string): SheetRule {
+  const scope = /^@scope\s*(?:\((.*?)\))?\s*(?:to\s*\((.*)\))?$/s.exec(head);
+  const held = head.startsWith("@media") ? new CSSMediaRule(head.slice(6).trim()) : scope ? new CSSScopeRule(scope[1] ?? null, scope[2] ?? null) : null;
+  if (held) {
+    held.cssRules = parseRules(body);
+    return held;
+  }
+  // A style rule's declarations come before the rules nested in it.
+  const nested = body.indexOf("{");
+  const cut = nested < 0 ? body.length : body.lastIndexOf(";", nested) + 1;
+  const rule = new CSSStyleRule(head, body.slice(0, cut).trim());
+  rule.cssRules = nested < 0 ? [] : parseRules(body.slice(cut));
+  return rule;
+}
+
+/** The rules in `text`, by its braces, strings in them kept whole: enough of css for these tests. */
+function parseRules(text: string): SheetRule[] {
+  const rules: SheetRule[] = [];
+  let head = "";
+  let body = "";
+  let depth = 0;
+  let quote = "";
+  for (const char of text) {
+    if (quote) {
+      if (char === quote) quote = "";
+    } else if (char === '"' || char === "'") quote = char;
+    else if (char === ";" && depth === 0) {
+      rules.push(new CSSNamespaceRule(`${head.trim()};`));
+      head = "";
+      continue;
+    } else if (char === "{" && depth++ === 0) continue;
+    else if (char === "}" && --depth === 0) {
+      rules.push(ruleOf(head.trim(), body));
+      head = body = "";
+      continue;
+    }
+    if (depth === 0) head += char;
+    else body += char;
+  }
+  return rules;
+}
+
+/** A constructable sheet, as the frame's window has one, which counts what it parses. */
+class RuleSheet extends Holding {
+  static parsed: string[] = [];
+  replaceSync(text: string): void {
+    RuleSheet.parsed.push(text);
+    this.cssRules = parseRules(text);
+  }
+}
+
+describe("unrootRules", () => {
+  test("rewrites the selectors of each rule with :root, nested ones too, and leaves its values and the other rules as they are", () => {
+    RuleSheet.parsed = [];
+    const rules = [
+      ':root[data-theme="dark"] { --x: 1; }',
+      "html:root.a p { color: red; }",
+      ":root:not(.b) > body { margin: 0; }",
+      "@media (min-width: 1px) { :root { --y: 2; } }",
+      'p::before { content: ":root"; }',
+      '[title=":root"] { color: blue; }',
+      "p { color: red; }",
+    ];
+    expect(unrootRules(rules, RuleSheet as unknown as typeof CSSStyleSheet)).toEqual([
+      '[data-knobs-root][data-theme="dark"] { --x: 1; }',
+      "html[data-knobs-root].a p { color: red; }",
+      "[data-knobs-root]:not(.b) > body { margin: 0; }",
+      "@media (min-width: 1px) { [data-knobs-root] { --y: 2; } }",
+      'p::before { content: ":root"; }',
+      '[title=":root"] { color: blue; }',
+      "p { color: red; }",
+    ]);
+    // A rule with no :root in it is not parsed again.
+    expect(RuleSheet.parsed).not.toContain("p { color: red; }");
+  });
+
+  test("parses each rule after the page's namespaces, and leaves them out of what it writes", () => {
+    RuleSheet.parsed = [];
+    const rules = ["@namespace svg url(http://www.w3.org/2000/svg);", "svg|a:root { fill: red; }"];
+    const out = unrootRules(rules, RuleSheet as unknown as typeof CSSStyleSheet);
+    expect(RuleSheet.parsed).toEqual(["@namespace svg url(http://www.w3.org/2000/svg);\nsvg|a:root { fill: red; }"]);
+    expect(out).toEqual([rules[0], "svg|a[data-knobs-root] { fill: red; }"]);
+  });
+
+  test("writes a scope again with its ends unrooted, as they cannot be set, and reaches a rule nested in a style rule", () => {
+    const Sheet = RuleSheet as unknown as typeof CSSStyleSheet;
+    expect(unrootRules(["@scope (:root.a) to (:root .b) { p { color: red; } }"], Sheet)).toEqual(["@scope ([data-knobs-root].a) to ([data-knobs-root] .b) { p { color: red; } }"]);
+    expect(unrootRules(["@scope (.card) { :root & { color: red; } }"], Sheet)).toEqual(["@scope (.card) { [data-knobs-root] & { color: red; } }"]);
+    expect(unrootRules([".card { color: blue; :root & { color: red; } }"], Sheet)).toEqual([".card { color: blue; [data-knobs-root] & { color: red; } }"]);
+    expect(unrootRules(["@scope (:root) { .x { color: red; } }"], Sheet)).toEqual(["@scope ([data-knobs-root]) { .x { color: red; } }"]);
+  });
+
+  test("parses a rule once, and again only after the frame goes", () => {
+    RuleSheet.parsed = [];
+    const Sheet = RuleSheet as unknown as typeof CSSStyleSheet;
+    const rules = [":root.dark { --x: 1; }"];
+    expect(unrootRules(rules, Sheet)).toEqual(unrootRules(rules, Sheet));
+    expect(RuleSheet.parsed.length).toBe(1);
+    forgetShots();
+    unrootRules(rules, Sheet);
+    expect(RuleSheet.parsed.length).toBe(2);
+  });
+
+  test("leaves the rules as they are without a way to parse them", () => {
+    const rules = [":root.dark { --x: 1; }", 'p::before { content: ":root"; }'];
+    expect(unrootRules(rules, undefined)).toBe(rules);
   });
 });
 
@@ -1026,6 +1236,8 @@ class Tag {
   naturalWidth = 0;
   naturalHeight = 0;
   text = "";
+  /** A shadow root of its own, which a copy does not take along. */
+  shadowRoot: object | null = null;
   constructor(
     readonly localName: string,
     attributes: Record<string, string> = {},
@@ -1060,10 +1272,36 @@ class Tag {
   all(): Tag[] {
     return this.children.flatMap((child) => [child, ...child.all()]);
   }
-  /** By names and by attributes that are set, any of a list. */
+  getElementsByTagName(): Tag[] {
+    return this.all().filter((node) => node.localName !== "#text");
+  }
+  /** Its box on the page. */
+  box = { top: 0, height: 0 };
+  getBoundingClientRect(): { top: number; height: number } {
+    return this.box;
+  }
+  get firstChild(): Tag | null {
+    return this.children[0] ?? null;
+  }
+  get ownerDocument(): { createTextNode: (text: string) => Tag } {
+    return {
+      createTextNode: (text: string) => {
+        const made = new Tag("#text");
+        made.text = text;
+        return made;
+      },
+    };
+  }
+  /** By names, by attributes that are set, and by an own style with an animation in it, any of a list. */
+  matches(selector: string): boolean {
+    return selector.split(",").some((part) => {
+      const one = part.trim();
+      if (one.startsWith("[style*=")) return (this.attributes.get("style") ?? "").toLowerCase().includes("animation");
+      return one.startsWith("[") ? this.attributes.has(one.slice(1, -1)) : this.localName === one;
+    });
+  }
   querySelectorAll(selector: string): Tag[] {
-    const parts = selector.split(",").map((part) => part.trim());
-    return this.all().filter((node) => parts.some((part) => (part.startsWith("[") ? node.attributes.has(part.slice(1, -1)) : node.localName === part)));
+    return this.all().filter((node) => node.matches(selector));
   }
   querySelector(selector: string): Tag | null {
     return this.querySelectorAll(selector)[0] ?? null;
@@ -1125,6 +1363,81 @@ describe("copyPage, of a page with pictures and with what devknobs put on it", (
     // And the page's own are untouched.
     expect(live.querySelector("img")?.attributes.get("src")).toBe("cover.jpg");
     expect(live.querySelectorAll("source").length).toBe(1);
+  });
+
+  test("gives a shadow host its box as the page lays it out, and one with nothing of its own a character that shows nothing, to sit on its line", () => {
+    const empty = new Tag("number-flow");
+    const filled = new Tag("count-up", {}, [new Tag("span")]);
+    empty.shadowRoot = {};
+    filled.shadowRoot = {};
+    const live = new Tag("html", {}, [new Tag("head"), new Tag("body", {}, [empty, filled])]);
+    // Neither fills its line, so each sits on it by its baseline.
+    empty.box = filled.box = { top: 4, height: 21 };
+    const inert = { importNode: (node: Tag) => node.clone(), createElement: (name: string) => new Tag(name) };
+    const host = { display: "inline-block", width: "18px", height: "21px", animationName: "none", overflowX: "visible", overflowY: "visible" };
+    const plain = { display: "block", animationName: "none", overflowX: "visible", overflowY: "visible" };
+    const doc = {
+      documentElement: live,
+      body: live.children[1],
+      styleSheets: [],
+      implementation: { createHTMLDocument: () => inert },
+      defaultView: { getComputedStyle: (node: Tag) => (node.shadowRoot ? host : plain), matchMedia: () => ({ matches: false }) },
+    };
+    const copy = copyPage({ contentDocument: doc } as unknown as HTMLIFrameElement) as unknown as Tag | null;
+    const [emptyCopy, filledCopy] = copy?.querySelector("body")?.children ?? [];
+    expect(emptyCopy?.getAttribute("style")).toBe(";display:inline-block !important;width:18px !important;height:21px !important");
+    expect(emptyCopy?.children.map((child) => [child.localName, child.text])).toEqual([["#text", String.fromCharCode(0x200b)]]);
+    // One with something of its own keeps just that.
+    expect(filledCopy?.children.map((child) => child.localName)).toEqual(["span"]);
+  });
+
+  /** The copy of a page with `body`, its rules `rules`, its animations `running`, and each element's computed `animationName` by `named`. */
+  function animatedCopy(body: Tag[], rules: string[], running: object[], named: (node: Tag, pseudo?: string) => string, rootStyle?: string): { copy: Tag; own: string } {
+    const live = new Tag("html", rootStyle ? { style: rootStyle } : {}, [new Tag("head"), new Tag("body", {}, body)]);
+    const inert = { importNode: (node: Tag) => node.clone(), createElement: (name: string) => new Tag(name) };
+    const doc = {
+      documentElement: live,
+      body: live.children[1],
+      styleSheets: [{ cssRules: rules.map((cssText) => ({ cssText })) }],
+      implementation: { createHTMLDocument: () => inert },
+      getAnimations: () => running,
+      defaultView: {
+        getComputedStyle: (node: Tag, pseudo?: string) => ({ animationName: named(node, pseudo), overflowX: "visible", overflowY: "visible", display: "block" }),
+        matchMedia: () => ({ matches: false }),
+      },
+    };
+    const copy = copyPage({ contentDocument: doc } as unknown as HTMLIFrameElement) as unknown as Tag | null;
+    if (!copy) throw new Error("the page was not copied");
+    const own = copy.querySelectorAll("style").at(-1)?.text ?? "";
+    return { copy, own };
+  }
+
+  test("starts what runs on a pseudo-element where it is, by a rule in the copy's first layer for its element alone", () => {
+    const bar = new Tag("div", { class: "bar" });
+    const paused = { animationName: "grow", currentTime: 30000, effect: { target: bar, pseudoElement: "::before", getKeyframes: () => [], getTiming: () => ({ delay: 0 }) } };
+    const { copy, own } = animatedCopy([bar], [], [paused], (node, pseudo) => (node === bar && pseudo === "::before" ? "grow" : "none"));
+    const drawn = copy.querySelector("body")?.children[0];
+    expect(drawn?.getAttribute("data-knobs-still")).toBe("0");
+    expect(own).toContain('@layer knobs-still {\n*, ::before, ::after { transition: none !important; animation-delay: -1000000000ms !important; }\n[data-knobs-still="0"]::before { animation-delay:-30000ms !important; }\n}');
+  });
+
+  test("where an element's own style sets an animation, which may win over the still layer, puts each animation the page has no more past its end on its element", () => {
+    const own = "animation: fade 1s !important";
+    const faded = new Tag("div", { class: "x" });
+    const inline = new Tag("div", { style: own });
+    const plain = new Tag("p");
+    const named = (node: Tag) => (node === faded || node === inline ? "fade" : "none");
+    const { copy } = animatedCopy([faded, inline, plain], [".x { animation: fade 1s; }"], [], named);
+    const [fadedCopy, inlineCopy, plainCopy] = copy.querySelector("body")?.children ?? [];
+    expect(fadedCopy?.getAttribute("style")).toBe(";animation-delay:-1000000000ms !important");
+    expect(inlineCopy?.getAttribute("style")).toBe(`${own};animation-delay:-1000000000ms !important`);
+    expect(plainCopy?.getAttribute("style")).toBeNull();
+    // A rule of the page, important or not, loses to the still layer, so no element is read.
+    const ruled = animatedCopy([new Tag("div", { class: "x" })], [".x { animation: fade 1s !important; }"], [], () => "fade").copy;
+    expect(ruled.querySelector("body")?.children[0]?.getAttribute("style")).toBeNull();
+    // The root's own style counts too.
+    const rooted = animatedCopy([new Tag("div", { class: "x" })], [], [], () => "fade", own).copy;
+    expect(rooted.querySelector("body")?.children[0]?.getAttribute("style")).toBe(";animation-delay:-1000000000ms !important");
   });
 
   test("lays out visible the root or body whose overflow the viewport takes, which would cut off or scroll the copy, and only that one", () => {

@@ -49,6 +49,8 @@ jobs:
       - run: pnpm test
       # The extension loaded into the same Chromium (playwright-core 1.62.1), on local pages only.
       - run: pnpm --filter @vinena/knobs build && pnpm --filter @knobs/extension build && pnpm --filter @knobs/extension smoke
+      # The picture under Safari's bottom bar against the page itself, on the oracle's own local page, from the build above.
+      - run: pnpm --filter @vinena/knobs underbar-oracle
       # The smoke's screenshots, the two that differ among them.
       - if: failure()
         uses: actions/upload-artifact@v4

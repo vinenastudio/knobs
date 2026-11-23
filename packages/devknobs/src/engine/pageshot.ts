@@ -2,7 +2,10 @@ import { blurWidths } from "./fold";
 import { objectPlace } from "./objectfit";
 import { embedFonts, forgetFonts } from "./pagefonts";
 import { freezeMedia, frameMedia, pinScheme, prefixedNamespace, schemePins } from "./shotmedia";
+import { LONG_DONE, stillPins } from "./shotpins";
+import { forgetSprites, inlineSprites } from "./shotsprites";
 import { isMarked, markOwn, ownSelector } from "../mark";
+import { isKind } from "../rulekind";
 
 /**
  * A rough picture of the page in the frame, for the copies of a foldable's
@@ -301,6 +304,8 @@ export function forgetShots(): void {
   watched = null;
   shots = new WeakMap();
   forgetFonts();
+  forgetSprites();
+  unrooted = new Map();
 }
 
 /** Is `doc` the page watched, with no change since its pictures were kept? One it has not been told of yet counts. */
@@ -457,6 +462,31 @@ function blankPictures(live: Element, copy: Element): void {
  */
 const NO_CONTROLS = "video::-webkit-media-controls { display: none !important; }";
 
+/**
+ * A drawing starts from the copy's styles as they are, so no transition runs
+ * in it, and it runs the copy's animations from their start, each time: one
+ * that has run on the page would run again. So every animation is past its
+ * end in the copy, and what runs on the page now is pinned on its element,
+ * by `stillPins`, where it is.
+ */
+const NO_MOTION = `*, ::before, ::after { transition: none !important; animation-delay: ${LONG_DONE}ms !important; }`;
+
+/**
+ * The cascade layer the copy's own still rules are in, named first, before
+ * any of the page's: an important declaration in the first layer wins over
+ * every other rule's, the page's important ones, layered or not, too.
+ */
+const STILL_LAYER = "knobs-still";
+
+/** The attribute that tells the copy of an element whose pseudo-element something runs on, for the rule that starts it where it is. */
+const STILL = "data-knobs-still";
+
+/** An element whose own style sets an animation, which may be important and win over the still layer. */
+const OWN_ANIMATION = '[style*="animation" i]';
+
+/** A character that takes no room and shows nothing. */
+const ZERO_WIDTH = String.fromCharCode(0x200b);
+
 /** Does an element with `overflow` on one axis, as it computes, cut off what overflows it there? */
 export function cuts(overflow: string): boolean {
   return overflow === "hidden" || overflow === "auto" || overflow === "scroll" || overflow === "clip";
@@ -475,6 +505,122 @@ export function viewportOverflow(doc: Document, view: Window): Element | null {
   if (cuts(style.overflowX) || cuts(style.overflowY)) return root;
   const { body } = doc;
   return body?.localName === "body" && body.parentElement === root ? body : null;
+}
+
+/**
+ * The attribute on the root of a copy of the page that stands for `:root`. A
+ * drawing's root is its `svg`, not the copy's `html`, so a rule for the
+ * page's root with more to it, as `:root[data-theme=dark]` or `html:root.a`,
+ * would match nothing there.
+ */
+export const COPY_ROOT = "data-knobs-root";
+
+/** A character that goes on with a name, past its start, or starts an escape in it. */
+const NAME_PART = /[\w\-\u0080-￿\\]/;
+
+/**
+ * `selector` with each `:root` in it, in any case, as the copy's root
+ * attribute: only the pseudo-class, not a part of a longer name, of a
+ * pseudo-element, of a string or of an escape. Both weigh as one class, so
+ * the cascade stays the page's.
+ */
+export function unroot(selector: string): string {
+  let out = "";
+  let quote = "";
+  /** The last character was a colon that starts a pseudo-class or pseudo-element. */
+  let colon = false;
+  for (let at = 0; at < selector.length; at++) {
+    const char = selector[at] ?? "";
+    if (char === "\\") {
+      out += selector.slice(at, at + 2);
+      at++;
+      colon = false;
+      continue;
+    }
+    if (quote) {
+      if (char === quote) quote = "";
+      out += char;
+      continue;
+    }
+    if (char === '"' || char === "'") quote = char;
+    else if (char === ":" && !colon && selector.slice(at + 1, at + 5).toLowerCase() === "root" && !NAME_PART.test(selector[at + 5] ?? "")) {
+      out += `[${COPY_ROOT}]`;
+      at += 4;
+      continue;
+    }
+    colon = char === ":" && !colon;
+    out += char;
+  }
+  return out;
+}
+
+/** A sheet or a rule that holds rules. */
+type RuleHolder = Pick<CSSStyleSheet, "cssRules" | "insertRule" | "deleteRule">;
+
+/** Each rule in `holder`, those nested too, its selectors and its scope's ends unrooted. */
+function unrootIn(holder: RuleHolder): void {
+  for (let index = 0; index < holder.cssRules.length; index++) {
+    const rule = holder.cssRules[index];
+    if (!rule) continue;
+    if (isKind(rule, "CSSStyleRule")) {
+      const selector = unroot(rule.selectorText);
+      if (selector !== rule.selectorText) rule.selectorText = selector;
+      unrootIn(rule);
+    } else if (isKind(rule, "CSSMediaRule") || isKind(rule, "CSSSupportsRule") || isKind(rule, "CSSContainerRule") || isKind(rule, "CSSLayerBlockRule")) {
+      unrootIn(rule);
+    } else if (isKind(rule, "CSSScopeRule")) {
+      unrootIn(rule);
+      // A scope's ends cannot be set, so the rule is written again with them.
+      const start = rule.start === null ? null : unroot(rule.start);
+      const end = rule.end === null ? null : unroot(rule.end);
+      if (start === rule.start && end === rule.end) continue;
+      const body = Array.from(rule.cssRules, (child) => child.cssText).join("\n");
+      holder.deleteRule(index);
+      holder.insertRule(`@scope${start === null ? "" : ` (${start})`}${end === null ? "" : ` to (${end})`} {\n${body}\n}`, index);
+    }
+  }
+}
+
+/** Each rule with `:root` of the last picture as it was unrooted, by its text after the page's namespaces, so the next parses it again only where it changed. */
+let unrooted = new Map<string, string>();
+
+/**
+ * The copy's rules, one by one, each `:root` in their selectors made the
+ * copy's root attribute. A rule that has `:root` is parsed in a sheet of its
+ * own, made by `Sheet`, rewritten, and written out again, so a string or a
+ * value with `:root` in it stays as it is; the rest stay as they are. The
+ * page's prefixed `@namespace` rules go in front of each, so a namespaced
+ * selector parses, and are left out of what is written. Without a way to
+ * parse them, the rules stay as they are.
+ */
+export function unrootRules(rules: string[], Sheet: typeof CSSStyleSheet | undefined): string[] {
+  if (typeof Sheet?.prototype?.replaceSync !== "function") return rules;
+  const namespaces = rules.filter(prefixedNamespace).join("\n");
+  const own = (sheet: CSSStyleSheet) => Array.from(sheet.cssRules).filter((rule) => !rule.cssText.startsWith("@namespace"));
+  const write = (text: string): string => {
+    try {
+      const sheet = new Sheet();
+      sheet.replaceSync(namespaces ? `${namespaces}\n${text}` : text);
+      if (own(sheet).length === 0) return text;
+      unrootIn(sheet);
+      return own(sheet)
+        .map((rule) => rule.cssText)
+        .join("\n");
+    } catch {
+      return text;
+    }
+  };
+  // Only this picture's rules are kept for the next, so a page whose css changes keeps no more than it has.
+  const kept = new Map<string, string>();
+  const out = rules.map((text) => {
+    if (!/:root/i.test(text) || text.startsWith("@namespace")) return text;
+    const key = `${namespaces}\n${text}`;
+    const written = unrooted.get(key) ?? kept.get(key) ?? write(text);
+    kept.set(key, written);
+    return written;
+  });
+  unrooted = kept;
+  return out;
 }
 
 /**
@@ -518,16 +664,32 @@ export function copyPage(
   const frozen = freezeMedia([...namespaces, ...rules], read, view?.CSSStyleSheet);
   const scheme = read.find(([feature]) => feature === "prefers-color-scheme")?.[1];
   const pinned = view && scheme ? schemePins(doc, view, scheme, frozen.computed) : null;
+  // The still layer wins over every rule of the page, but not over an important animation in an element's own style, so then each animated element is pinned.
+  const careful = doc.documentElement.matches(OWN_ANIMATION) || doc.documentElement.querySelector(OWN_ANIMATION) !== null;
+  const still = view ? stillPins(doc, view, careful) : null;
+  /** The rules that start what runs on a pseudo-element of the copy where it is on the page. */
+  const pseudo: string[] = [];
   const pin = (node: Element, copy: Element) => {
     const to = pinned?.(node);
     if (to) pinScheme(copy, to);
+    const now = still?.(node);
+    if (!now) return;
+    if (now.inline) copy.setAttribute("style", `${copy.getAttribute("style") ?? ""}${now.inline}`);
+    if (now.pseudo.length > 0) {
+      const mark = String(pseudo.length);
+      copy.setAttribute(STILL, mark);
+      for (const [selector, css] of now.pseudo) pseudo.push(`[${STILL}="${mark}"]${selector} { ${css}; }`);
+    }
+    // A shadow host with nothing of its own lays its line out on no text in the copy, so it gets a character that shows nothing, as its shadow's text sits on the line.
+    if (now.inline && node.shadowRoot && !copy.firstChild) copy.append(copy.ownerDocument.createTextNode(ZERO_WIDTH));
   };
   // Made in a document of its own, which loads nothing and runs nothing: a
   // copy in the frame's would fetch its pictures again and run their handlers.
   const inert = doc.implementation.createHTMLDocument("");
   const root = inert.importNode(doc.documentElement, true);
+  root.setAttribute(COPY_ROOT, "");
   pin(doc.documentElement, root);
-  if (leave || pinned || each) {
+  if (leave || pinned || each || still) {
     // The copy has the page's elements in the same order until some are taken out.
     const live = doc.documentElement.getElementsByTagName("*");
     const copied = root.getElementsByTagName("*");
@@ -552,10 +714,14 @@ export function copyPage(
   }
   // And nothing devknobs put on the page: what its knobs write is in the rules.
   for (const node of root.querySelectorAll(`script, link, style, noscript, ${ownSelector()}`)) node.remove();
+  inlineSprites(doc, root, inert);
   const quiet = inert.createElement("style");
-  quiet.textContent = NO_CONTROLS;
+  quiet.textContent = `${NO_CONTROLS}\n@layer ${STILL_LAYER} {\n${[NO_MOTION, ...pseudo].join("\n")}\n}`;
   const style = inert.createElement("style");
-  style.textContent = frozen.rules.join("\n");
+  // The still layer is named before any of the page's, after its namespaces, which hold only at the top of a sheet.
+  const pageRules = unrootRules(frozen.rules, view?.CSSStyleSheet);
+  const top = pageRules.filter((text) => text.startsWith("@namespace")).length;
+  style.textContent = [...pageRules.slice(0, top), `@layer ${STILL_LAYER};`, ...pageRules.slice(top)].join("\n");
   (root.querySelector("head") ?? root).append(style, quiet);
   return root;
 }
