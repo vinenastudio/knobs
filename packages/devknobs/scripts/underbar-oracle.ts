@@ -12,7 +12,8 @@
 // a sample of its elements must lie within a px of the page's, all the way down.
 // Build first, then: pnpm --filter @vinena/knobs underbar-oracle [index.global.js] [screenshot dir] [--url URL] [--scroll PX] [--dark]
 // With --url and no --scroll it puts the page's first large picture across the band.
-// Without --url it serves its own page: a rule for its root with more to it than `:root`, a
+// Without --url it serves its own page: a rule for its root with more to it than `:root`, an
+// icon from a sprite file, a number in a shadow root, a margin a script animates, a
 // picture in a round clip, a background picture, a
 // drawing, and a picture from another origin that the frame may not read. And videos, of a
 // clip the browser records first, whose frames are all the same, so one that plays shows the
@@ -77,6 +78,8 @@ const striped = (width: number, height: number) =>
     Math.floor((y / height) * 24) % 2 ? 210 : 50,
     Math.round((x / width) * 255),
   ]);
+/** A sprite file, whose dot the page shows through a `use`, in a color from the file's own gradient. */
+const SPRITE = `<svg xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g"><stop offset="0" stop-color="#f5d90a"/><stop offset="1" stop-color="#e5484d"/></linearGradient></defs><symbol id="dot" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="url(#g)"/></symbol></svg>`;
 const pictures: Record<string, Buffer> = {
   '/hero.png': striped(400, 500),
   '/hero@2x.png': striped(800, 1000),
@@ -110,9 +113,13 @@ canvas { display: block; width: 100%; height: 200px; margin: 0 0 40px; }
 .case video { display: block; top: 0; left: 0; width: 100%; height: 160px; object-fit: cover; }
 .case p, .case h2 { width: 70%; height: 60px; margin: 0; background: #f5d90a; color: #111; font: 600 28px/60px system-ui; text-align: center; }
 .tail { height: 1400px; }
+.icon { display: block; }
 </style><script src="/devknobs.js"></script></head><body><div class="col">
 <div class="lead"></div>
 <h2 class="spaced" id="spaced">Spaced by the root's look</h2>
+<svg class="icon" id="icon" viewBox="0 0 40 40" width="40" height="40"><use href="/sprite.svg#dot"/></svg>
+<count-up id="count">7</count-up>
+<p id="lift" style="margin: 0; height: 40px">moved by a script</p>
 <span class="media"><img id="hero" loading="lazy" src="/hero.png" srcset="/hero.png 1x, /hero@2x.png 2x" alt=""></span>
 <div class="paper" id="paper"></div>
 <canvas id="chart" width="708" height="400"></canvas>
@@ -134,6 +141,13 @@ for (let x = 0; x < 708; x += 12) {
   pen.fillStyle = 'hsl(' + x / 2 + ' 80% 55%)';
   pen.fillRect(x, 400 - ((x * 37) % 380), 10, 400);
 }
+// A number drawn in a shadow root, which lays its host out, and a margin a script animates.
+customElements.define('count-up', class extends HTMLElement {
+  connectedCallback() {
+    this.attachShadow({ mode: 'open' }).innerHTML = '<style>:host { display: block; height: 48px; font: 600 32px/48px system-ui; }</style><slot></slot>';
+  }
+});
+document.getElementById('lift').animate([{ marginTop: '0px' }, { marginTop: '40px' }], { duration: 1, fill: 'forwards' });
 // The turns the looping video took, each a seek back to its start.
 window.turns = 0;
 document.getElementById('loop').addEventListener('seeked', () => window.turns++);
@@ -205,6 +219,9 @@ const serve = (html: () => string) => (request: IncomingMessage, response: Serve
   } else if (path === '/devknobs.js') {
     response.setHeader('content-type', 'text/javascript');
     response.end(code);
+  } else if (path === '/sprite.svg') {
+    response.setHeader('content-type', 'image/svg+xml');
+    response.end(SPRITE);
   } else {
     response.setHeader('content-type', 'text/html');
     response.end(html());
@@ -392,37 +409,79 @@ const SAMPLE = 400;
 const DRIFT = 1;
 
 /**
+ * How many elements were marked and found in the copy, how many of those the page moved on
+ * its own while it was measured, and each of the rest, its top and height on the page and in
+ * the copy, the worst apart first.
+ */
+interface Drift {
+  marked: number;
+  found: number;
+  moved: number;
+  rows: { name: string; top: number; height: number; copyTop: number; copyHeight: number; off: number }[];
+}
+
+/**
  * The page's elements against their copies in the band's picture, laid out on their own: a
  * sample of the elements of the frame's document gets a mark the copy takes along, the band
  * takes a new picture, and that is laid out in a frame of the top page. Each element's top in
  * the document and its height, the page's and the copy's, the worst apart first.
  */
-async function layoutDrift(tab: Page): Promise<{ marked: number; found: number; rows: { name: string; top: number; height: number; copyTop: number; copyHeight: number; off: number }[] }> {
-  const before = await tab.evaluate((most) => {
-    const shadow = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot;
-    const view = shadow?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')?.contentWindow;
-    const src = shadow?.querySelector<HTMLImageElement>('.underbar > img')?.src ?? '';
-    if (!view?.document.body) return { marked: 0, src };
-    const shown = [...view.document.body.querySelectorAll('*')].filter((node) => {
-      if (['script', 'style', 'link', 'noscript', 'template'].includes(node.localName)) return false;
-      if (node.closest('[data-devknobs]')) return false;
-      for (let at: Element | null = node; at; at = at.parentElement) {
-        if (view.getComputedStyle(at).position === 'fixed') return false;
+async function layoutDrift(tab: Page): Promise<Drift> {
+  let drift: Drift = { marked: 0, found: 0, moved: 0, rows: [] };
+  // A page that draws its elements again drops the marks, so it is marked again, a few times at most.
+  for (let turn = 0; turn < 3 && (drift.marked === 0 || drift.found === 0); turn++) {
+    const marked = await tab.evaluate(([most, round]) => {
+      const shadow = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot;
+      const view = shadow?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')?.contentWindow;
+      if (!view?.document.body) return 0;
+      for (const node of view.document.querySelectorAll('[data-oracle-at]')) node.removeAttribute('data-oracle-at');
+      // The page holds still while it is measured, as the picture does: what an animation moves is where it is now in both.
+      const held = view.document.getAnimations().filter((animation) => animation.playState === 'running');
+      for (const animation of held) animation.pause();
+      Reflect.set(view, 'oracleHeld', [...((Reflect.get(view, 'oracleHeld') as Animation[] | undefined) ?? []), ...held]);
+      // What the page does not show, as the content of a closed details, is laid out only when asked, so it is left out.
+      const shown = [...view.document.body.querySelectorAll('*')].filter((node) => {
+        if (['script', 'style', 'link', 'noscript', 'template'].includes(node.localName)) return false;
+        if (node.closest('[data-devknobs]') || !node.checkVisibility()) return false;
+        for (let at: Element | null = node; at; at = at.parentElement) {
+          if (view.getComputedStyle(at).position === 'fixed') return false;
+        }
+        return node.getBoundingClientRect().height > 0;
+      });
+      const step = Math.max(1, shown.length / most);
+      let count = 0;
+      // Where each was as it was marked, to tell one the page moves on its own, which no still picture follows.
+      const places: Record<string, [number, number]> = {};
+      const down = view.scrollY + (view.document.scrollingElement !== view.document.body ? view.document.body.scrollTop : 0);
+      for (let at = 0; at < shown.length && count < most; at += step) {
+        const node = shown[Math.floor(at)];
+        if (!node) continue;
+        const mark = `${round}-${count++}`;
+        const box = node.getBoundingClientRect();
+        places[mark] = [box.top + down, box.height];
+        node.setAttribute('data-oracle-at', mark);
       }
-      return node.getBoundingClientRect().height > 0;
-    });
-    const step = Math.max(1, shown.length / most);
-    let marked = 0;
-    for (let at = 0; at < shown.length; at += step) shown[Math.floor(at)]?.setAttribute('data-oracle-at', String(marked++));
-    return { marked, src };
-  }, SAMPLE);
-  // The marks change the page, so the band takes a new picture of it.
-  await tab.waitForFunction(
-    (old) => document.querySelector('[data-devknobs="viewport"]')?.shadowRoot?.querySelector<HTMLImageElement>('.underbar > img')?.src !== old,
-    before.src,
-    { timeout: 10000 },
-  );
-  await tab.waitForTimeout(800);
+      Reflect.set(view, 'oraclePlaces', places);
+      return count;
+    }, [SAMPLE, turn] as const);
+    if (marked === 0) continue;
+    // The marks change the page, so the band takes a new picture of it, with this turn's.
+    const taken = await tab
+      .waitForFunction(
+        (round) => document.querySelector('[data-devknobs="viewport"]')?.shadowRoot?.querySelector<HTMLImageElement>('.underbar > img')?.src.includes(`data-oracle-at%3D%22${round}-`),
+        turn,
+        { timeout: 10000 },
+      )
+      .catch(() => null);
+    if (!taken) continue;
+    await tab.waitForTimeout(800);
+    drift = await measureDrift(tab);
+  }
+  return drift;
+}
+
+/** The marked elements of the page against their copies in the band's picture, as `layoutDrift` tells. */
+async function measureDrift(tab: Page): Promise<Drift> {
   return tab.evaluate(async () => {
     const shadow = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot;
     const view = shadow?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')?.contentWindow;
@@ -430,26 +489,40 @@ async function layoutDrift(tab: Page): Promise<{ marked: number; found: number; 
     if (!view || !picture) return { marked: 0, found: 0, rows: [] };
     const svg = decodeURIComponent(picture.src.slice(picture.src.indexOf(',') + 1));
     const probe = document.createElement('iframe');
-    probe.style.cssText = `position: fixed; left: -100000px; top: 0; width: ${picture.naturalWidth}px; height: ${picture.naturalHeight}px; border: 0`;
+    // A picture is laid out at one device pixel a px, whatever the screen's, so the frame that lays it out here is too: its zoom takes the screen's ratio back out.
+    probe.style.cssText = `position: fixed; left: -100000px; top: 0; width: ${picture.naturalWidth}px; height: ${picture.naturalHeight}px; border: 0; zoom: ${1 / (window.devicePixelRatio || 1)}`;
     const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
     const loaded = new Promise((done) => probe.addEventListener('load', done, { once: true }));
     probe.src = url;
     document.body.append(probe);
     await loaded;
     await new Promise((done) => setTimeout(done, 500));
+    // The copy's animations stand where the picture starts them, which is where the page held them.
+    for (const animation of probe.contentDocument?.getAnimations() ?? []) {
+      animation.pause();
+      animation.currentTime = 0;
+    }
     const copied = new Map<string, Element>();
     for (const node of probe.contentDocument?.querySelectorAll('[data-oracle-at]') ?? []) copied.set(node.getAttribute('data-oracle-at') ?? '', node);
     const body = view.document.body;
     const scrolled = view.scrollY + (body && view.document.scrollingElement !== body ? body.scrollTop : 0);
     const name = (node: Element) => node.localName + (node.id ? `#${node.id}` : '') + (node.classList.length > 0 ? `.${[...node.classList].slice(0, 2).join('.')}` : '');
     const rows = [];
+    const places = (Reflect.get(view, 'oraclePlaces') as Record<string, [number, number]> | undefined) ?? {};
+    let moved = 0;
     const marked = view.document.querySelectorAll('[data-oracle-at]');
     for (const node of marked) {
-      const copy = copied.get(node.getAttribute('data-oracle-at') ?? '');
+      const mark = node.getAttribute('data-oracle-at') ?? '';
+      const copy = copied.get(mark);
       if (!copy) continue;
       const live = node.getBoundingClientRect();
       const drawn = copy.getBoundingClientRect();
       const top = live.top + scrolled;
+      const was = places[mark];
+      if (was && (Math.abs(was[0] - top) > 0.5 || Math.abs(was[1] - live.height) > 0.5)) {
+        moved++;
+        continue;
+      }
       rows.push({
         name: `${node.parentElement ? `${name(node.parentElement)} > ` : ''}${name(node)}`,
         top,
@@ -460,9 +533,11 @@ async function layoutDrift(tab: Page): Promise<{ marked: number; found: number; 
       });
     }
     for (const node of marked) node.removeAttribute('data-oracle-at');
+    for (const animation of (Reflect.get(view, 'oracleHeld') as Animation[] | undefined) ?? []) animation.play();
+    Reflect.set(view, 'oracleHeld', []);
     probe.remove();
     URL.revokeObjectURL(url);
-    return { marked: marked.length, found: copied.size, rows: rows.sort((a, b) => b.off - a.off) };
+    return { marked: marked.length, found: rows.length + moved, moved, rows: rows.sort((a, b) => b.off - a.off) };
   });
 }
 
@@ -512,7 +587,7 @@ try {
   check(
     `the copy lays the page out as the page does, ${DRIFT} px at most apart`,
     drift.marked > 0 && drift.found === drift.marked && worst.length === 0,
-    `${drift.found} of ${drift.marked} elements found in the copy, most ${(drift.rows[0]?.off ?? 0).toFixed(1)} px apart` +
+    `${drift.found} of ${drift.marked} elements found in the copy, ${drift.moved} the page moved on its own left out, most ${(drift.rows[0]?.off ?? 0).toFixed(1)} px apart` +
       worst
         .map((row) => `\n       ${row.name}: top ${row.top.toFixed(1)} height ${row.height.toFixed(1)}, copy top ${row.copyTop.toFixed(1)} height ${row.copyHeight.toFixed(1)}`)
         .join(''),
