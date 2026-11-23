@@ -1331,7 +1331,8 @@ describe("createUnderbar", () => {
   test("the copy hides the controls a drawing puts on each video, as it runs no script", () => {
     const { frame } = frameOf([new Video("https://site.test/clip.mp4", 1080, 1920).unready().at(0, 900, 400, 300)]);
     pictureOf(frame, BAND);
-    expect(serialized?.querySelectorAll("style").map((style) => style.text)).toContain("video::-webkit-media-controls { display: none !important; }");
+    const own = serialized?.querySelectorAll("style").map((style) => style.text.split("\n")) ?? [];
+    expect(own.flat()).toContain("video::-webkit-media-controls { display: none !important; }");
   });
 
   test("a video that plays is drawn again at each of its frames, what shows over it back over it, till a new picture takes the cover", async () => {

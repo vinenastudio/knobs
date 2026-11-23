@@ -227,6 +227,9 @@ class FakePage extends FakeNode {
   querySelectorAll(): FakeNode[] {
     return [];
   }
+  getElementsByTagName(): FakeNode[] {
+    return [];
+  }
 
   override cloneNode(): FakeNode {
     return new FakePage();

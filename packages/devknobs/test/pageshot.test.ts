@@ -1187,6 +1187,9 @@ class Tag {
   all(): Tag[] {
     return this.children.flatMap((child) => [child, ...child.all()]);
   }
+  getElementsByTagName(): Tag[] {
+    return this.all();
+  }
   /** By names and by attributes that are set, any of a list. */
   querySelectorAll(selector: string): Tag[] {
     const parts = selector.split(",").map((part) => part.trim());

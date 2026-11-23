@@ -2,6 +2,8 @@ import { blurWidths } from "./fold";
 import { objectPlace } from "./objectfit";
 import { embedFonts, forgetFonts } from "./pagefonts";
 import { freezeMedia, frameMedia, pinScheme, prefixedNamespace, schemePins } from "./shotmedia";
+import { stillPins } from "./shotpins";
+import { forgetSprites, inlineSprites } from "./shotsprites";
 import { isMarked, markOwn, ownSelector } from "../mark";
 
 /**
@@ -301,6 +303,7 @@ export function forgetShots(): void {
   watched = null;
   shots = new WeakMap();
   forgetFonts();
+  forgetSprites();
 }
 
 /** Is `doc` the page watched, with no change since its pictures were kept? One it has not been told of yet counts. */
@@ -456,6 +459,16 @@ function blankPictures(live: Element, copy: Element): void {
  * loads: on the page they do not show.
  */
 const NO_CONTROLS = "video::-webkit-media-controls { display: none !important; }";
+
+/**
+ * A drawing starts from the copy's styles as they are, so no transition runs
+ * in it: what one sets on the page now is pinned on the element, by
+ * `stillPins`, as is where each animation is.
+ */
+const NO_MOTION = "*, ::before, ::after { transition: none !important; }";
+
+/** A character that takes no room and shows nothing. */
+const ZERO_WIDTH = String.fromCharCode(0x200b);
 
 /** Does an element with `overflow` on one axis, as it computes, cut off what overflows it there? */
 export function cuts(overflow: string): boolean {
@@ -625,9 +638,14 @@ export function copyPage(
   const frozen = freezeMedia([...namespaces, ...rules], read, view?.CSSStyleSheet);
   const scheme = read.find(([feature]) => feature === "prefers-color-scheme")?.[1];
   const pinned = view && scheme ? schemePins(doc, view, scheme, frozen.computed) : null;
+  const still = view ? stillPins(doc, view) : null;
   const pin = (node: Element, copy: Element) => {
     const to = pinned?.(node);
     if (to) pinScheme(copy, to);
+    const css = still?.(node);
+    if (css) copy.setAttribute("style", `${copy.getAttribute("style") ?? ""}${css}`);
+    // A shadow host with nothing of its own lays its line out on no text in the copy, so it gets a character that shows nothing, as its shadow's text sits on the line.
+    if (css && node.shadowRoot && !copy.firstChild) copy.append(copy.ownerDocument.createTextNode(ZERO_WIDTH));
   };
   // Made in a document of its own, which loads nothing and runs nothing: a
   // copy in the frame's would fetch its pictures again and run their handlers.
@@ -635,7 +653,7 @@ export function copyPage(
   const root = inert.importNode(doc.documentElement, true);
   root.setAttribute(COPY_ROOT, "");
   pin(doc.documentElement, root);
-  if (leave || pinned || each) {
+  if (leave || pinned || each || still) {
     // The copy has the page's elements in the same order until some are taken out.
     const live = doc.documentElement.getElementsByTagName("*");
     const copied = root.getElementsByTagName("*");
@@ -660,8 +678,9 @@ export function copyPage(
   }
   // And nothing devknobs put on the page: what its knobs write is in the rules.
   for (const node of root.querySelectorAll(`script, link, style, noscript, ${ownSelector()}`)) node.remove();
+  inlineSprites(doc, root, inert);
   const quiet = inert.createElement("style");
-  quiet.textContent = NO_CONTROLS;
+  quiet.textContent = `${NO_CONTROLS}\n${NO_MOTION}`;
   const style = inert.createElement("style");
   style.textContent = unrootRules(frozen.rules, view?.CSSStyleSheet).join("\n");
   (root.querySelector("head") ?? root).append(style, quiet);
