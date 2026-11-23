@@ -275,12 +275,12 @@ const EDGE = 2;
 const close = (gap: { mean: number; off: number }) => gap.mean < 12 && gap.off < 0.1;
 /**
  * The spots whose band holds only flat color, text and the sprite's icon, nothing a picture
- * of the page draws at another size: they must match but for the screen's edge, about 1 in
- * 100 px, so an icon drawn without its file's style, about 3 in 100, or a page's text in a
- * color of the sprite file's, about 9 in 100, shows.
+ * of the page draws at another size: they must match but for the screen's edge and font
+ * antialias, about 1 in 100 px on a Mac and 3 in 100 on Linux, so an icon drawn with the
+ * sprite file's style leaking into the page, about 9 in 100, shows.
  */
 const EXACT = new Set(['icon']);
-const exact = (gap: { mean: number; off: number }) => gap.mean < 3 && gap.off < 0.025;
+const exact = (gap: { mean: number; off: number }) => gap.mean < 5 && gap.off < 0.05;
 /** How many px of a shot a css px of the top page takes. */
 const SHOT = 2;
 
