@@ -8,10 +8,12 @@
 // paints sharp, is checked with the bars on too. A page that scrolls in its body, not its
 // document, is scrolled there. The console of the page is read throughout, the frame
 // loaded again once, and each address the console tells of a failed CORS request for may
-// show there once at most.
+// show there once at most. First, the copy in the band's picture is laid out on its own and
+// a sample of its elements must lie within a px of the page's, all the way down.
 // Build first, then: pnpm --filter @vinena/knobs underbar-oracle [index.global.js] [screenshot dir] [--url URL] [--scroll PX] [--dark]
 // With --url and no --scroll it puts the page's first large picture across the band.
-// Without --url it serves its own page: a picture in a round clip, a background picture, a
+// Without --url it serves its own page: a rule for its root with more to it than `:root`, a
+// picture in a round clip, a background picture, a
 // drawing, and a picture from another origin that the frame may not read. And videos, of a
 // clip the browser records first, whose frames are all the same, so one that plays shows the
 // same in the band and in the frame: one that loops under a sound button, one from another
@@ -85,10 +87,12 @@ const pictures: Record<string, Buffer> = {
 /** The clip the videos show, recorded in the browser before the page loads. */
 let clip: Buffer | null = null;
 
-const page = (away: string) => `<!doctype html><html><head><meta charset="utf-8">
+const page = (away: string) => `<!doctype html><html data-look="a"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>band oracle</title>
 <style>
 html { color-scheme: dark; }
+html:root[data-look=a] { --space: 8rem; font-size: 17px; }
+.spaced { margin: var(--space, 0) 0 0; font: 600 1.5rem/40px system-ui; }
 body { margin: 0; background: #1b1b18; color: #ddd; font: 16px/1.5 system-ui; }
 .col { padding: 0 24px; }
 .lead { height: 420px; }
@@ -108,6 +112,7 @@ canvas { display: block; width: 100%; height: 200px; margin: 0 0 40px; }
 .tail { height: 1400px; }
 </style><script src="/devknobs.js"></script></head><body><div class="col">
 <div class="lead"></div>
+<h2 class="spaced" id="spaced">Spaced by the root's look</h2>
 <span class="media"><img id="hero" loading="lazy" src="/hero.png" srcset="/hero.png 1x, /hero@2x.png 2x" alt=""></span>
 <div class="paper" id="paper"></div>
 <canvas id="chart" width="708" height="400"></canvas>
@@ -381,6 +386,86 @@ async function places(tab: Page, least: number): Promise<{ name: string; top: nu
   );
 }
 
+/** How many of the page's elements the layout of the copy is checked at, at most. */
+const SAMPLE = 400;
+/** How far an element of the copy may lie from the page's, in css px. */
+const DRIFT = 1;
+
+/**
+ * The page's elements against their copies in the band's picture, laid out on their own: a
+ * sample of the elements of the frame's document gets a mark the copy takes along, the band
+ * takes a new picture, and that is laid out in a frame of the top page. Each element's top in
+ * the document and its height, the page's and the copy's, the worst apart first.
+ */
+async function layoutDrift(tab: Page): Promise<{ marked: number; found: number; rows: { name: string; top: number; height: number; copyTop: number; copyHeight: number; off: number }[] }> {
+  const before = await tab.evaluate((most) => {
+    const shadow = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot;
+    const view = shadow?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')?.contentWindow;
+    const src = shadow?.querySelector<HTMLImageElement>('.underbar > img')?.src ?? '';
+    if (!view?.document.body) return { marked: 0, src };
+    const shown = [...view.document.body.querySelectorAll('*')].filter((node) => {
+      if (['script', 'style', 'link', 'noscript', 'template'].includes(node.localName)) return false;
+      if (node.closest('[data-devknobs]')) return false;
+      for (let at: Element | null = node; at; at = at.parentElement) {
+        if (view.getComputedStyle(at).position === 'fixed') return false;
+      }
+      return node.getBoundingClientRect().height > 0;
+    });
+    const step = Math.max(1, shown.length / most);
+    let marked = 0;
+    for (let at = 0; at < shown.length; at += step) shown[Math.floor(at)]?.setAttribute('data-oracle-at', String(marked++));
+    return { marked, src };
+  }, SAMPLE);
+  // The marks change the page, so the band takes a new picture of it.
+  await tab.waitForFunction(
+    (old) => document.querySelector('[data-devknobs="viewport"]')?.shadowRoot?.querySelector<HTMLImageElement>('.underbar > img')?.src !== old,
+    before.src,
+    { timeout: 10000 },
+  );
+  await tab.waitForTimeout(800);
+  return tab.evaluate(async () => {
+    const shadow = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot;
+    const view = shadow?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')?.contentWindow;
+    const picture = shadow?.querySelector<HTMLImageElement>('.underbar > img');
+    if (!view || !picture) return { marked: 0, found: 0, rows: [] };
+    const svg = decodeURIComponent(picture.src.slice(picture.src.indexOf(',') + 1));
+    const probe = document.createElement('iframe');
+    probe.style.cssText = `position: fixed; left: -100000px; top: 0; width: ${picture.naturalWidth}px; height: ${picture.naturalHeight}px; border: 0`;
+    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+    const loaded = new Promise((done) => probe.addEventListener('load', done, { once: true }));
+    probe.src = url;
+    document.body.append(probe);
+    await loaded;
+    await new Promise((done) => setTimeout(done, 500));
+    const copied = new Map<string, Element>();
+    for (const node of probe.contentDocument?.querySelectorAll('[data-oracle-at]') ?? []) copied.set(node.getAttribute('data-oracle-at') ?? '', node);
+    const body = view.document.body;
+    const scrolled = view.scrollY + (body && view.document.scrollingElement !== body ? body.scrollTop : 0);
+    const name = (node: Element) => node.localName + (node.id ? `#${node.id}` : '') + (node.classList.length > 0 ? `.${[...node.classList].slice(0, 2).join('.')}` : '');
+    const rows = [];
+    const marked = view.document.querySelectorAll('[data-oracle-at]');
+    for (const node of marked) {
+      const copy = copied.get(node.getAttribute('data-oracle-at') ?? '');
+      if (!copy) continue;
+      const live = node.getBoundingClientRect();
+      const drawn = copy.getBoundingClientRect();
+      const top = live.top + scrolled;
+      rows.push({
+        name: `${node.parentElement ? `${name(node.parentElement)} > ` : ''}${name(node)}`,
+        top,
+        height: live.height,
+        copyTop: drawn.top,
+        copyHeight: drawn.height,
+        off: Math.max(Math.abs(drawn.top - top), Math.abs(drawn.height - live.height)),
+      });
+    }
+    for (const node of marked) node.removeAttribute('data-oracle-at');
+    probe.remove();
+    URL.revokeObjectURL(url);
+    return { marked: marked.length, found: copied.size, rows: rows.sort((a, b) => b.off - a.off) };
+  });
+}
+
 if (out) await mkdir(out, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const results: string[] = [];
@@ -421,6 +506,17 @@ try {
   await tab.waitForTimeout(800);
   const first = await measure(tab);
   if (!first) throw new Error('no band under the bars');
+  // The copy in the band's picture lays the page out as the page does, all the way down, so it moves with the page.
+  const drift = await layoutDrift(tab);
+  const worst = drift.rows.filter((row) => row.off > DRIFT).slice(0, 8);
+  check(
+    `the copy lays the page out as the page does, ${DRIFT} px at most apart`,
+    drift.marked > 0 && drift.found === drift.marked && worst.length === 0,
+    `${drift.found} of ${drift.marked} elements found in the copy, most ${(drift.rows[0]?.off ?? 0).toFixed(1)} px apart` +
+      worst
+        .map((row) => `\n       ${row.name}: top ${row.top.toFixed(1)} height ${row.height.toFixed(1)}, copy top ${row.copyTop.toFixed(1)} height ${row.copyHeight.toFixed(1)}`)
+        .join(''),
+  );
   const bandDoc = first.band.height / first.scale;
   const spots = scrollAt !== null
     ? [{ name: 'page', scroll: Number(scrollAt) }]
