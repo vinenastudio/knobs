@@ -83,7 +83,7 @@ const striped = (width: number, height: number) =>
  * gradient and a ring from its own style, which also names a class the page has: that one
  * must not reach the page.
  */
-const SPRITE = `<svg xmlns="http://www.w3.org/2000/svg"><style>.spr { fill: url(#g); color: #e5484d; } #dot circle { stroke: #111; stroke-width: 4px; }</style><script>document.title = "ran"</script><defs><linearGradient id="g"><stop offset="0" stop-color="#f5d90a"/><stop offset="1" stop-color="#e5484d"/></linearGradient></defs><symbol id="dot" viewBox="0 0 40 40"><circle class="spr" cx="20" cy="20" r="16"/></symbol><symbol id="unused"><rect width="40" height="40"/></symbol></svg>`;
+const SPRITE = `<svg xmlns="http://www.w3.org/2000/svg"><style>.spr { fill: url(#g); color: #e5484d; } #dot circle { stroke: #111; stroke-width: 4px; } @keyframes paint { from, to { background-color: rgb(0, 0, 255); } } @font-face { font-family: system-ui; src: local(Courier); }</style><script>document.title = "ran"</script><defs><linearGradient id="g"><stop offset="0" stop-color="#f5d90a"/><stop offset="1" stop-color="#e5484d"/></linearGradient></defs><symbol id="dot" viewBox="0 0 40 40"><circle class="spr" cx="20" cy="20" r="16"/></symbol><symbol id="unused"><rect width="40" height="40"/></symbol></svg>`;
 const pictures: Record<string, Buffer> = {
   '/hero.png': striped(400, 500),
   '/hero@2x.png': striped(800, 1000),
@@ -119,6 +119,15 @@ canvas { display: block; width: 100%; height: 200px; margin: 0 0 40px; }
 .tail { height: 1400px; }
 .icon { display: block; margin: 0 auto; }
 @scope (:root[data-look=a]) { .spaced { padding-bottom: 24px; } }
+.still { height: 24px; margin: 0 0 8px; background: rgb(229, 72, 77); }
+@keyframes fadein { from { opacity: 0; } }
+@keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes paint { from, to { background-color: rgb(229, 72, 77); } }
+@layer utilities { .gone-layer { animation: fadein 400ms !important; } }
+body .col .gone-specific { animation: fadein 400ms !important; }
+.bar { position: relative; background: rgb(0, 0, 255); }
+.bar::before { content: ""; position: absolute; inset: 0; background: rgb(229, 72, 77); transform-origin: left; animation: grow 100s linear -30s paused; }
+.painted { background: none; animation: paint 1s both; }
 </style><script src="/devknobs.js"></script></head><body><div class="col">
 <div class="lead"></div>
 <h2 class="spaced" id="spaced">Spaced by the root's look</h2>
@@ -140,6 +149,11 @@ canvas { display: block; width: 100%; height: 200px; margin: 0 0 40px; }
 <section class="case" id="paint-s"><div style="position: sticky; top: 0; height: 0"><video style="position: absolute; z-index: 3" src="${away}/clip.webm" muted playsinline preload="auto"></video></div><p style="position: relative; z-index: 1; margin-top: 50px">over</p></section>
 <svg class="icon" id="icon" viewBox="0 0 40 40" width="40" height="40"><use href="/sprite.svg#dot"/></svg>
 <p class="spr" style="margin: 0; height: 24px; font: 600 20px/24px system-ui">the sprite's own style reaches only the sprite</p>
+<div class="still gone-layer" data-oracle-color="229,72,77"></div>
+<div class="still gone-specific" data-oracle-color="229,72,77"></div>
+<div class="still" style="animation: fadein 400ms !important" data-oracle-color="229,72,77"></div>
+<div class="still bar" data-oracle-color="0,0,255"></div>
+<div class="still painted" data-oracle-color="229,72,77"></div>
 <div class="tail"></div>
 </div><script>
 const pen = document.getElementById('chart').getContext('2d');
@@ -440,6 +454,43 @@ interface Drift {
  * takes a new picture, and that is laid out in a frame of the top page. Each element's top in
  * the document and its height, the page's and the copy's, the worst apart first.
  */
+/**
+ * The band's picture drawn as a new picture is, at its first frame, against what the page
+ * shows: each element of the page with a `data-oracle-color` must draw that color at its
+ * middle there. A picture runs its animations from their start, so one the page has run, or
+ * holds part way, shows otherwise there at once. The picture is drawn from a url of its own,
+ * so the browser runs it from its start and not on from one it drew before.
+ */
+async function firstFrame(tab: Page): Promise<{ name: string; want: string; drawn: string }[]> {
+  return tab.evaluate(async () => {
+    const shadow = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot;
+    const view = shadow?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')?.contentWindow;
+    const picture = shadow?.querySelector<HTMLImageElement>('.underbar > img');
+    if (!view || !picture) return [{ name: 'the band', want: 'a picture', drawn: 'none' }];
+    const image = new Image();
+    image.src = `${picture.src}${encodeURIComponent(`<!-- ${performance.now()} -->`)}`;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const pen = canvas.getContext('2d', { willReadFrequently: true });
+    if (!pen) return [{ name: 'the band', want: 'a canvas', drawn: 'none' }];
+    pen.drawImage(image, 0, 0);
+    const body = view.document.body;
+    const down = view.scrollY + (body && view.document.scrollingElement !== body ? body.scrollTop : 0);
+    const wrong = [];
+    for (const node of view.document.querySelectorAll('[data-oracle-color]')) {
+      const box = node.getBoundingClientRect();
+      const want = (node.getAttribute('data-oracle-color') ?? '').split(',').map(Number);
+      const drawn = [...pen.getImageData(Math.round(box.left + box.width / 2), Math.round(box.top + down + box.height / 2), 1, 1).data].slice(0, 3);
+      if (drawn.some((value, at) => Math.abs(value - (want[at] ?? 0)) > 40)) {
+        wrong.push({ name: `${node.localName}.${[...node.classList].join('.')}${node.getAttribute('style') ? '[style]' : ''}`, want: want.join(','), drawn: drawn.join(',') });
+      }
+    }
+    return wrong;
+  });
+}
+
 async function layoutDrift(tab: Page): Promise<Drift> {
   let drift: Drift = { marked: 0, found: 0, moved: 0, rows: [] };
   // A page that draws its elements again drops the marks, so it is marked again, a few times at most.
@@ -606,6 +657,15 @@ try {
         .map((row) => `\n       ${row.name}: top ${row.top.toFixed(1)} height ${row.height.toFixed(1)}, copy top ${row.copyTop.toFixed(1)} height ${row.copyHeight.toFixed(1)}`)
         .join(''),
   );
+  // Its own page has animations the copy must not run again, nor run on from their start.
+  if (!target) {
+    const wrong = await firstFrame(tab);
+    check(
+      'a new picture draws what the page shows at once: animations run, held part way, and named as the sprite names its own',
+      wrong.length === 0,
+      wrong.length === 0 ? 'each case as the page shows it' : wrong.map((one) => `\n       ${one.name}: ${one.drawn} for ${one.want}`).join(''),
+    );
+  }
   const bandDoc = first.band.height / first.scale;
   const spots = scrollAt !== null
     ? [{ name: 'page', scroll: Number(scrollAt) }]
