@@ -78,8 +78,12 @@ const striped = (width: number, height: number) =>
     Math.floor((y / height) * 24) % 2 ? 210 : 50,
     Math.round((x / width) * 255),
   ]);
-/** A sprite file, whose dot the page shows through a `use`, in a color from the file's own gradient. */
-const SPRITE = `<svg xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="g"><stop offset="0" stop-color="#f5d90a"/><stop offset="1" stop-color="#e5484d"/></linearGradient></defs><symbol id="dot" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="url(#g)"/></symbol></svg>`;
+/**
+ * A sprite file, whose dot the page shows through a `use`, in a color from the file's own
+ * gradient and a ring from its own style, which also names a class the page has: that one
+ * must not reach the page.
+ */
+const SPRITE = `<svg xmlns="http://www.w3.org/2000/svg"><style>.spr { fill: url(#g); color: #e5484d; } #dot circle { stroke: #111; stroke-width: 4px; }</style><script>document.title = "ran"</script><defs><linearGradient id="g"><stop offset="0" stop-color="#f5d90a"/><stop offset="1" stop-color="#e5484d"/></linearGradient></defs><symbol id="dot" viewBox="0 0 40 40"><circle class="spr" cx="20" cy="20" r="16"/></symbol><symbol id="unused"><rect width="40" height="40"/></symbol></svg>`;
 const pictures: Record<string, Buffer> = {
   '/hero.png': striped(400, 500),
   '/hero@2x.png': striped(800, 1000),
@@ -113,11 +117,11 @@ canvas { display: block; width: 100%; height: 200px; margin: 0 0 40px; }
 .case video { display: block; top: 0; left: 0; width: 100%; height: 160px; object-fit: cover; }
 .case p, .case h2 { width: 70%; height: 60px; margin: 0; background: #f5d90a; color: #111; font: 600 28px/60px system-ui; text-align: center; }
 .tail { height: 1400px; }
-.icon { display: block; }
+.icon { display: block; margin: 0 auto; }
+@scope (:root[data-look=a]) { .spaced { padding-bottom: 24px; } }
 </style><script src="/devknobs.js"></script></head><body><div class="col">
 <div class="lead"></div>
 <h2 class="spaced" id="spaced">Spaced by the root's look</h2>
-<svg class="icon" id="icon" viewBox="0 0 40 40" width="40" height="40"><use href="/sprite.svg#dot"/></svg>
 <count-up id="count">7</count-up>
 <p id="lift" style="margin: 0; height: 40px">moved by a script</p>
 <span class="media"><img id="hero" loading="lazy" src="/hero.png" srcset="/hero.png 1x, /hero@2x.png 2x" alt=""></span>
@@ -134,6 +138,8 @@ canvas { display: block; width: 100%; height: 200px; margin: 0 0 40px; }
 <section class="case" id="paint-e"><p style="z-index: 5; margin-top: 50px">under</p><video style="position: relative; margin-top: -110px" src="${away}/clip.webm" muted playsinline preload="auto"></video></section>
 <section class="case" id="paint-h"><div style="position: sticky; top: 0; height: 0"><p style="position: absolute; z-index: 50; top: 50px">under</p></div><video style="position: relative" src="${away}/clip.webm" muted playsinline preload="auto"></video></section>
 <section class="case" id="paint-s"><div style="position: sticky; top: 0; height: 0"><video style="position: absolute; z-index: 3" src="${away}/clip.webm" muted playsinline preload="auto"></video></div><p style="position: relative; z-index: 1; margin-top: 50px">over</p></section>
+<svg class="icon" id="icon" viewBox="0 0 40 40" width="40" height="40"><use href="/sprite.svg#dot"/></svg>
+<p class="spr" style="margin: 0; height: 24px; font: 600 20px/24px system-ui">the sprite's own style reaches only the sprite</p>
 <div class="tail"></div>
 </div><script>
 const pen = document.getElementById('chart').getContext('2d');
@@ -253,6 +259,14 @@ const EDGE = 2;
  * apart.
  */
 const close = (gap: { mean: number; off: number }) => gap.mean < 12 && gap.off < 0.1;
+/**
+ * The spots whose band holds only flat color, text and the sprite's icon, nothing a picture
+ * of the page draws at another size: they must match but for the screen's edge, about 1 in
+ * 100 px, so an icon drawn without its file's style, about 3 in 100, or a page's text in a
+ * color of the sprite file's, about 9 in 100, shows.
+ */
+const EXACT = new Set(['icon']);
+const exact = (gap: { mean: number; off: number }) => gap.mean < 3 && gap.off < 0.025;
 /** How many px of a shot a css px of the top page takes. */
 const SHOT = 2;
 
@@ -390,7 +404,7 @@ async function places(tab: Page, least: number): Promise<{ name: string; top: nu
         return rect ? [{ name, top: rect.top + scrolled, height: rect.height }] : [];
       };
       if (fixture) {
-        const ids = ['hero', 'paper', 'chart', 'away', 'loop', 'cors', 'wait', 'scaled', 'paint-a', 'paint-b', 'paint-c', 'paint-e', 'paint-h', 'paint-s'];
+        const ids = ['icon', 'hero', 'paper', 'chart', 'away', 'loop', 'cors', 'wait', 'scaled', 'paint-a', 'paint-b', 'paint-c', 'paint-e', 'paint-h', 'paint-s'];
         return ids.flatMap((id) => at(id, view.document.getElementById(id)));
       }
       const picture = [...view.document.querySelectorAll('img')].find((node) => {
@@ -635,14 +649,14 @@ try {
     const whole = await difference(tab, under, live, inset, Math.ceil(EDGE * SHOT));
     check(
       `${spot.name}: the band shows what the page paints there (scroll ${at.scrollY}, bars hidden)`,
-      close(whole),
+      EXACT.has(spot.name) ? exact(whole) : close(whole),
       `mean channel gap ${whole.mean.toFixed(2)}, px off ${(whole.off * 100).toFixed(2)}%, closest at ${whole.shift} px down (${whole.shifted.toFixed(2)})`,
     );
     if (stripUnder && stripLive) {
       const sharp = await difference(tab, stripUnder, stripLive, inset);
       check(
         `${spot.name}: the strip over the capsules (${strip} px) is sharp page`,
-        close(sharp),
+        EXACT.has(spot.name) ? exact(sharp) : close(sharp),
         `mean channel gap ${sharp.mean.toFixed(2)}, px off ${(sharp.off * 100).toFixed(2)}%, closest at ${sharp.shift} px down (${sharp.shifted.toFixed(2)})`,
       );
     }
