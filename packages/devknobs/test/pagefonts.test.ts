@@ -203,6 +203,7 @@ describe("copyPage", () => {
       querySelectorAll: () => [],
       querySelector: () => null,
       append() {},
+      setAttribute() {},
       set textContent(text: string) {
         styles = text;
       },

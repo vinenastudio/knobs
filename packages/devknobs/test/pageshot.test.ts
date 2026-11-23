@@ -3,6 +3,7 @@ import {
   blankUrl,
   blurMargin,
   blurPictures,
+  COPY_ROOT,
   copyPage,
   drawing,
   drawMedia,
@@ -17,6 +18,8 @@ import {
   shootPage,
   shotKey,
   svgUrl,
+  unroot,
+  unrootRules,
 } from "../src/engine/pageshot";
 import * as outlines from "../src/engine/outlines";
 import * as spacing from "../src/engine/spacing";
@@ -51,6 +54,10 @@ class FakeNode {
   }
   remove(): void {
     this.removed = true;
+  }
+  readonly attributes = new Map<string, string>();
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
   }
   /** What was written into it: a style's rules. */
   text = "";
@@ -152,6 +159,126 @@ describe("copyPage", () => {
 
   test("has nothing to copy without a page", () => {
     expect(copyPage(frameOf(null))).toBeNull();
+  });
+
+  test("marks the copy's root, which stands for the page's root in its rules", () => {
+    const copy = copyPage(frameOf(new FakeDocument(true))) as unknown as FakeNode | null;
+    expect(copy?.attributes.get(COPY_ROOT)).toBe("");
+  });
+});
+
+describe("unroot", () => {
+  test("makes each :root a pseudo-class the copy's root attribute, so a rule with more to it than :root still matches the copy's html", () => {
+    expect(unroot(':root[data-theme="dark"]')).toBe('[data-knobs-root][data-theme="dark"]');
+    expect(unroot("html:root.a p")).toBe("html[data-knobs-root].a p");
+    expect(unroot(":root:not(.b) > body")).toBe("[data-knobs-root]:not(.b) > body");
+    expect(unroot(":root")).toBe("[data-knobs-root]");
+    expect(unroot(":ROOT.dark, :Root")).toBe("[data-knobs-root].dark, [data-knobs-root]");
+    expect(unroot(":root::before")).toBe("[data-knobs-root]::before");
+  });
+
+  test("reaches :root inside :is, :where, :not and :has", () => {
+    expect(unroot(":is(:root, .x) :where(:root) p:not(:root *) :has(> :root)")).toBe(
+      ":is([data-knobs-root], .x) :where([data-knobs-root]) p:not([data-knobs-root] *) :has(> [data-knobs-root])",
+    );
+  });
+
+  test("leaves :root in a string, in an escaped name, in a longer name and after a pseudo-element's colons as it is", () => {
+    for (const selector of ['[title=":root"]', "[title=':root']", '[title="a\\":root"]', ".md\\:root", ".a\\:root p", ":rooted", ":root-x", "p::root", "p::before"]) {
+      expect(unroot(selector)).toBe(selector);
+    }
+    expect(unroot('[title=":root"]:root')).toBe('[title=":root"][data-knobs-root]');
+  });
+});
+
+/** A rule as a sheet parses one: a style rule whose selector may be set, or a group of rules under a condition. */
+class SheetRule {
+  readonly cssRules?: SheetRule[];
+  constructor(
+    public selectorText: string,
+    private body: string,
+  ) {
+    if (selectorText.startsWith("@")) this.cssRules = parseRules(body);
+  }
+  get cssText(): string {
+    return this.cssRules ? `${this.selectorText} { ${this.cssRules.map((rule) => rule.cssText).join(" ")} }` : `${this.selectorText} { ${this.body.trim()} }`;
+  }
+}
+
+/** The rules in `text`, by its braces, strings in them kept whole: enough of css for these tests. */
+function parseRules(text: string): SheetRule[] {
+  const rules: SheetRule[] = [];
+  let head = "";
+  let body = "";
+  let depth = 0;
+  let quote = "";
+  for (const char of text) {
+    if (quote) {
+      if (char === quote) quote = "";
+    } else if (char === '"' || char === "'") quote = char;
+    else if (char === ";" && depth === 0) {
+      // A statement, as a namespace is.
+      rules.push(new SheetRule(head.trim(), ""));
+      head = "";
+      continue;
+    } else if (char === "{" && depth++ === 0) continue;
+    else if (char === "}" && --depth === 0) {
+      rules.push(new SheetRule(head.trim(), body));
+      head = body = "";
+      continue;
+    }
+    if (depth === 0) head += char;
+    else body += char;
+  }
+  return rules;
+}
+
+/** A constructable sheet, as the frame's window has one, which counts what it parses. */
+class RuleSheet {
+  static parsed: string[] = [];
+  cssRules: SheetRule[] = [];
+  replaceSync(text: string): void {
+    RuleSheet.parsed.push(text);
+    this.cssRules = parseRules(text);
+  }
+}
+
+describe("unrootRules", () => {
+  test("rewrites the selectors of each rule with :root, nested ones too, and leaves its values and the other rules as they are", () => {
+    RuleSheet.parsed = [];
+    const rules = [
+      ':root[data-theme="dark"] { --x: 1; }',
+      "html:root.a p { color: red; }",
+      ":root:not(.b) > body { margin: 0; }",
+      "@media (min-width: 1px) { :root { --y: 2; } }",
+      'p::before { content: ":root"; }',
+      '[title=":root"] { color: blue; }',
+      "p { color: red; }",
+    ];
+    expect(unrootRules(rules, RuleSheet as unknown as typeof CSSStyleSheet)).toEqual([
+      '[data-knobs-root][data-theme="dark"] { --x: 1; }',
+      "html[data-knobs-root].a p { color: red; }",
+      "[data-knobs-root]:not(.b) > body { margin: 0; }",
+      "@media (min-width: 1px) { [data-knobs-root] { --y: 2; } }",
+      'p::before { content: ":root"; }',
+      '[title=":root"] { color: blue; }',
+      "p { color: red; }",
+    ]);
+    // A rule with no :root in it is not parsed again.
+    expect(RuleSheet.parsed).not.toContain("p { color: red; }");
+  });
+
+  test("parses each rule after the page's namespaces, and leaves them out of what it writes", () => {
+    RuleSheet.parsed = [];
+    const rules = ["@namespace svg url(http://www.w3.org/2000/svg);", "svg|a:root { fill: red; }"];
+    const out = unrootRules(rules, RuleSheet as unknown as typeof CSSStyleSheet);
+    expect(RuleSheet.parsed).toEqual(["@namespace svg url(http://www.w3.org/2000/svg);\nsvg|a:root { fill: red; }"]);
+    expect(out).toEqual([rules[0], "svg|a[data-knobs-root] { fill: red; }"]);
+  });
+
+  test("leaves the rules as they are without a way to parse them", () => {
+    const rules = [":root.dark { --x: 1; }", 'p::before { content: ":root"; }'];
+    expect(unrootRules(rules, undefined)).toBe(rules);
   });
 });
 

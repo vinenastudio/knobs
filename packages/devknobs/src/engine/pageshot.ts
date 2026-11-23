@@ -478,6 +478,113 @@ export function viewportOverflow(doc: Document, view: Window): Element | null {
 }
 
 /**
+ * The attribute on the root of a copy of the page that stands for `:root`. A
+ * drawing's root is its `svg`, not the copy's `html`, so a rule for the
+ * page's root with more to it, as `:root[data-theme=dark]` or `html:root.a`,
+ * would match nothing there.
+ */
+export const COPY_ROOT = "data-knobs-root";
+
+/** A character that goes on with a name, past its start, or starts an escape in it. */
+const NAME_PART = /[\w\-\u0080-￿\\]/;
+
+/**
+ * `selector` with each `:root` in it, in any case, as the copy's root
+ * attribute: only the pseudo-class, not a part of a longer name, of a
+ * pseudo-element, of a string or of an escape. Both weigh as one class, so
+ * the cascade stays the page's.
+ */
+export function unroot(selector: string): string {
+  let out = "";
+  let quote = "";
+  /** The last character was a colon that starts a pseudo-class or pseudo-element. */
+  let colon = false;
+  for (let at = 0; at < selector.length; at++) {
+    const char = selector[at] ?? "";
+    if (char === "\\") {
+      out += selector.slice(at, at + 2);
+      at++;
+      colon = false;
+      continue;
+    }
+    if (quote) {
+      if (char === quote) quote = "";
+      out += char;
+      continue;
+    }
+    if (char === '"' || char === "'") quote = char;
+    else if (char === ":" && !colon && selector.slice(at + 1, at + 5).toLowerCase() === "root" && !NAME_PART.test(selector[at + 5] ?? "")) {
+      out += `[${COPY_ROOT}]`;
+      at += 4;
+      continue;
+    }
+    colon = char === ":" && !colon;
+    out += char;
+  }
+  return out;
+}
+
+/** A sheet or a rule that holds rules. */
+interface RuleHolder {
+  readonly cssRules: CSSRuleList;
+  insertRule(rule: string, index?: number): number;
+  deleteRule(index: number): void;
+}
+
+/** Each rule in `holder`, those nested too, its selectors and its scope's ends unrooted. */
+function unrootIn(holder: RuleHolder): void {
+  for (let index = 0; index < holder.cssRules.length; index++) {
+    const rule = holder.cssRules[index];
+    if (!rule) continue;
+    const styled = rule as CSSStyleRule;
+    if (typeof styled.selectorText === "string") {
+      const selector = unroot(styled.selectorText);
+      if (selector !== styled.selectorText) styled.selectorText = selector;
+    }
+    const inner = (rule as CSSGroupingRule).cssRules;
+    if (inner && inner !== holder.cssRules) unrootIn(rule as unknown as RuleHolder);
+    // A scope's ends cannot be set, so the rule is written again with them.
+    const scope = rule as CSSScopeRule;
+    if (!("start" in scope) || !("end" in scope) || !inner) continue;
+    const start = scope.start === null ? null : unroot(scope.start);
+    const end = scope.end === null ? null : unroot(scope.end);
+    if (start === scope.start && end === scope.end) continue;
+    const body = Array.from(inner, (child) => child.cssText).join("\n");
+    holder.deleteRule(index);
+    holder.insertRule(`@scope${start === null ? "" : ` (${start})`}${end === null ? "" : ` to (${end})`} {\n${body}\n}`, index);
+  }
+}
+
+/**
+ * The copy's rules, one by one, each `:root` in their selectors made the
+ * copy's root attribute. A rule that has `:root` is parsed in a sheet of its
+ * own, made by `Sheet`, rewritten, and written out again, so a string or a
+ * value with `:root` in it stays as it is; the rest stay as they are. The
+ * page's prefixed `@namespace` rules go in front of each, so a namespaced
+ * selector parses, and are left out of what is written. Without a way to
+ * parse them, the rules stay as they are.
+ */
+export function unrootRules(rules: string[], Sheet: typeof CSSStyleSheet | undefined): string[] {
+  if (typeof Sheet?.prototype?.replaceSync !== "function") return rules;
+  const namespaces = rules.filter(prefixedNamespace).join("\n");
+  const own = (sheet: CSSStyleSheet) => Array.from(sheet.cssRules).filter((rule) => !rule.cssText.startsWith("@namespace"));
+  return rules.map((text) => {
+    if (!/:root/i.test(text) || text.startsWith("@namespace")) return text;
+    try {
+      const sheet = new Sheet();
+      sheet.replaceSync(namespaces ? `${namespaces}\n${text}` : text);
+      if (own(sheet).length === 0) return text;
+      unrootIn(sheet);
+      return own(sheet)
+        .map((rule) => rule.cssText)
+        .join("\n");
+    } catch {
+      return text;
+    }
+  });
+}
+
+/**
  * The page in `frame`, copied as it is now for `paintPage`, or null where it
  * is out of reach. What `leave` picks of the page is left out of the copy.
  * `each` is told of each element of the page and its copy, before anything is
@@ -526,6 +633,7 @@ export function copyPage(
   // copy in the frame's would fetch its pictures again and run their handlers.
   const inert = doc.implementation.createHTMLDocument("");
   const root = inert.importNode(doc.documentElement, true);
+  root.setAttribute(COPY_ROOT, "");
   pin(doc.documentElement, root);
   if (leave || pinned || each) {
     // The copy has the page's elements in the same order until some are taken out.
@@ -555,7 +663,7 @@ export function copyPage(
   const quiet = inert.createElement("style");
   quiet.textContent = NO_CONTROLS;
   const style = inert.createElement("style");
-  style.textContent = frozen.rules.join("\n");
+  style.textContent = unrootRules(frozen.rules, view?.CSSStyleSheet).join("\n");
   (root.querySelector("head") ?? root).append(style, quiet);
   return root;
 }
