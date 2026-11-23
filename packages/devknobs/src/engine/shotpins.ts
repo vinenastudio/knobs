@@ -16,7 +16,7 @@
 const NOT_PROPERTY = new Set(["offset", "computedOffset", "easing", "composite"]);
 
 /** A delay that puts an animation the page has no more past its end in the copy, in ms. */
-const LONG_DONE = -1e9;
+export const LONG_DONE = -1e9;
 
 /** What runs on an element of the page now. */
 export interface Moving {
@@ -34,6 +34,16 @@ export function cssName(name: string): string {
   return name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
 }
 
+/** Does `effect` run through keyframes, as every animation of a page does? */
+function keyframed(effect: AnimationEffect | null): effect is KeyframeEffect {
+  return effect !== null && "getKeyframes" in effect && "target" in effect;
+}
+
+/** Is `animation` one a css `animation` runs? */
+function fromCss(animation: Animation): animation is CSSAnimation {
+  return "animationName" in animation && typeof animation.animationName === "string";
+}
+
 /**
  * The elements of `doc` something runs on now, and what: a css animation on
  * the document's own clock by the delay that starts it in the copy where it
@@ -48,15 +58,13 @@ export function animated(doc: Document): Map<Element, Moving> {
     return found;
   }
   for (const animation of running) {
-    const effect = animation.effect as KeyframeEffect | null;
-    const target = effect?.target;
-    if (!effect || !target || effect.pseudoElement || typeof effect.getKeyframes !== "function") continue;
-    const moving = found.get(target) ?? { pinned: new Set<string>(), phases: new Map<string, number>() };
-    found.set(target, moving);
-    const name = (animation as CSSAnimation).animationName;
+    const effect = animation.effect;
+    if (!keyframed(effect) || !effect.target || effect.pseudoElement) continue;
+    const moving = found.get(effect.target) ?? { pinned: new Set<string>(), phases: new Map<string, number>() };
+    found.set(effect.target, moving);
     const time = animation.currentTime;
-    if (typeof name === "string" && typeof time === "number") {
-      moving.phases.set(name, (Number(effect.getTiming().delay) || 0) - time);
+    if (fromCss(animation) && typeof time === "number") {
+      moving.phases.set(animation.animationName, (Number(effect.getTiming().delay) || 0) - time);
       continue;
     }
     for (const frame of effect.getKeyframes()) {
@@ -117,11 +125,14 @@ export function lineTop(node: Element, style: CSSStyleDeclaration): string {
 /**
  * What to add to the style of the copy of each element of the page in `doc`,
  * seen in `view`, so it is laid out and drawn as on the page now, or null to
- * leave it.
+ * leave it. Only an element something runs on now, or a shadow host, has its
+ * style read: every other animation the copy has is past its end there, by
+ * its own rules, as the page has none running.
  */
 export function stillPins(doc: Document, view: Window): (node: Element) => string | null {
   const moving = animated(doc);
   return (node) => {
+    if (!node.shadowRoot && !moving.has(node)) return null;
     const style = view.getComputedStyle(node);
     const now = moving.get(node);
     let css = phasePins(style, now?.phases);

@@ -2,9 +2,10 @@ import { blurWidths } from "./fold";
 import { objectPlace } from "./objectfit";
 import { embedFonts, forgetFonts } from "./pagefonts";
 import { freezeMedia, frameMedia, pinScheme, prefixedNamespace, schemePins } from "./shotmedia";
-import { stillPins } from "./shotpins";
+import { LONG_DONE, stillPins } from "./shotpins";
 import { forgetSprites, inlineSprites } from "./shotsprites";
 import { isMarked, markOwn, ownSelector } from "../mark";
+import { isKind } from "../rulekind";
 
 /**
  * A rough picture of the page in the frame, for the copies of a foldable's
@@ -304,6 +305,7 @@ export function forgetShots(): void {
   shots = new WeakMap();
   forgetFonts();
   forgetSprites();
+  unrooted.clear();
 }
 
 /** Is `doc` the page watched, with no change since its pictures were kept? One it has not been told of yet counts. */
@@ -462,10 +464,12 @@ const NO_CONTROLS = "video::-webkit-media-controls { display: none !important; }
 
 /**
  * A drawing starts from the copy's styles as they are, so no transition runs
- * in it: what one sets on the page now is pinned on the element, by
- * `stillPins`, as is where each animation is.
+ * in it, and it runs the copy's animations from their start, each time: one
+ * that has run on the page would run again. So every animation is past its
+ * end in the copy, and what runs on the page now is pinned on its element,
+ * by `stillPins`, where it is.
  */
-const NO_MOTION = "*, ::before, ::after { transition: none !important; }";
+const NO_MOTION = `*, ::before, ::after { transition: none !important; animation-delay: ${LONG_DONE}ms !important; }`;
 
 /** A character that takes no room and shows nothing. */
 const ZERO_WIDTH = String.fromCharCode(0x200b);
@@ -538,35 +542,34 @@ export function unroot(selector: string): string {
 }
 
 /** A sheet or a rule that holds rules. */
-interface RuleHolder {
-  readonly cssRules: CSSRuleList;
-  insertRule(rule: string, index?: number): number;
-  deleteRule(index: number): void;
-}
+type RuleHolder = Pick<CSSStyleSheet, "cssRules" | "insertRule" | "deleteRule">;
 
 /** Each rule in `holder`, those nested too, its selectors and its scope's ends unrooted. */
 function unrootIn(holder: RuleHolder): void {
   for (let index = 0; index < holder.cssRules.length; index++) {
     const rule = holder.cssRules[index];
     if (!rule) continue;
-    const styled = rule as CSSStyleRule;
-    if (typeof styled.selectorText === "string") {
-      const selector = unroot(styled.selectorText);
-      if (selector !== styled.selectorText) styled.selectorText = selector;
+    if (isKind(rule, "CSSStyleRule")) {
+      const selector = unroot(rule.selectorText);
+      if (selector !== rule.selectorText) rule.selectorText = selector;
+      unrootIn(rule);
+    } else if (isKind(rule, "CSSMediaRule") || isKind(rule, "CSSSupportsRule") || isKind(rule, "CSSContainerRule") || isKind(rule, "CSSLayerBlockRule")) {
+      unrootIn(rule);
+    } else if (isKind(rule, "CSSScopeRule")) {
+      unrootIn(rule);
+      // A scope's ends cannot be set, so the rule is written again with them.
+      const start = rule.start === null ? null : unroot(rule.start);
+      const end = rule.end === null ? null : unroot(rule.end);
+      if (start === rule.start && end === rule.end) continue;
+      const body = Array.from(rule.cssRules, (child) => child.cssText).join("\n");
+      holder.deleteRule(index);
+      holder.insertRule(`@scope${start === null ? "" : ` (${start})`}${end === null ? "" : ` to (${end})`} {\n${body}\n}`, index);
     }
-    const inner = (rule as CSSGroupingRule).cssRules;
-    if (inner && inner !== holder.cssRules) unrootIn(rule as unknown as RuleHolder);
-    // A scope's ends cannot be set, so the rule is written again with them.
-    const scope = rule as CSSScopeRule;
-    if (!("start" in scope) || !("end" in scope) || !inner) continue;
-    const start = scope.start === null ? null : unroot(scope.start);
-    const end = scope.end === null ? null : unroot(scope.end);
-    if (start === scope.start && end === scope.end) continue;
-    const body = Array.from(inner, (child) => child.cssText).join("\n");
-    holder.deleteRule(index);
-    holder.insertRule(`@scope${start === null ? "" : ` (${start})`}${end === null ? "" : ` to (${end})`} {\n${body}\n}`, index);
   }
 }
+
+/** Each rule with `:root` as it was unrooted, by its text after the page's namespaces, so a picture parses it once. */
+const unrooted = new Map<string, string>();
 
 /**
  * The copy's rules, one by one, each `:root` in their selectors made the
@@ -581,8 +584,7 @@ export function unrootRules(rules: string[], Sheet: typeof CSSStyleSheet | undef
   if (typeof Sheet?.prototype?.replaceSync !== "function") return rules;
   const namespaces = rules.filter(prefixedNamespace).join("\n");
   const own = (sheet: CSSStyleSheet) => Array.from(sheet.cssRules).filter((rule) => !rule.cssText.startsWith("@namespace"));
-  return rules.map((text) => {
-    if (!/:root/i.test(text) || text.startsWith("@namespace")) return text;
+  const write = (text: string): string => {
     try {
       const sheet = new Sheet();
       sheet.replaceSync(namespaces ? `${namespaces}\n${text}` : text);
@@ -594,6 +596,16 @@ export function unrootRules(rules: string[], Sheet: typeof CSSStyleSheet | undef
     } catch {
       return text;
     }
+  };
+  return rules.map((text) => {
+    if (!/:root/i.test(text) || text.startsWith("@namespace")) return text;
+    const key = `${namespaces}\n${text}`;
+    let out = unrooted.get(key);
+    if (out === undefined) {
+      out = write(text);
+      unrooted.set(key, out);
+    }
+    return out;
   });
 }
 

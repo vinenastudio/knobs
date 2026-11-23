@@ -123,10 +123,18 @@ describe("stillPins", () => {
       [plain, styleOf({}, { animationName: "none" })],
     ]);
     const doc = { getAnimations: () => [css(card, "rise", 500), scripted(card, [{ marginTop: "40px" }])] } as unknown as Document;
-    const view = { getComputedStyle: (node: object) => styles.get(node) } as unknown as Window;
+    const read: object[] = [];
+    const view = {
+      getComputedStyle: (node: object) => {
+        read.push(node);
+        return styles.get(node);
+      },
+    } as unknown as Window;
     const pins = stillPins(doc, view);
     expect(pins(card as unknown as Element)).toBe(";animation-delay:-500ms !important;margin-top:40px !important");
     expect(pins(host as unknown as Element)).toBe(";display:block !important;width:100px !important;height:48px !important");
     expect(pins(plain as unknown as Element)).toBeNull();
+    // An element nothing runs on, and no shadow host, is not read at all: the copy's own rules put its animations past their end.
+    expect(read).toEqual([card, host]);
   });
 });
