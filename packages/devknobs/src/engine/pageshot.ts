@@ -481,8 +481,8 @@ const STILL_LAYER = "knobs-still";
 /** The attribute that tells the copy of an element whose pseudo-element something runs on, for the rule that starts it where it is. */
 const STILL = "data-knobs-still";
 
-/** A rule's text that sets an animation, or its delay, as important. */
-const IMPORTANT_ANIMATION = /animation(-delay)?\s*:[^;}]*!important/i;
+/** An element whose own style sets an animation, which may be important and win over the still layer. */
+const OWN_ANIMATION = '[style*="animation" i]';
 
 /** A character that takes no room and shows nothing. */
 const ZERO_WIDTH = String.fromCharCode(0x200b);
@@ -664,8 +664,8 @@ export function copyPage(
   const frozen = freezeMedia([...namespaces, ...rules], read, view?.CSSStyleSheet);
   const scheme = read.find(([feature]) => feature === "prefers-color-scheme")?.[1];
   const pinned = view && scheme ? schemePins(doc, view, scheme, frozen.computed) : null;
-  // An important animation of the page's own, in a rule or in an element's style, may win over the copy's rules, so then each animated element is pinned.
-  const careful = frozen.rules.some((text) => IMPORTANT_ANIMATION.test(text)) || doc.documentElement.querySelector('[style*="animation" i]') !== null;
+  // The still layer wins over every rule of the page, but not over an important animation in an element's own style, so then each animated element is pinned.
+  const careful = doc.documentElement.matches(OWN_ANIMATION) || doc.documentElement.querySelector(OWN_ANIMATION) !== null;
   const still = view ? stillPins(doc, view, careful) : null;
   /** The rules that start what runs on a pseudo-element of the copy where it is on the page. */
   const pseudo: string[] = [];

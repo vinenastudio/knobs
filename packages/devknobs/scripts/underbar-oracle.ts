@@ -119,6 +119,7 @@ canvas { display: block; width: 100%; height: 200px; margin: 0 0 40px; }
 .tail { height: 1400px; }
 .icon { display: block; margin: 0 auto; }
 @scope (:root[data-look=a]) { .spaced { padding-bottom: 24px; } }
+/* No element of this page has an animation in its own style, so the copy's still layer alone holds these where the page has them. */
 .still { height: 24px; margin: 0 0 8px; background: rgb(229, 72, 77); }
 @keyframes fadein { from { opacity: 0; } }
 @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
@@ -151,7 +152,6 @@ body .col .gone-specific { animation: fadein 400ms !important; }
 <p class="spr" style="margin: 0; height: 24px; font: 600 20px/24px system-ui">the sprite's own style reaches only the sprite</p>
 <div class="still gone-layer" data-oracle-color="229,72,77"></div>
 <div class="still gone-specific" data-oracle-color="229,72,77"></div>
-<div class="still" style="animation: fadein 400ms !important" data-oracle-color="229,72,77"></div>
 <div class="still bar" data-oracle-color="0,0,255"></div>
 <div class="still painted" data-oracle-color="229,72,77"></div>
 <div class="tail"></div>

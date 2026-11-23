@@ -148,11 +148,12 @@ export function lineTop(node: Element, style: CSSStyleDeclaration): string {
 /**
  * What to add to the copy of each element of the page in `doc`, seen in
  * `view`, so it is laid out and drawn as on the page now, or null to leave
- * it. The copy's own rules put every animation past its end, but a rule of
- * the page with an important animation, or an element's own style with one,
- * may win over them: with `careful`, as the page has either, each element
- * with an animation has its style read and pinned. Otherwise only an element
- * something runs on now, or a shadow host, is read.
+ * it. The copy's own rules, in the first layer, put every animation past its
+ * end, over every rule of the page, but an element's own style with an
+ * important animation wins over them: with `careful`, as the page has an
+ * element with an animation in its own style, each element with an animation
+ * has its style read and pinned. Otherwise only an element something runs on
+ * now, or a shadow host, is read.
  */
 export function stillPins(doc: Document, view: Window, careful: boolean): (node: Element) => Still | null {
   const moving = animated(doc);

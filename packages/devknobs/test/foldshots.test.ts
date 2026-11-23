@@ -230,6 +230,9 @@ class FakePage extends FakeNode {
   getElementsByTagName(): FakeNode[] {
     return [];
   }
+  matches(): boolean {
+    return false;
+  }
 
   override cloneNode(): FakeNode {
     return new FakePage();

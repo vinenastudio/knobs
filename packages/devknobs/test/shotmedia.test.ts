@@ -293,6 +293,10 @@ class El {
   getElementsByTagName(): El[] {
     return this.all();
   }
+  /** No element of these pages has an animation in its own style. */
+  matches(): boolean {
+    return false;
+  }
   querySelectorAll(selector: string): El[] {
     const names = selector.split(/,\s*/);
     return this.all().filter((node) =>

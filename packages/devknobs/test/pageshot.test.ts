@@ -43,6 +43,9 @@ class FakeNode {
     readonly tag: string,
     readonly owner: FakeDocument,
   ) {}
+  matches(): boolean {
+    return false;
+  }
   querySelectorAll(): FakeNode[] {
     return [];
   }
@@ -1289,10 +1292,16 @@ class Tag {
       },
     };
   }
-  /** By names and by attributes that are set, any of a list. */
+  /** By names, by attributes that are set, and by an own style with an animation in it, any of a list. */
+  matches(selector: string): boolean {
+    return selector.split(",").some((part) => {
+      const one = part.trim();
+      if (one.startsWith("[style*=")) return (this.attributes.get("style") ?? "").toLowerCase().includes("animation");
+      return one.startsWith("[") ? this.attributes.has(one.slice(1, -1)) : this.localName === one;
+    });
+  }
   querySelectorAll(selector: string): Tag[] {
-    const parts = selector.split(",").map((part) => part.trim());
-    return this.all().filter((node) => parts.some((part) => (part.startsWith("[") ? node.attributes.has(part.slice(1, -1)) : node.localName === part)));
+    return this.all().filter((node) => node.matches(selector));
   }
   querySelector(selector: string): Tag | null {
     return this.querySelectorAll(selector)[0] ?? null;
@@ -1383,8 +1392,8 @@ describe("copyPage, of a page with pictures and with what devknobs put on it", (
   });
 
   /** The copy of a page with `body`, its rules `rules`, its animations `running`, and each element's computed `animationName` by `named`. */
-  function animatedCopy(body: Tag[], rules: string[], running: object[], named: (node: Tag, pseudo?: string) => string): { copy: Tag; own: string } {
-    const live = new Tag("html", {}, [new Tag("head"), new Tag("body", {}, body)]);
+  function animatedCopy(body: Tag[], rules: string[], running: object[], named: (node: Tag, pseudo?: string) => string, rootStyle?: string): { copy: Tag; own: string } {
+    const live = new Tag("html", rootStyle ? { style: rootStyle } : {}, [new Tag("head"), new Tag("body", {}, body)]);
     const inert = { importNode: (node: Tag) => node.clone(), createElement: (name: string) => new Tag(name) };
     const doc = {
       documentElement: live,
@@ -1412,16 +1421,23 @@ describe("copyPage, of a page with pictures and with what devknobs put on it", (
     expect(own).toContain('@layer knobs-still {\n*, ::before, ::after { transition: none !important; animation-delay: -1000000000ms !important; }\n[data-knobs-still="0"]::before { animation-delay:-30000ms !important; }\n}');
   });
 
-  test("where a rule of the page sets an animation as important, puts each animation the page has no more past its end on its element", () => {
+  test("where an element's own style sets an animation, which may win over the still layer, puts each animation the page has no more past its end on its element", () => {
+    const own = "animation: fade 1s !important";
     const faded = new Tag("div", { class: "x" });
+    const inline = new Tag("div", { style: own });
     const plain = new Tag("p");
-    const { copy } = animatedCopy([faded, plain], [".x { animation: fade 1s !important; }"], [], (node) => (node === faded ? "fade" : "none"));
-    const [fadedCopy, plainCopy] = copy.querySelector("body")?.children ?? [];
+    const named = (node: Tag) => (node === faded || node === inline ? "fade" : "none");
+    const { copy } = animatedCopy([faded, inline, plain], [".x { animation: fade 1s; }"], [], named);
+    const [fadedCopy, inlineCopy, plainCopy] = copy.querySelector("body")?.children ?? [];
     expect(fadedCopy?.getAttribute("style")).toBe(";animation-delay:-1000000000ms !important");
+    expect(inlineCopy?.getAttribute("style")).toBe(`${own};animation-delay:-1000000000ms !important`);
     expect(plainCopy?.getAttribute("style")).toBeNull();
-    // Without one, the copy's own rules do it, and no element is read.
-    const quiet = animatedCopy([faded, plain], [".x { animation: fade 1s; }"], [], (node) => (node === faded ? "fade" : "none")).copy;
-    expect(quiet.querySelector("body")?.children[0]?.getAttribute("style")).toBeNull();
+    // A rule of the page, important or not, loses to the still layer, so no element is read.
+    const ruled = animatedCopy([new Tag("div", { class: "x" })], [".x { animation: fade 1s !important; }"], [], () => "fade").copy;
+    expect(ruled.querySelector("body")?.children[0]?.getAttribute("style")).toBeNull();
+    // The root's own style counts too.
+    const rooted = animatedCopy([new Tag("div", { class: "x" })], [], [], () => "fade", own).copy;
+    expect(rooted.querySelector("body")?.children[0]?.getAttribute("style")).toBe(";animation-delay:-1000000000ms !important");
   });
 
   test("lays out visible the root or body whose overflow the viewport takes, which would cut off or scroll the copy, and only that one", () => {

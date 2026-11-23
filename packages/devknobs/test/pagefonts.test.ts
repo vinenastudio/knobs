@@ -202,6 +202,7 @@ describe("copyPage", () => {
     const node = (): Record<string, unknown> => ({
       querySelectorAll: () => [],
       querySelector: () => null,
+      matches: () => false,
       append() {},
       setAttribute() {},
       set textContent(text: string) {
