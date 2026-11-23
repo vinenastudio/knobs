@@ -110,22 +110,58 @@ export function spriteSelector(selector: string, ids: Set<string>, prefix: strin
     .join(", ");
 }
 
-/** Each style rule in `holder`, those nested too, made to match the sprite file's elements only. */
-function markRules(holder: Pick<CSSStyleSheet, "cssRules">, mark: (selector: string) => string): void {
+type Holder = Pick<CSSStyleSheet, "cssRules" | "deleteRule">;
+
+/** A rule that holds rules under a condition or a layer, as the sprite file's styles may. */
+function grouping(rule: CSSRule): rule is CSSMediaRule | CSSSupportsRule | CSSContainerRule | CSSLayerBlockRule {
+  return isKind(rule, "CSSMediaRule") || isKind(rule, "CSSSupportsRule") || isKind(rule, "CSSContainerRule") || isKind(rule, "CSSLayerBlockRule");
+}
+
+/** Each `@keyframes` in `holder`, those in groups too, named `prefix` + its name, and its old name told to `names`. */
+function renameKeyframes(holder: Holder, prefix: string, names: Map<string, string>): void {
   for (const rule of Array.from(holder.cssRules)) {
+    if (isKind(rule, "CSSKeyframesRule")) {
+      const name = `${prefix}${rule.name}`;
+      names.set(rule.name, name);
+      rule.name = name;
+    } else if (grouping(rule)) renameKeyframes(rule, prefix, names);
+  }
+}
+
+/**
+ * Each rule in `holder`, those nested too, kept to the sprite file: a style
+ * rule made to match its elements only, by `mark`, and its animations by the
+ * names `names` gives their `@keyframes`. One whose selector cannot be marked,
+ * and every other rule but a group and a `@keyframes`, as an `@font-face`,
+ * would reach the whole page, so it is taken out.
+ */
+function markRules(holder: Holder, mark: (selector: string) => string, names: Map<string, string>): void {
+  for (let index = holder.cssRules.length - 1; index >= 0; index--) {
+    const rule = holder.cssRules[index];
+    if (!rule) continue;
     if (isKind(rule, "CSSStyleRule")) {
       rule.selectorText = mark(rule.selectorText);
-      markRules(rule, mark);
-    } else if (isKind(rule, "CSSMediaRule") || isKind(rule, "CSSSupportsRule") || isKind(rule, "CSSContainerRule") || isKind(rule, "CSSLayerBlockRule")) {
-      markRules(rule, mark);
-    }
+      if (!rule.selectorText.includes(SPRITE)) {
+        holder.deleteRule(index);
+        continue;
+      }
+      const animation = rule.style.getPropertyValue("animation-name");
+      const renamed = animation
+        .split(",")
+        .map((name) => names.get(name.trim()) ?? name.trim())
+        .join(", ");
+      if (animation && renamed !== animation) rule.style.setProperty("animation-name", renamed, rule.style.getPropertyPriority("animation-name"));
+      markRules(rule, mark, names);
+    } else if (grouping(rule)) markRules(rule, mark, names);
+    else if (!isKind(rule, "CSSKeyframesRule")) holder.deleteRule(index);
   }
 }
 
 /**
  * The css of a sprite file's styles, `text`, matching its own elements only,
- * those marked as the `index`th file's, each `#id` of one of its `ids` made
- * `prefix` + id: parsed by `Sheet`, or "" where it cannot be, so none
+ * those marked as the `index`th file's, each `#id` of one of its `ids` and
+ * each of its `@keyframes` named `prefix` + its name, and nothing else of it
+ * that would reach the page: parsed by `Sheet`, or "" where it cannot be, so none
  * reaches the page. A `<use>` draws a copy of its part that the page's rules
  * match as they match the part itself, so the file's rules stay the page's
  * own, and only what they match is kept to the file.
@@ -135,7 +171,9 @@ export function spriteStyle(text: string, ids: Set<string>, prefix: string, inde
   try {
     const sheet = new Sheet();
     sheet.replaceSync(text);
-    markRules(sheet, (selector) => spriteSelector(selector, ids, prefix, index));
+    const names = new Map<string, string>();
+    renameKeyframes(sheet, prefix, names);
+    markRules(sheet, (selector) => spriteSelector(selector, ids, prefix, index), names);
     return prefixRefs(Array.from(sheet.cssRules, (rule) => rule.cssText).join("\n"), prefix);
   } catch {
     return "";

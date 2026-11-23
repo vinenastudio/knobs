@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { forgetSprites, inlineSprites, prefixIds, prefixRefs, spriteSelector } from "../src/engine/shotsprites";
+import { forgetSprites, inlineSprites, prefixIds, prefixRefs, spriteSelector, spriteStyle } from "../src/engine/shotsprites";
 
 const SVG = "http://www.w3.org/2000/svg";
 const XLINK = "http://www.w3.org/1999/xlink";
@@ -111,20 +111,63 @@ const settle = () => new Promise((done) => setTimeout(done, 0));
 /** A style rule as a sheet parses one, named as the browser's, as rules are told apart by their class's name. */
 class CSSStyleRule {
   readonly cssRules: CSSStyleRule[] = [];
-  constructor(
-    public selectorText: string,
-    private body: string,
-  ) {}
+  private selector: string;
+  /** Its declarations, by name, as the rule's style reads and writes them. */
+  private readonly declarations = new Map<string, string>();
+  readonly style = {
+    getPropertyValue: (name: string) => this.declarations.get(name) ?? "",
+    getPropertyPriority: () => "",
+    setProperty: (name: string, value: string) => this.declarations.set(name, value),
+  };
+  constructor(selector: string, body: string) {
+    this.selector = selector;
+    for (const part of body.split(";")) {
+      const colon = part.indexOf(":");
+      if (colon > 0) this.declarations.set(part.slice(0, colon).trim(), part.slice(colon + 1).trim());
+    }
+  }
+  /** A selector the browser cannot parse, as a pseudo-class after a pseudo-element, is not set, as the browser does. */
+  get selectorText(): string {
+    return this.selector;
+  }
+  set selectorText(selector: string) {
+    if (!/::[\w-]+:/.test(selector)) this.selector = selector;
+  }
   get cssText(): string {
-    return `${this.selectorText} { ${this.body.trim()} }`;
+    return `${this.selector} { ${[...this.declarations].map(([name, value]) => `${name}: ${value};`).join(" ")} }`;
   }
 }
 
-/** A constructable sheet of plain style rules: enough of css for these tests. */
+/** A `@keyframes`, its name settable as the browser's. */
+class CSSKeyframesRule {
+  constructor(
+    public name: string,
+    private body: string,
+  ) {}
+  get cssText(): string {
+    return `@keyframes ${this.name} { ${this.body.trim()} }`;
+  }
+}
+
+/** A rule of another kind, as an `@font-face`. */
+class CSSFontFaceRule {
+  constructor(readonly cssText: string) {}
+}
+
+/** A constructable sheet of flat rules: enough of css for these tests. */
 class RuleSheet {
-  cssRules: CSSStyleRule[] = [];
+  cssRules: (CSSStyleRule | CSSKeyframesRule | CSSFontFaceRule)[] = [];
   replaceSync(text: string): void {
-    this.cssRules = [...text.matchAll(/([^{}]+)\{([^}]*)\}/g)].map((found) => new CSSStyleRule((found[1] ?? "").trim(), found[2] ?? ""));
+    this.cssRules = [...text.matchAll(/([^{}]+)\{((?:[^{}]|\{[^{}]*\})*)\}/g)].map((found) => {
+      const head = (found[1] ?? "").trim();
+      const body = found[2] ?? "";
+      if (head.startsWith("@keyframes")) return new CSSKeyframesRule(head.slice(10).trim(), body);
+      if (head.startsWith("@")) return new CSSFontFaceRule(`${head} { ${body.trim()} }`);
+      return new CSSStyleRule(head, body);
+    });
+  }
+  deleteRule(index: number): void {
+    this.cssRules.splice(index, 1);
   }
 }
 
@@ -206,6 +249,20 @@ describe("inlineSprites", () => {
     const page = copy(new Part("use", { href: "#own" }), new Part("use"));
     expect(fetched).toEqual([]);
     expect(page.children.length).toBe(2);
+  });
+});
+
+describe("spriteStyle", () => {
+  test("names the file's keyframes its own, and its animations by them, so none meets the page's of the same name", () => {
+    const css = "@keyframes grow { to { fill: blue; } } .bar { animation-name: grow, spin; fill: red; }";
+    expect(spriteStyle(css, new Set(), "p-", 0, RuleSheet as unknown as typeof CSSStyleSheet)).toBe(
+      '@keyframes p-grow { to { fill: blue; } }\n.bar[data-knobs-sprite="0"] { animation-name: p-grow, spin; fill: red; }',
+    );
+  });
+
+  test("takes out what would reach the whole page: a rule of another kind, and one whose selector cannot be marked", () => {
+    const css = '@font-face { font-family: "Logo"; } ::-webkit-scrollbar-thumb:hover { background: red; } .dot { fill: red; }';
+    expect(spriteStyle(css, new Set(), "p-", 0, RuleSheet as unknown as typeof CSSStyleSheet)).toBe('.dot[data-knobs-sprite="0"] { fill: red; }');
   });
 });
 
