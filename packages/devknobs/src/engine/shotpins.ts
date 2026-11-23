@@ -18,12 +18,23 @@ const NOT_PROPERTY = new Set(["offset", "computedOffset", "easing", "composite"]
 /** A delay that puts an animation the page has no more past its end in the copy, in ms. */
 export const LONG_DONE = -1e9;
 
-/** What runs on an element of the page now. */
-export interface Moving {
+/** What runs on an element, or on one of its pseudo-elements, of the page now. */
+export interface Running {
   /** The properties set by what the copy cannot run, to pin as they are now. */
   pinned: Set<string>;
   /** Each css animation by its name, and the delay that starts it in the copy where it is on the page now, in ms. */
   phases: Map<string, number>;
+}
+
+/** What runs on an element of the page now, and on each of its pseudo-elements, by its selector, as `::before`. */
+export interface Moving extends Running {
+  pseudo: Map<string, Running>;
+}
+
+/** What to add to the copy of an element: to its own style, and for each of its pseudo-elements, by its selector, as declarations. */
+export interface Still {
+  inline: string;
+  pseudo: [string, string][];
 }
 
 /** A property as `getKeyframes` names it, as css names it: `backgroundColor` as `background-color`. */
@@ -44,10 +55,12 @@ function fromCss(animation: Animation): animation is CSSAnimation {
   return "animationName" in animation && typeof animation.animationName === "string";
 }
 
+const nothing = (): Running => ({ pinned: new Set<string>(), phases: new Map<string, number>() });
+
 /**
- * The elements of `doc` something runs on now, and what: a css animation on
- * the document's own clock by the delay that starts it in the copy where it
- * is, the rest by the properties it sets. One on a pseudo-element is left out.
+ * The elements of `doc` something runs on now, and what, on each and on its
+ * pseudo-elements: a css animation on the document's own clock by the delay
+ * that starts it in the copy where it is, the rest by the properties it sets.
  */
 export function animated(doc: Document): Map<Element, Moving> {
   const found = new Map<Element, Moving>();
@@ -59,16 +72,21 @@ export function animated(doc: Document): Map<Element, Moving> {
   }
   for (const animation of running) {
     const effect = animation.effect;
-    if (!keyframed(effect) || !effect.target || effect.pseudoElement) continue;
-    const moving = found.get(effect.target) ?? { pinned: new Set<string>(), phases: new Map<string, number>() };
+    if (!keyframed(effect) || !effect.target) continue;
+    const moving = found.get(effect.target) ?? { ...nothing(), pseudo: new Map<string, Running>() };
     found.set(effect.target, moving);
+    let own: Running = moving;
+    if (effect.pseudoElement) {
+      own = moving.pseudo.get(effect.pseudoElement) ?? nothing();
+      moving.pseudo.set(effect.pseudoElement, own);
+    }
     const time = animation.currentTime;
     if (fromCss(animation) && typeof time === "number") {
-      moving.phases.set(animation.animationName, (Number(effect.getTiming().delay) || 0) - time);
+      own.phases.set(animation.animationName, (Number(effect.getTiming().delay) || 0) - time);
       continue;
     }
     for (const frame of effect.getKeyframes()) {
-      for (const key of Object.keys(frame)) if (!NOT_PROPERTY.has(key)) moving.pinned.add(cssName(key));
+      for (const key of Object.keys(frame)) if (!NOT_PROPERTY.has(key)) own.pinned.add(cssName(key));
     }
   }
   return found;
@@ -94,6 +112,11 @@ export function phasePins(style: CSSStyleDeclaration, phases: Map<string, number
   if (!names || names === "none") return "";
   const delays = names.split(",").map((name) => `${phases?.get(name.trim()) ?? LONG_DONE}ms`);
   return `;animation-delay:${delays.join(", ")} !important`;
+}
+
+/** What runs, `running`, as `style` has it now, as css to pin it with. */
+function runningPins(style: CSSStyleDeclaration, running: Running | undefined): string {
+  return phasePins(style, running?.phases) + (running && running.pinned.size > 0 ? animationPins(style, running.pinned) : "");
 }
 
 /**
@@ -123,21 +146,27 @@ export function lineTop(node: Element, style: CSSStyleDeclaration): string {
 }
 
 /**
- * What to add to the style of the copy of each element of the page in `doc`,
- * seen in `view`, so it is laid out and drawn as on the page now, or null to
- * leave it. Only an element something runs on now, or a shadow host, has its
- * style read: every other animation the copy has is past its end there, by
- * its own rules, as the page has none running.
+ * What to add to the copy of each element of the page in `doc`, seen in
+ * `view`, so it is laid out and drawn as on the page now, or null to leave
+ * it. The copy's own rules put every animation past its end, but a rule of
+ * the page with an important animation, or an element's own style with one,
+ * may win over them: with `careful`, as the page has either, each element
+ * with an animation has its style read and pinned. Otherwise only an element
+ * something runs on now, or a shadow host, is read.
  */
-export function stillPins(doc: Document, view: Window): (node: Element) => string | null {
+export function stillPins(doc: Document, view: Window, careful: boolean): (node: Element) => Still | null {
   const moving = animated(doc);
   return (node) => {
-    if (!node.shadowRoot && !moving.has(node)) return null;
-    const style = view.getComputedStyle(node);
     const now = moving.get(node);
-    let css = phasePins(style, now?.phases);
-    if (now && now.pinned.size > 0) css += animationPins(style, now.pinned);
-    if (node.shadowRoot) css += hostPins(style) + lineTop(node, style);
-    return css === "" ? null : css;
+    if (!careful && !now && !node.shadowRoot) return null;
+    const style = view.getComputedStyle(node);
+    let inline = runningPins(style, now);
+    if (node.shadowRoot) inline += hostPins(style) + lineTop(node, style);
+    const pseudo: [string, string][] = [];
+    for (const [selector, running] of now?.pseudo ?? []) {
+      const css = runningPins(view.getComputedStyle(node, selector), running);
+      if (css) pseudo.push([selector, css.slice(1).replaceAll(";", "; ")]);
+    }
+    return inline === "" && pseudo.length === 0 ? null : { inline, pseudo };
   };
 }

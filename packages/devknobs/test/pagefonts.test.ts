@@ -213,7 +213,7 @@ describe("copyPage", () => {
     Object.assign(doc, { documentElement: node(), implementation: { createHTMLDocument: () => inert } });
     const frame = { contentDocument: doc } as unknown as HTMLIFrameElement;
     copyPage(frame);
-    expect(styles).toBe(INTER);
+    expect(styles).toBe(`@layer knobs-still;\n${INTER}`);
     await settle();
     copyPage(frame);
     expect(styles).toContain(DATA);

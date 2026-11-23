@@ -37,10 +37,21 @@ describe("animated", () => {
       ],
     } as unknown as Document;
     const found = animated(doc);
-    expect([...found.keys()]).toEqual([card as Element]);
+    expect([...found.keys()]).toEqual([card as Element, dot as Element]);
     const moving = found.get(card as Element);
     expect([...(moving?.phases ?? [])]).toEqual([["rise", -700]]);
     expect([...(moving?.pinned ?? [])]).toEqual(["margin-top"]);
+    // What runs on a pseudo-element is told by it, apart from its element's own.
+    const dotted = found.get(dot as Element);
+    expect(dotted?.pinned.size).toBe(0);
+    expect([...(dotted?.pseudo.get("::before")?.pinned ?? [])]).toEqual(["opacity"]);
+  });
+
+  test("tells a css animation on a pseudo-element by where the copy starts it", () => {
+    const bar = {};
+    const paused = { animationName: "grow", currentTime: 30000, effect: { target: bar, pseudoElement: "::before", getKeyframes: () => [], getTiming: () => ({ delay: 0 }) } };
+    const found = animated({ getAnimations: () => [paused] } as unknown as Document);
+    expect([...(found.get(bar as Element)?.pseudo.get("::before")?.phases ?? [])]).toEqual([["grow", -30000]]);
   });
 
   test("pins what a css animation that follows a scroll sets, as the copy has no scroll to follow", () => {
@@ -130,11 +141,34 @@ describe("stillPins", () => {
         return styles.get(node);
       },
     } as unknown as Window;
-    const pins = stillPins(doc, view);
-    expect(pins(card as unknown as Element)).toBe(";animation-delay:-500ms !important;margin-top:40px !important");
-    expect(pins(host as unknown as Element)).toBe(";display:block !important;width:100px !important;height:48px !important");
+    const pins = stillPins(doc, view, false);
+    expect(pins(card as unknown as Element)).toEqual({ inline: ";animation-delay:-500ms !important;margin-top:40px !important", pseudo: [] });
+    expect(pins(host as unknown as Element)).toEqual({ inline: ";display:block !important;width:100px !important;height:48px !important", pseudo: [] });
     expect(pins(plain as unknown as Element)).toBeNull();
     // An element nothing runs on, and no shadow host, is not read at all: the copy's own rules put its animations past their end.
     expect(read).toEqual([card, host]);
+  });
+
+  test("where the page has an important animation the copy's rules may not win over, puts each animation the page has no more past its end on its element", () => {
+    const faded = { shadowRoot: null };
+    const plain = { shadowRoot: null };
+    const styles = new Map<object, CSSStyleDeclaration>([
+      [faded, styleOf({}, { animationName: "fade" })],
+      [plain, styleOf({}, { animationName: "none" })],
+    ]);
+    const view = { getComputedStyle: (node: object) => styles.get(node) } as unknown as Window;
+    const pins = stillPins({ getAnimations: () => [] } as unknown as Document, view, true);
+    expect(pins(faded as unknown as Element)).toEqual({ inline: ";animation-delay:-1000000000ms !important", pseudo: [] });
+    expect(pins(plain as unknown as Element)).toBeNull();
+  });
+
+  test("starts what runs on a pseudo-element where it is, as declarations for a rule of its own", () => {
+    const bar = { shadowRoot: null };
+    const paused = { animationName: "grow", currentTime: 30000, effect: { target: bar, pseudoElement: "::before", getKeyframes: () => [], getTiming: () => ({ delay: 0 }) } };
+    const view = {
+      getComputedStyle: (_node: object, pseudo?: string) => styleOf({}, { animationName: pseudo === "::before" ? "grow" : "none" }),
+    } as unknown as Window;
+    const pins = stillPins({ getAnimations: () => [paused] } as unknown as Document, view, false);
+    expect(pins(bar as unknown as Element)).toEqual({ inline: "", pseudo: [["::before", "animation-delay:-30000ms !important"]] });
   });
 });

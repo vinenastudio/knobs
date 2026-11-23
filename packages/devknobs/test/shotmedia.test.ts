@@ -4,6 +4,8 @@ import { copyPage, forgetShots } from "../src/engine/pageshot";
 import { eitherScheme, frameMedia, freezeMedia, prefixedNamespace } from "../src/engine/shotmedia";
 
 const TRUE_TOKEN = "(min-width: 0px)";
+/** The copy's own first layer, named before the page's rules. */
+const STILL = "@layer knobs-still;\n";
 const FALSE_TOKEN = "(not (min-width: 0px))";
 
 /** A declaration block as a sheet parses one: each declaration, its value, and whether it is important. */
@@ -371,7 +373,7 @@ describe("copyPage, of a frame that reads another scheme than the system", () =>
 
   test("draws the frame's light rules, not the system's dark ones", () => {
     const copy = copied([["@media (prefers-color-scheme: dark) { body { background: black; } }"]], page("normal"));
-    expect(copy.querySelector("style")?.text).toBe(`@media ${FALSE_TOKEN} { body { background: black; } }`);
+    expect(copy.querySelector("style")?.text).toBe(`${STILL}@media ${FALSE_TOKEN} { body { background: black; } }`);
   });
 
   test("keeps a sheet for some media only for those media, as the frame reads them", () => {
@@ -382,14 +384,14 @@ describe("copyPage, of a frame that reads another scheme than the system", () =>
       ],
       page("normal"),
     );
-    expect(copy.querySelector("style")?.text).toBe(`@media ${FALSE_TOKEN} { p { color: white; } }\np { margin: 0; }`);
+    expect(copy.querySelector("style")?.text).toBe(`${STILL}@media ${FALSE_TOKEN} { p { color: white; } }\np { margin: 0; }`);
   });
 
   test("sets the rules' schemes to the frame's, and pins only the root inline, not each element under it", () => {
     const live = page("light dark", [new El("main", "light dark", [new El("p", "light dark")])]);
     live.setAttribute("style", "font-size: 20px");
     const copy = copied([[":root { color-scheme: light dark; }", "section { color-scheme: light dark; }"]], live);
-    expect(copy.querySelector("style")?.text).toBe(":root { color-scheme: light; }\nsection { color-scheme: light; }");
+    expect(copy.querySelector("style")?.text).toBe(`${STILL}:root { color-scheme: light; }\nsection { color-scheme: light; }`);
     expect(styled(copy)).toEqual([["html", "font-size: 20px;color-scheme:light !important"]]);
     // The page itself is untouched.
     expect(live.getAttribute("style")).toBe("font-size: 20px");
@@ -428,7 +430,8 @@ describe("copyPage, of a frame that reads another scheme than the system", () =>
       [["p { margin: 0; }"], ['@namespace url("http://www.w3.org/2000/svg");', prefixed, "rect { fill: red; }"]],
       page("normal"),
     );
-    expect(copy.querySelector("style")?.text).toBe(`${prefixed}\np { margin: 0; }\nrect { fill: red; }`);
+    // The copy's own first layer is named after the namespaces, which hold only at the top of a sheet.
+    expect(copy.querySelector("style")?.text).toBe(`${prefixed}\n${STILL}p { margin: 0; }\nrect { fill: red; }`);
   });
 
   test("sets no style anywhere on a root that is normal with no meta", () => {

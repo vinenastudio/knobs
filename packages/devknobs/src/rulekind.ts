@@ -10,6 +10,7 @@ export interface RuleKinds {
   CSSLayerStatementRule: CSSLayerStatementRule;
   CSSScopeRule: CSSScopeRule;
   CSSPropertyRule: CSSPropertyRule;
+  CSSKeyframesRule: CSSKeyframesRule;
 }
 
 /** Is `rule` of the class named `kind`, from whichever window it was made in? */

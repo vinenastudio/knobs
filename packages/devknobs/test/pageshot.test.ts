@@ -157,7 +157,7 @@ describe("copyPage", () => {
     ];
     const copy = copyPage(frameOf(page)) as unknown as FakeNode | null;
     const style = copy?.querySelector("head")?.children.find((child) => child.tag === "style");
-    expect(style?.text.split("\n")).toEqual(["p { color: red }", rewritten, ...knobs]);
+    expect(style?.text.split("\n")).toEqual(["@layer knobs-still;", "p { color: red }", rewritten, ...knobs]);
   });
 
   test("has nothing to copy without a page", () => {
@@ -1380,6 +1380,48 @@ describe("copyPage, of a page with pictures and with what devknobs put on it", (
     expect(emptyCopy?.children.map((child) => [child.localName, child.text])).toEqual([["#text", String.fromCharCode(0x200b)]]);
     // One with something of its own keeps just that.
     expect(filledCopy?.children.map((child) => child.localName)).toEqual(["span"]);
+  });
+
+  /** The copy of a page with `body`, its rules `rules`, its animations `running`, and each element's computed `animationName` by `named`. */
+  function animatedCopy(body: Tag[], rules: string[], running: object[], named: (node: Tag, pseudo?: string) => string): { copy: Tag; own: string } {
+    const live = new Tag("html", {}, [new Tag("head"), new Tag("body", {}, body)]);
+    const inert = { importNode: (node: Tag) => node.clone(), createElement: (name: string) => new Tag(name) };
+    const doc = {
+      documentElement: live,
+      body: live.children[1],
+      styleSheets: [{ cssRules: rules.map((cssText) => ({ cssText })) }],
+      implementation: { createHTMLDocument: () => inert },
+      getAnimations: () => running,
+      defaultView: {
+        getComputedStyle: (node: Tag, pseudo?: string) => ({ animationName: named(node, pseudo), overflowX: "visible", overflowY: "visible", display: "block" }),
+        matchMedia: () => ({ matches: false }),
+      },
+    };
+    const copy = copyPage({ contentDocument: doc } as unknown as HTMLIFrameElement) as unknown as Tag | null;
+    if (!copy) throw new Error("the page was not copied");
+    const own = copy.querySelectorAll("style").at(-1)?.text ?? "";
+    return { copy, own };
+  }
+
+  test("starts what runs on a pseudo-element where it is, by a rule in the copy's first layer for its element alone", () => {
+    const bar = new Tag("div", { class: "bar" });
+    const paused = { animationName: "grow", currentTime: 30000, effect: { target: bar, pseudoElement: "::before", getKeyframes: () => [], getTiming: () => ({ delay: 0 }) } };
+    const { copy, own } = animatedCopy([bar], [], [paused], (node, pseudo) => (node === bar && pseudo === "::before" ? "grow" : "none"));
+    const drawn = copy.querySelector("body")?.children[0];
+    expect(drawn?.getAttribute("data-knobs-still")).toBe("0");
+    expect(own).toContain('@layer knobs-still {\n*, ::before, ::after { transition: none !important; animation-delay: -1000000000ms !important; }\n[data-knobs-still="0"]::before { animation-delay:-30000ms !important; }\n}');
+  });
+
+  test("where a rule of the page sets an animation as important, puts each animation the page has no more past its end on its element", () => {
+    const faded = new Tag("div", { class: "x" });
+    const plain = new Tag("p");
+    const { copy } = animatedCopy([faded, plain], [".x { animation: fade 1s !important; }"], [], (node) => (node === faded ? "fade" : "none"));
+    const [fadedCopy, plainCopy] = copy.querySelector("body")?.children ?? [];
+    expect(fadedCopy?.getAttribute("style")).toBe(";animation-delay:-1000000000ms !important");
+    expect(plainCopy?.getAttribute("style")).toBeNull();
+    // Without one, the copy's own rules do it, and no element is read.
+    const quiet = animatedCopy([faded, plain], [".x { animation: fade 1s; }"], [], (node) => (node === faded ? "fade" : "none")).copy;
+    expect(quiet.querySelector("body")?.children[0]?.getAttribute("style")).toBeNull();
   });
 
   test("lays out visible the root or body whose overflow the viewport takes, which would cut off or scroll the copy, and only that one", () => {
