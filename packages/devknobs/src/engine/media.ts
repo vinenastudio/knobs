@@ -199,6 +199,13 @@ let observer: MutationObserver | null = null;
 let frame = 0;
 let colorScheme: string | null = null;
 
+/** The browser's own `matches` of this window's lists, under the patch while it is on, or null where there is none. */
+export function nativeMatchesGetter(): ((this: MediaQueryList) => boolean) | null {
+  if (readMatches) return readMatches;
+  if (typeof MediaQueryList === "undefined") return null;
+  return Object.getOwnPropertyDescriptor(MediaQueryList.prototype, "matches")?.get ?? null;
+}
+
 /**
  * A rule's media text as the page wrote it, whatever the prefers knobs or text
  * size made of it since. The rewritten text is what the browser matches, and

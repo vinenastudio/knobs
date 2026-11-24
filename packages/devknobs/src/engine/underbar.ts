@@ -76,16 +76,180 @@ export function bandShift(scrollY: number, innerHeight: number, scale: number): 
   return -(scrollY + innerHeight) * scale;
 }
 
-/** A length in the viewport's units, `vh` and its small, large and dynamic forms. */
-const VH = /(-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)[sld]?vh\b/gi;
+/**
+ * How many px a hundred of `unit` are in a frame `width` by `height` css px,
+ * where it is a viewport unit the picture reads wrongly, in its small, large
+ * and dynamic forms too: heights and block lengths by its height, the least
+ * and the most of its sides by those. Null for any other, widths too, as the
+ * picture is as wide as the frame.
+ */
+function viewportSize(unit: string, height: number, width: number): number | null {
+  let base = unit.toLowerCase();
+  if (base.length > 2 && "sld".includes(base[0] ?? "")) base = base.slice(1);
+  if (base === "vh" || base === "vb") return height;
+  if (base === "vmin") return Math.min(width, height);
+  if (base === "vmax") return Math.max(width, height);
+  return null;
+}
+
+/** Character codes the scan looks for. */
+const BACKSLASH = 92;
+const LINE = 10;
+const MINUS = 45;
+const PLUS = 43;
+const DOT = 46;
+
+/** A character code that is a digit. A code past the end is NaN, which is none of these. */
+const isDigit = (code: number) => code >= 48 && code <= 57;
+
+/** A code that starts a name: a letter, `_`, or a character past ASCII. */
+const startsName = (code: number) => (code >= 97 && code <= 122) || (code >= 65 && code <= 90) || code === 95 || code >= 0x80;
+
+/** A code that goes on with a name. */
+const inName = (code: number) => startsName(code) || isDigit(code) || code === MINUS;
+
+const isHex = (code: number) => isDigit(code) || (code >= 97 && code <= 102) || (code >= 65 && code <= 70);
+
+/** Is there an escape at `at` of `css`: a backslash with no line break after it? */
+const escapeAt = (css: string, at: number) => css.charCodeAt(at) === BACKSLASH && at + 1 < css.length && css.charCodeAt(at + 1) !== LINE;
+
+/** Where the escape at `at` of `css` ends: one character, or up to 6 hex digits and one space after them. */
+function escapeEnd(css: string, at: number): number {
+  let end = at + 1;
+  if (!isHex(css.charCodeAt(end))) return end + 1;
+  while (end < at + 7 && isHex(css.charCodeAt(end))) end++;
+  const next = css.charCodeAt(end);
+  // A space, tab, line feed, carriage return or form feed.
+  return next === 32 || (next >= 9 && next <= 13 && next !== 11) ? end + 1 : end;
+}
+
+/** Does an identifier start at `at` of `css`: a name's start, an escape, or `-` before either or another `-`? */
+function identAt(css: string, at: number): boolean {
+  const code = css.charCodeAt(at);
+  if (startsName(code) || escapeAt(css, at)) return true;
+  if (code !== MINUS) return false;
+  const next = css.charCodeAt(at + 1);
+  return next === MINUS || startsName(next) || escapeAt(css, at + 1);
+}
+
+/** Where the name that goes on from `at` of `css` ends, its escapes in it. */
+function nameEnd(css: string, at: number): number {
+  let end = at;
+  while (end < css.length) {
+    if (inName(css.charCodeAt(end))) end++;
+    else if (escapeAt(css, end)) end = escapeEnd(css, end);
+    else break;
+  }
+  return end;
+}
+
+/** Where the first `close` from `from` of `css` that no backslash escapes is, or the end of `css`: one after an even run of backslashes. */
+function unescaped(css: string, from: number, close: string): number {
+  let found = css.indexOf(close, from);
+  while (found >= 0) {
+    let back = found;
+    while (back > from && css.charCodeAt(back - 1) === BACKSLASH) back--;
+    if ((found - back) % 2 === 0) return found;
+    found = css.indexOf(close, found + 1);
+  }
+  return css.length;
+}
+
+/** Where the string that starts with its quote at `at` of `css` ends, past its closing quote. */
+function stringEnd(css: string, at: number): number {
+  return Math.min(unescaped(css, at + 1, css[at] ?? "") + 1, css.length);
+}
+
+/** Where the number that starts at `at` of `css` ends, or `at` where none starts there: a sign, digits, a fraction, an exponent. */
+function numberEnd(css: string, at: number): number {
+  let end = at;
+  let code = css.charCodeAt(end);
+  if (code === PLUS || code === MINUS) code = css.charCodeAt(++end);
+  const whole = end;
+  while (isDigit(code)) code = css.charCodeAt(++end);
+  if (code === DOT && isDigit(css.charCodeAt(end + 1))) {
+    end++;
+    while (isDigit(css.charCodeAt(end))) end++;
+  }
+  if (end === whole) return at;
+  code = css.charCodeAt(end);
+  if (code === 101 || code === 69) {
+    const after = css.charCodeAt(end + 1);
+    const sign = after === PLUS || after === MINUS ? 1 : 0;
+    if (isDigit(css.charCodeAt(end + 1 + sign))) {
+      end += 1 + sign;
+      while (isDigit(css.charCodeAt(end))) end++;
+    }
+  }
+  return end;
+}
+
+/** How long a text is before its result is kept for the next picture: a page's style text, not an element's own style. */
+const KEPT_FROM = 4096;
+
+/** The results of the last long texts, newest last: the copy has a few, the same each time the page is pictured again. */
+let keptUnits: { css: string; height: number; width: number; out: string }[] = [];
+
+/** Let go of the long texts kept, as the band goes. */
+export function forgetUnits(): void {
+  keptUnits = [];
+}
 
 /**
- * `css` with every length in viewport heights as the px they come to in a
- * viewport `height` px tall. The picture's own viewport is as tall as the
- * whole document, which would stretch them.
+ * `css` with every length in a viewport unit the picture reads wrongly as the
+ * px it comes to in a frame `width` by `height` css px. The picture's own
+ * viewport is as tall as the whole document, which would stretch them. Only
+ * numbers are read: names, as a class `.h-\[50vh\]` or a variable
+ * `--a-50vh`, strings, `url(...)`, `@` and `#` names and comments stay as
+ * they are. A long text's result is kept for the next time it is asked.
  */
-export function viewportUnits(css: string, height: number): string {
-  return css.replace(VH, (_, amount: string) => `${Math.round(Number(amount) * height) / 100}px`);
+export function viewportUnits(css: string, height: number, width: number): string {
+  if (css.length < KEPT_FROM) return scanUnits(css, height, width);
+  const kept = keptUnits.find((one) => one.height === height && one.width === width && one.css === css);
+  if (kept) return kept.out;
+  const out = scanUnits(css, height, width);
+  keptUnits = [...keptUnits.slice(-3), { css, height, width, out }];
+  return out;
+}
+
+/** `viewportUnits`, read through once. */
+function scanUnits(css: string, height: number, width: number): string {
+  let out = "";
+  /** How far `out` has `css` in it. */
+  let written = 0;
+  let at = 0;
+  while (at < css.length) {
+    const code = css.charCodeAt(at);
+    let end = at + 1;
+    if (code === 34 || code === 39) end = stringEnd(css, at);
+    else if (code === 47 && css.charCodeAt(at + 1) === 42) {
+      const close = css.indexOf("*/", at + 2);
+      end = close < 0 ? css.length : close + 2;
+    } else if ((code === 64 || code === 35) && (inName(css.charCodeAt(at + 1)) || escapeAt(css, at + 1))) end = nameEnd(css, at + 1);
+    else if (identAt(css, at)) {
+      end = nameEnd(css, at);
+      if (end - at === 3 && css.charCodeAt(end) === 40 && css.slice(at, end).toLowerCase() === "url") {
+        // Its address as it is, quoted or not, up to its `)`.
+        end++;
+        while (css.charCodeAt(end) === 32) end++;
+        const quote = css.charCodeAt(end);
+        if (quote === 34 || quote === 39) end = stringEnd(css, end);
+        end = Math.min(unescaped(css, end, ")") + 1, css.length);
+      }
+    } else if (isDigit(code) || code === DOT || code === PLUS || code === MINUS) {
+      const amount = numberEnd(css, at);
+      if (amount > at) {
+        end = identAt(css, amount) ? nameEnd(css, amount) : amount;
+        const size = end - amount >= 2 ? viewportSize(css.slice(amount, end), height, width) : null;
+        if (size !== null) {
+          out += `${css.slice(written, at)}${Math.round(Number(css.slice(at, amount)) * size) / 100}px`;
+          written = end;
+        }
+      }
+    }
+    at = end;
+  }
+  return written === 0 ? css : out + css.slice(written);
 }
 
 /**
@@ -178,10 +342,10 @@ export function pictureOf(frame: HTMLIFrameElement, band = 0, loaded: () => void
   );
   if (!copy) return null;
   for (const style of copy.querySelectorAll("style")) {
-    style.textContent = viewportUnits(style.textContent ?? "", tall);
+    style.textContent = viewportUnits(style.textContent ?? "", tall, width);
   }
   for (const node of copy.querySelectorAll("[style]")) {
-    node.setAttribute("style", viewportUnits(node.getAttribute("style") ?? "", tall));
+    node.setAttribute("style", viewportUnits(node.getAttribute("style") ?? "", tall, width));
   }
   for (const put of puts) put();
   const scroller = bodyScroller(doc, view);
@@ -483,6 +647,7 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
       watched = null;
       dropCover();
       forgetPixels();
+      forgetUnits();
       band.remove();
     },
   };

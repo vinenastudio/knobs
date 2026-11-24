@@ -1,7 +1,7 @@
 import { blurWidths } from "./fold";
 import { objectPlace } from "./objectfit";
 import { embedFonts, forgetFonts } from "./pagefonts";
-import { freezeMedia, frameMedia, pinScheme, prefixedNamespace, schemePins } from "./shotmedia";
+import { frameDecides, freezeMedia, frameMedia, pinScheme, prefixedNamespace, schemePins } from "./shotmedia";
 import { LONG_DONE, stillPins } from "./shotpins";
 import { forgetSprites, inlineSprites } from "./shotsprites";
 import { isMarked, markOwn, ownSelector } from "../mark";
@@ -658,10 +658,10 @@ export function copyPage(
       // A sheet from another origin keeps its rules to itself.
     }
   }
-  // A drawing of it matches its media against the system, so they read what the frame reads.
+  // A drawing of it matches its media against the system and its own size, so the frame decides them.
   const view = doc.defaultView;
   const read = view ? frameMedia(view) : [];
-  const frozen = freezeMedia([...namespaces, ...rules], read, view?.CSSStyleSheet);
+  const frozen = freezeMedia([...namespaces, ...rules], read, view?.CSSStyleSheet, view ? (frameDecides(view) ?? undefined) : undefined);
   const scheme = read.find(([feature]) => feature === "prefers-color-scheme")?.[1];
   const pinned = view && scheme ? schemePins(doc, view, scheme, frozen.computed) : null;
   // The still layer wins over every rule of the page, but not over an important animation in an element's own style, so then each animated element is pinned.

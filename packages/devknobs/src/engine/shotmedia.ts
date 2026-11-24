@@ -1,4 +1,5 @@
-import { type MediaFeature, mentionsFeature, rewriteMediaText, walkRules } from "./media";
+import { type MatchMedia, nativeMatchMedia } from "./matchmedia";
+import { type MediaFeature, mentionsFeature, nativeMatchesGetter, rewriteMediaText, walkRules } from "./media";
 
 /**
  * The media a copy of the page is drawn in. A picture of the copy is an svg
@@ -38,6 +39,46 @@ export function frameMedia(view: Window): [MediaFeature, string][] {
     }
   }
   return read;
+}
+
+/**
+ * Whether the frame `view` applies a whole media query, as its own css does,
+ * or null where there is nothing to ask. A picture matches a query against
+ * its own size and as an image: as tall as the document, at one device px to
+ * a css px, with no scripts. The frame's own `matchMedia` may be patched by
+ * the knobs above it, as a touch screen, and that patch answers what the
+ * page's scripts should read, not what the frame's css applies. So this
+ * window's own `matchMedia`, `match`, is asked on the frame and read with its
+ * own `matches`, `read`, both from before any patch. Where either is missing,
+ * or the browser will not ask it on another window, the frame's `matchMedia`
+ * is asked. Each query is asked once.
+ */
+export function frameDecides(
+  view: Window,
+  match: MatchMedia | null = nativeMatchMedia(),
+  read: ((this: MediaQueryList) => boolean) | null = nativeMatchesGetter(),
+): ((query: string) => boolean) | null {
+  const own = typeof view.matchMedia === "function";
+  if (!(match && read) && !own) return null;
+  const ask = (query: string): boolean => {
+    if (match && read) {
+      try {
+        return read.call(match.call(view, query));
+      } catch {
+        // Another browser may not ask its own on another window.
+      }
+    }
+    return view.matchMedia(query).matches;
+  };
+  const decided = new Map<string, boolean>();
+  return (query) => {
+    let holds = decided.get(query);
+    if (holds === undefined) {
+      holds = ask(query);
+      decided.set(query, holds);
+    }
+    return holds;
+  };
 }
 
 /**
@@ -90,21 +131,40 @@ export interface Frozen {
  * so their order, and the order of their layers, stays the page's. The
  * page's prefixed `@namespace` rules go in front of each, so a namespaced selector
  * parses, and are left out of what is written. Without a way to parse them,
- * the rules stay as they are.
+ * the rules stay as they are. With `decide`, the frame's answer to a whole
+ * query, each query is made one that holds or one that does not by it, the
+ * features of one it gives no answer to rewritten as without it.
  */
 export function freezeMedia(
   rules: string[],
   read: [MediaFeature, string][],
   Sheet: typeof CSSStyleSheet | undefined,
+  decide?: (query: string) => boolean,
 ): Frozen {
   const scheme = read.find(([feature]) => feature === "prefers-color-scheme")?.[1];
   const schemed = (text: string) => scheme !== undefined && text.includes("color-scheme");
-  if (read.length === 0) return { rules, computed: false };
+  if (read.length === 0 && !decide) return { rules, computed: false };
   if (typeof Sheet?.prototype?.replaceSync !== "function") return { rules, computed: rules.some(schemed) };
   const namespaces = rules.filter(prefixedNamespace).join("\n");
+  const queried = (text: string) => text.includes("@media") && (decide !== undefined || mentionsFeature(text));
+  /** The query `text` made to read what the frame reads, feature by feature. */
+  const rewritten = (text: string) => {
+    let query = text;
+    for (const [feature, value] of read) query = rewriteMediaText(query, feature, value);
+    return query;
+  };
+  /** The query `text` as the frame decides it, or feature by feature where it will not. */
+  const frameQuery = (text: string) => {
+    if (!decide || text === "" || text === "all") return rewritten(text);
+    try {
+      return decide(text) ? "all" : "not all";
+    } catch {
+      return rewritten(text);
+    }
+  };
   let computed = false;
   const frozen = rules.map((text) => {
-    if (!(text.includes("@media") && mentionsFeature(text)) && !schemed(text)) return text;
+    if (!queried(text) && !schemed(text)) return text;
     try {
       const sheet = new Sheet();
       sheet.replaceSync(namespaces ? `${namespaces}\n${text}` : text);
@@ -113,8 +173,7 @@ export function freezeMedia(
       walkRules(
         sheet.cssRules,
         (rule) => {
-          let query = rule.media.mediaText;
-          for (const [feature, value] of read) query = rewriteMediaText(query, feature, value);
+          const query = frameQuery(rule.media.mediaText);
           if (query !== rule.media.mediaText) rule.media.mediaText = query;
         },
         new Set(),

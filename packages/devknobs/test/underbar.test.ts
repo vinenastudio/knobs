@@ -92,16 +92,77 @@ describe("showsBand", () => {
 describe("viewportUnits", () => {
   test("every viewport height becomes the px it comes to", () => {
     const css = ".a{height:100vh}.b{min-height:50svh}.c{top:10lvh}.d{height:100dvh}";
-    expect(viewportUnits(css, 714)).toBe(".a{height:714px}.b{min-height:357px}.c{top:71.4px}.d{height:714px}");
+    expect(viewportUnits(css, 714, 402)).toBe(".a{height:714px}.b{min-height:357px}.c{top:71.4px}.d{height:714px}");
   });
 
-  test("decimals, negatives and calc keep their sense", () => {
-    expect(viewportUnits("calc(100vh - 2rem) -12.5vh .5vh", 800)).toBe("calc(800px - 2rem) -100px 4px");
+  test("decimals, negatives, exponents and calc keep their sense", () => {
+    expect(viewportUnits("calc(100vh - 2rem) -12.5vh .5vh", 800, 402)).toBe("calc(800px - 2rem) -100px 4px");
+    expect(viewportUnits("a{top:1e2vh;bottom:-10vh;left:+.5vh}", 618, 402)).toBe("a{top:618px;bottom:-61.8px;left:3.09px}");
   });
 
   test("widths, names and words with vh in them stay", () => {
-    const css = ".vh{width:100vw;inline-size:10vi}.x{--vhigh:1}";
-    expect(viewportUnits(css, 714)).toBe(css);
+    const css = ".vh{width:100vw;inline-size:10vi;block-size:10svw;margin:2em}.x{--vhigh:1}";
+    expect(viewportUnits(css, 714, 402)).toBe(css);
+  });
+
+  test("class names with viewport units in them stay, their values do not", () => {
+    expect(viewportUnits(".h-\\[260svh\\] { height: 260svh; }", 618, 402)).toBe(".h-\\[260svh\\] { height: 1606.8px; }");
+    expect(viewportUnits(".min-h-\\[calc\\(100vh-4rem\\)\\] { min-height: calc(100vh - 4rem); }", 618, 402)).toBe(
+      ".min-h-\\[calc\\(100vh-4rem\\)\\] { min-height: calc(618px - 4rem); }",
+    );
+    expect(viewportUnits(".\\32 60svh { height: 60svh; }", 618, 402)).toBe(".\\32 60svh { height: 370.8px; }");
+    expect(viewportUnits(".w-50vh{width:50vh}", 618, 402)).toBe(".w-50vh{width:309px}");
+  });
+
+  test("custom property names, strings, urls, hashes and attribute values stay", () => {
+    const kept = [
+      ":root{--vh-50vh:1}",
+      '.a::after{content:"100vh"}',
+      ".b::after{content:'50svh'}",
+      "@font-face{src:url(data:font/woff2;base64,AA9vh/50vh+)}",
+      '@font-face{src:url("data:font/woff2;base64,AA9vh/50vh+")}',
+      "#a50vh{color:red}",
+      '[data-h="50vh"]{color:red}',
+      "/* 100vh */",
+    ];
+    for (const css of kept) expect(viewportUnits(css, 618, 402)).toBe(css);
+  });
+
+  test("block lengths read the height, and the least and most of the sides read the frame's, upright and sideways", () => {
+    const css = "a{top:10vb;left:10dvb;width:50vmin;height:50vmax;margin:10svmin 10lvmax}";
+    expect(viewportUnits(css, 618, 402)).toBe("a{top:61.8px;left:61.8px;width:201px;height:309px;margin:40.2px 61.8px}");
+    expect(viewportUnits(css, 402, 874)).toBe("a{top:40.2px;left:40.2px;width:201px;height:437px;margin:40.2px 87.4px}");
+  });
+
+  test("a long text asked again gives the same result, and at another size its own", () => {
+    const long = `.a{height:50vh;width:50vmin}${"/* page */".repeat(500)}`;
+    const tail = "/* page */".repeat(500);
+    expect(viewportUnits(long, 618, 402)).toBe(`.a{height:309px;width:201px}${tail}`);
+    expect(viewportUnits(long, 618, 402)).toBe(`.a{height:309px;width:201px}${tail}`);
+    expect(viewportUnits(long, 700, 402)).toBe(`.a{height:350px;width:201px}${tail}`);
+    expect(viewportUnits(long, 618, 300)).toBe(`.a{height:309px;width:150px}${tail}`);
+    expect(viewportUnits(long, 618, 402)).toBe(`.a{height:309px;width:201px}${tail}`);
+  });
+
+  test("a sheet of a million characters with many strings and addresses and no backslash reads through at once", () => {
+    const rule = '[type="button"]{content:"";height:50vh;background:url("a.png")}';
+    const times = Math.ceil(1_000_000 / rule.length);
+    const start = performance.now();
+    const out = viewportUnits(rule.repeat(times), 618, 402);
+    const took = performance.now() - start;
+    expect(out).toBe(rule.replace("50vh", "309px").repeat(times));
+    expect(took).toBeLessThan(200);
+  });
+
+  test("escaped quotes and brackets end no string or address", () => {
+    const css = `a::after{content:"a\\"50vh"}b{background:url(x\\)50vh.png);height:10vh}c{background:url( 'y)50vh' );top:10vh}`;
+    expect(viewportUnits(css, 618, 402)).toBe(
+      `a::after{content:"a\\"50vh"}b{background:url(x\\)50vh.png);height:61.8px}c{background:url( 'y)50vh' );top:61.8px}`,
+    );
+  });
+
+  test("an element's own style keeps its picture's address", () => {
+    expect(viewportUnits('height:100vh;background:url("x-50vh.png")', 618, 402)).toBe('height:618px;background:url("x-50vh.png")');
   });
 });
 

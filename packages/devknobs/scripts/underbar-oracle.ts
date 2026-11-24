@@ -9,9 +9,21 @@
 // document, is scrolled there. The console of the page is read throughout, the frame
 // loaded again once, and each address the console tells of a failed CORS request for may
 // show there once at most. First, the copy in the band's picture is laid out on its own and
-// a sample of its elements must lie within a px of the page's, all the way down.
-// Build first, then: pnpm --filter @vinena/knobs underbar-oracle [index.global.js] [screenshot dir] [--url URL] [--scroll PX] [--dark]
+// a sample of its elements must lie within a px of the page's, all the way down. That layout
+// is checked again after a scroll: on its own page in the middle of its pinned section, with
+// --url at --scroll when given and at a third and two thirds of the page's scroll. A sticky
+// element that lies where its `top` or `bottom` holds it in the viewport, or at the end of its
+// parent, has stuck, at any scroll, and it and what is in it are checked by their height only: the picture sticks
+// nothing, so the copy draws it where it lies before it sticks. The rest are checked whole.
+// Build first, then: pnpm --filter @vinena/knobs underbar-oracle [index.global.js] [screenshot dir] [--url URL] [--scroll PX] [--dark] [--device ID] [--posture closed|open] [--bypass-csp]
 // With --url and no --scroll it puts the page's first large picture across the band.
+// --bypass-csp turns the site's content security policy off for the tab. The copy's layout is
+// read in a frame of the page's own, which a strict policy keeps from loading; without the
+// flag that layout check fails and says so. tryprofound.com needs it. It is off by default, as
+// a band a strict policy blanks for real users would pass with it.
+// --device is the device knobs draws, iphone-17-pro by default, and --posture the fold of
+// one that folds, as iphone-duo closed. Before each release that touches the engine, run it
+// with --url on sugikit.com, mertduzgun.com, knobs.dev, llmond.com and tryprofound.com too.
 // Without --url it serves its own page: a rule for its root with more to it than `:root`, an
 // icon from a sprite file, a number in a shadow root, a margin a script animates, a
 // picture in a round clip, a background picture, a
@@ -21,6 +33,13 @@
 // origin the frame may not read, one that shows only its poster, one scaled in a round clip,
 // and six of another origin, paused, with a caption that paints over or under them as the
 // browser stacks it. The looping one is watched for some turns: it takes no picture at each.
+// And what a picture reads otherwise than the frame, each set to move what follows when the
+// copy gets it wrong: a pinned section as Tailwind writes one (a class with `260svh` in its
+// name, a sticky child of `100svh`), a class with `calc(100vh-4rem)` in its name, heights in
+// vmax, vb and dvb, media rules on the viewport's height, its aspect ratio, scripting and
+// resolution (a picture is as tall as the whole document, runs no script and draws at one
+// device px a px), one in a layer, and a string and a url that hold a viewport length and
+// must stay as they are.
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -43,8 +62,12 @@ const flag = (name: string) => {
 };
 const target = flag('--url');
 const scrollAt = flag('--scroll');
+const device = flag('--device') ?? 'iphone-17-pro';
+const posture = flag('--posture');
 const dark = args.includes('--dark');
 if (dark) args.splice(args.indexOf('--dark'), 1);
+const bypassCSP = args.includes('--bypass-csp');
+if (bypassCSP) args.splice(args.indexOf('--bypass-csp'), 1);
 const script = resolve(args[0] ?? join(root, 'dist/index.global.js'));
 const out = args[1] ? resolve(args[1]) : null;
 
@@ -129,7 +152,37 @@ body .col .gone-specific { animation: fadein 400ms !important; }
 .bar { position: relative; background: rgb(0, 0, 255); }
 .bar::before { content: ""; position: absolute; inset: 0; background: rgb(229, 72, 77); transform-origin: left; animation: grow 100s linear -30s paused; }
 .painted { background: none; animation: paint 1s both; }
-</style><script src="/devknobs.js"></script></head><body><div class="col">
+/* What a picture reads otherwise than the frame: each block's height moves what follows when the copy gets it wrong. */
+.h-\\[260svh\\] { height: 260svh; }
+.h-svh { height: 100svh; }
+.sticky { position: sticky; }
+.top-0 { top: 0; }
+.min-h-\\[calc\\(100vh-4rem\\)\\] { min-height: calc(100vh - 4rem); }
+.vmax { height: 10vmax; }
+.vb { height: 10vb; }
+.dvb { height: 10dvb; }
+.reads { margin: 0; height: 20px; background: #2b2b28; }
+@media (max-height: 5000px) { .mh { height: 60px; } }
+@media (min-height: 5000px) { .tall { height: 60px; } }
+/* The frame is about 402 by 714, 0.56 across to its height; the picture, as tall as the document, far under 0.5. */
+@media (max-aspect-ratio: 1/2) { .slim { height: 60px; } }
+.noscript { display: none; }
+@media (scripting: none) { .noscript { display: block; height: 80px; } }
+@media (min-resolution: 2dppx) { .dense { height: 40px; } }
+@layer x { .mh-layer { height: 20px; background: #2b2b28; } @media (max-height: 5000px) { .mh-layer { height: 60px; } } }
+/*
+ * A touch target: the copy reads what the frame's css applies, not what its matchMedia, patched by the knobs above it,
+ * says. The knobs in the frame rewrite these rules to read touch; the sheets for touch media only, below, they leave to
+ * the browser, which reads the mouse.
+ */
+.touch { height: 20px; }
+@media (pointer: coarse) { .touch { height: 44px; } }
+.nohover { height: 20px; }
+@media (hover: none) { .nohover { height: 44px; } }
+.touch-sheet, .nohover-sheet { height: 20px; }
+.quote::before { content: "100vh"; display: block; height: 20px; }
+.url { height: 40px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Crect class='9vh/' width='8' height='8' fill='%23e5484d'/%3E%3C/svg%3E"); }
+</style><style media="(pointer: coarse)">.touch-sheet { height: 44px; }</style><style media="(hover: none)">.nohover-sheet { height: 44px; }</style><script src="/devknobs.js"></script></head><body><div class="col">
 <div class="lead"></div>
 <h2 class="spaced" id="spaced">Spaced by the root's look</h2>
 <count-up id="count">7</count-up>
@@ -154,6 +207,24 @@ body .col .gone-specific { animation: fadein 400ms !important; }
 <div class="still gone-specific" data-oracle-color="229,72,77"></div>
 <div class="still bar" data-oracle-color="0,0,255"></div>
 <div class="still painted" data-oracle-color="229,72,77"></div>
+<section class="h-[260svh]" id="pin"><div class="sticky top-0 h-svh" style="background: #2b2b28"><p style="margin: 0">pinned</p></div></section>
+<p id="after-pin" style="margin: 0; height: 24px">after the pin</p>
+<div class="min-h-[calc(100vh-4rem)]" id="calc"><p style="margin: 0">a class with a viewport length in its name</p></div>
+<div class="vmax" id="vmax"></div>
+<div class="vb" id="vb"></div>
+<div class="dvb" id="dvb"></div>
+<div class="reads mh" id="mh"></div>
+<div class="reads tall" id="tall"></div>
+<div class="reads slim" id="slim"></div>
+<div class="reads noscript" id="noscript"></div>
+<div class="reads dense" id="dense"></div>
+<div class="mh-layer" id="mh-layer"></div>
+<div class="reads touch" id="touch"></div>
+<div class="reads nohover" id="nohover"></div>
+<div class="reads touch-sheet" id="touch-sheet"></div>
+<div class="reads nohover-sheet" id="nohover-sheet"></div>
+<p class="quote" id="quote" style="margin: 0">a string that holds a viewport length</p>
+<div class="url" id="url"></div>
 <div class="tail"></div>
 </div><script>
 const pen = document.getElementById('chart').getContext('2d');
@@ -438,13 +509,16 @@ const DRIFT = 1;
 
 /**
  * How many elements were marked and found in the copy, how many of those the page moved on
- * its own while it was measured, and each of the rest, its top and height on the page and in
- * the copy, the worst apart first.
+ * its own while it was measured, how many were checked by their height only for being stuck or in a stuck one,
+ * and each of the rest, its top and height on the page and in the copy, the worst apart first.
  */
 interface Drift {
   marked: number;
   found: number;
   moved: number;
+  pinned: number;
+  /** The frame that lays the copy out did not load: the site's content security policy keeps it out. */
+  blocked: boolean;
   rows: { name: string; top: number; height: number; copyTop: number; copyHeight: number; off: number }[];
 }
 
@@ -491,32 +565,77 @@ async function firstFrame(tab: Page): Promise<{ name: string; want: string; draw
   });
 }
 
+/** Each marking takes a round of its own, so a picture with the marks of an earlier check is not taken for this one's. */
+let rounds = 0;
+
+/**
+ * A sticky element that lies where its `top` or `bottom` holds it in the viewport, a px
+ * either way, or at the end of its parent, where a parent scrolled past pushes it, has stuck,
+ * at any scroll: a bar stuck to the bottom whose place is below the fold is stuck at the top too. The picture is as tall as the whole document and sticks
+ * nothing, so it draws such an element where it lies before it sticks: it, and what is in
+ * it, is checked by its height only. Every other element is checked whole.
+ */
 async function layoutDrift(tab: Page): Promise<Drift> {
-  let drift: Drift = { marked: 0, found: 0, moved: 0, rows: [] };
+  let drift: Drift = { marked: 0, found: 0, moved: 0, pinned: 0, blocked: false, rows: [] };
   // A page that draws its elements again drops the marks, so it is marked again, a few times at most.
-  for (let turn = 0; turn < 3 && (drift.marked === 0 || drift.found === 0); turn++) {
-    const marked = await tab.evaluate(([most, round]) => {
+  for (let turn = 0; turn < 3 && !drift.blocked && (drift.marked === 0 || drift.found === 0); turn++) {
+    const round = rounds++;
+    const { count: marked, pinned } = await tab.evaluate(([most, round]) => {
       const shadow = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot;
       const view = shadow?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')?.contentWindow;
-      if (!view?.document.body) return 0;
+      if (!view?.document.body) return { count: 0, pinned: 0 };
       for (const node of view.document.querySelectorAll('[data-oracle-at]')) node.removeAttribute('data-oracle-at');
       // The page holds still while it is measured, as the picture does: what an animation moves is where it is now in both.
       const held = view.document.getAnimations().filter((animation) => animation.playState === 'running');
       for (const animation of held) animation.pause();
       Reflect.set(view, 'oracleHeld', [...((Reflect.get(view, 'oracleHeld') as Animation[] | undefined) ?? []), ...held]);
       // What the page does not show, as the content of a closed details, is laid out only when asked, so it is left out.
+      /**
+       * Whether each sticky element lies where its `top` or `bottom` holds it in the viewport, a
+       * px either way, or at the end of its parent, where a parent scrolled past pushes it.
+       */
+      const stuckOnes = new Map<Element, boolean>();
+      const isStuck = (node: Element) => {
+        let stuck = stuckOnes.get(node);
+        if (stuck === undefined) {
+          const { top, bottom, marginTop, marginBottom } = view.getComputedStyle(node);
+          const box = node.getBoundingClientRect();
+          const held = (top !== 'auto' && Math.abs(box.top - parseFloat(top)) <= 1) || (bottom !== 'auto' && Math.abs(box.bottom - (view.innerHeight - parseFloat(bottom))) <= 1);
+          const parent = node.parentElement;
+          let pushed = false;
+          if (parent && !held) {
+            const room = view.getComputedStyle(parent);
+            const inner = parent.getBoundingClientRect();
+            pushed =
+              (top !== 'auto' && Math.abs(box.bottom + parseFloat(marginBottom) - (inner.bottom - parseFloat(room.borderBottomWidth) - parseFloat(room.paddingBottom))) <= 1) ||
+              (bottom !== 'auto' && Math.abs(box.top - parseFloat(marginTop) - (inner.top + parseFloat(room.borderTopWidth) + parseFloat(room.paddingTop))) <= 1);
+          }
+          stuck = held || pushed;
+          stuckOnes.set(node, stuck);
+        }
+        return stuck;
+      };
+      const sticky = new Set<Element>();
       const shown = [...view.document.body.querySelectorAll('*')].filter((node) => {
         if (['script', 'style', 'link', 'noscript', 'template'].includes(node.localName)) return false;
         if (node.closest('[data-devknobs]') || !node.checkVisibility()) return false;
+        let nearest: Element | null = null;
         for (let at: Element | null = node; at; at = at.parentElement) {
-          if (view.getComputedStyle(at).position === 'fixed') return false;
+          const position = view.getComputedStyle(at).position;
+          if (position === 'fixed') return false;
+          if (position === 'sticky' && !nearest) nearest = at;
         }
-        return node.getBoundingClientRect().height > 0;
+        if (node.getBoundingClientRect().height <= 0) return false;
+        if (nearest && isStuck(nearest)) sticky.add(node);
+        return true;
       });
       const step = Math.max(1, shown.length / most);
       let count = 0;
+      let pinned = 0;
       // Where each was as it was marked, to tell one the page moves on its own, which no still picture follows.
       const places: Record<string, [number, number]> = {};
+      /** The marks of those checked by their height only. */
+      const byHeightOnly: string[] = [];
       const down = view.scrollY + (view.document.scrollingElement !== view.document.body ? view.document.body.scrollTop : 0);
       for (let at = 0; at < shown.length && count < most; at += step) {
         const node = shown[Math.floor(at)];
@@ -525,43 +644,59 @@ async function layoutDrift(tab: Page): Promise<Drift> {
         const box = node.getBoundingClientRect();
         places[mark] = [box.top + down, box.height];
         node.setAttribute('data-oracle-at', mark);
+        if (sticky.has(node)) {
+          byHeightOnly.push(mark);
+          pinned++;
+        }
       }
       Reflect.set(view, 'oraclePlaces', places);
-      return count;
-    }, [SAMPLE, turn] as const);
+      Reflect.set(view, 'oracleByHeight', byHeightOnly);
+      return { count, pinned };
+    }, [SAMPLE, round] as const);
     if (marked === 0) continue;
-    // The marks change the page, so the band takes a new picture of it, with this turn's.
+    // The marks change the page, so the band takes a new picture of it, with this round's.
     const taken = await tab
       .waitForFunction(
         (round) => document.querySelector('[data-devknobs="viewport"]')?.shadowRoot?.querySelector<HTMLImageElement>('.underbar > img')?.src.includes(`data-oracle-at%3D%22${round}-`),
-        turn,
+        round,
         { timeout: 10000 },
       )
       .catch(() => null);
     if (!taken) continue;
     await tab.waitForTimeout(800);
-    drift = await measureDrift(tab);
+    drift = { ...(await measureDrift(tab)), pinned };
   }
   return drift;
 }
 
 /** The marked elements of the page against their copies in the band's picture, as `layoutDrift` tells. */
-async function measureDrift(tab: Page): Promise<Drift> {
+async function measureDrift(tab: Page): Promise<Omit<Drift, 'pinned'>> {
   return tab.evaluate(async () => {
     const shadow = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot;
     const view = shadow?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')?.contentWindow;
     const picture = shadow?.querySelector<HTMLImageElement>('.underbar > img');
-    if (!view || !picture) return { marked: 0, found: 0, rows: [] };
+    if (!view || !picture) return { marked: 0, found: 0, moved: 0, blocked: false, rows: [] };
     const svg = decodeURIComponent(picture.src.slice(picture.src.indexOf(',') + 1));
     const probe = document.createElement('iframe');
     // A picture is laid out at one device pixel a px, whatever the screen's, so the frame that lays it out here is too: its zoom takes the screen's ratio back out.
     probe.style.cssText = `position: fixed; left: -100000px; top: 0; width: ${picture.naturalWidth}px; height: ${picture.naturalHeight}px; border: 0; zoom: ${1 / (window.devicePixelRatio || 1)}`;
+    // A picture runs no script, so neither does the frame that lays it out: `(scripting: none)` reads there as in the picture.
+    probe.sandbox.add('allow-same-origin');
     const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
     const loaded = new Promise((done) => probe.addEventListener('load', done, { once: true }));
     probe.src = url;
     document.body.append(probe);
-    await loaded;
+    // A frame the site's content security policy keeps from loading may never tell.
+    await Promise.race([loaded, new Promise((done) => setTimeout(done, 10000))]);
     await new Promise((done) => setTimeout(done, 500));
+    if (!probe.contentDocument?.documentElement) {
+      for (const animation of (Reflect.get(view, 'oracleHeld') as Animation[] | undefined) ?? []) animation.play();
+      Reflect.set(view, 'oracleHeld', []);
+      probe.remove();
+      URL.revokeObjectURL(url);
+      return { marked: 0, found: 0, moved: 0, blocked: true, rows: [] };
+    }
+    const byHeight = new Set((Reflect.get(view, 'oracleByHeight') as string[] | undefined) ?? []);
     // The copy's animations stand where the picture starts them, which is where the page held them.
     for (const animation of probe.contentDocument?.getAnimations() ?? []) {
       animation.pause();
@@ -594,7 +729,8 @@ async function measureDrift(tab: Page): Promise<Drift> {
         height: live.height,
         copyTop: drawn.top,
         copyHeight: drawn.height,
-        off: Math.max(Math.abs(drawn.top - top), Math.abs(drawn.height - live.height)),
+        // One that may have stuck lies elsewhere on the page than in the still picture: its height is what it must keep.
+        off: byHeight.has(mark) ? Math.abs(drawn.height - live.height) : Math.max(Math.abs(drawn.top - top), Math.abs(drawn.height - live.height)),
       });
     }
     for (const node of marked) node.removeAttribute('data-oracle-at');
@@ -602,7 +738,7 @@ async function measureDrift(tab: Page): Promise<Drift> {
     Reflect.set(view, 'oracleHeld', []);
     probe.remove();
     URL.revokeObjectURL(url);
-    return { marked: marked.length, found: rows.length + moved, moved, rows: rows.sort((a, b) => b.off - a.off) };
+    return { marked: marked.length, found: rows.length + moved, moved, blocked: false, rows: rows.sort((a, b) => b.off - a.off) };
   });
 }
 
@@ -622,7 +758,8 @@ try {
     clip = await recordClip(maker, 1);
     await maker.close();
   }
-  const tab = await browser.newPage({ viewport: { width: 1280, height: 1100 }, deviceScaleFactor: SHOT, colorScheme: dark ? 'dark' : 'light' });
+  // A site's content security policy may keep the frame that lays the copy out from loading, which leaves the copy unread: set aside only with --bypass-csp.
+  const tab = await browser.newPage({ viewport: { width: 1280, height: 1100 }, deviceScaleFactor: SHOT, colorScheme: dark ? 'dark' : 'light', bypassCSP });
   // What the page's console shows, the frame's included: errors and warnings.
   const logged: string[] = [];
   tab.on('console', (message) => {
@@ -632,8 +769,10 @@ try {
   if (target) await tab.addInitScript(`if (window === window.top) {\n${code}\n}`);
   await tab.goto(base);
   await tab.evaluate(() => window.devknobs?.ready());
-  await tab.evaluate(() =>
-    window.devknobs?.setState({ device: 'iphone-17-pro', mock: true, browser: 'compact', bars: 'expanded', zoom: 1 }),
+  await tab.evaluate(
+    ([id, fold]) =>
+      window.devknobs?.setState({ device: id, ...(fold ? { posture: fold as 'closed' | 'open' } : {}), mock: true, browser: 'compact', bars: 'expanded', zoom: 1 }),
+    [device, posture] as const,
   );
   await tab.waitForFunction(
     () => {
@@ -647,16 +786,85 @@ try {
   const first = await measure(tab);
   if (!first) throw new Error('no band under the bars');
   // The copy in the band's picture lays the page out as the page does, all the way down, so it moves with the page.
-  const drift = await layoutDrift(tab);
-  const worst = drift.rows.filter((row) => row.off > DRIFT).slice(0, 8);
-  check(
-    `the copy lays the page out as the page does, ${DRIFT} px at most apart`,
-    drift.marked > 0 && drift.found === drift.marked && worst.length === 0,
-    `${drift.found} of ${drift.marked} elements found in the copy, ${drift.moved} the page moved on its own left out, most ${(drift.rows[0]?.off ?? 0).toFixed(1)} px apart` +
-      worst
-        .map((row) => `\n       ${row.name}: top ${row.top.toFixed(1)} height ${row.height.toFixed(1)}, copy top ${row.copyTop.toFixed(1)} height ${row.copyHeight.toFixed(1)}`)
-        .join(''),
-  );
+  const layout = async (where: string) => {
+    const drift = await layoutDrift(tab);
+    const worst = drift.rows.filter((row) => row.off > DRIFT).slice(0, 8);
+    if (drift.blocked) {
+      check(
+        `the copy lays the page out as the page does ${where}, ${DRIFT} px at most apart`,
+        false,
+        "the site's content security policy stopped the probe frame that lays the copy out, so the copy was not read: run again with --bypass-csp",
+      );
+      return drift;
+    }
+    check(
+      `the copy lays the page out as the page does ${where}, ${DRIFT} px at most apart`,
+      drift.marked > 0 && drift.found === drift.marked && worst.length === 0,
+      `${drift.found} of ${drift.marked} elements found in the copy, ${drift.moved} the page moved on its own and ${drift.pinned} pinned checked by height only, most ${(drift.rows[0]?.off ?? 0).toFixed(1)} px apart` +
+        worst
+          .map((row) => `\n       ${row.name}: top ${row.top.toFixed(1)} height ${row.height.toFixed(1)}, copy top ${row.copyTop.toFixed(1)} height ${row.copyHeight.toFixed(1)}`)
+          .join(''),
+    );
+    return drift;
+  };
+  const top = await layout('at the top');
+  if (!target) {
+    // Each case of its own page that a picture reads otherwise, by how much it changes its block's height in the copy.
+    const row = (id: string) => top.rows.find((one) => new RegExp(`> [a-z]+#${id}(\\.|$)`).test(one.name));
+    const cases = ['pin', 'calc', 'vmax', 'vb', 'dvb', 'mh', 'tall', 'slim', 'noscript', 'dense', 'mh-layer', 'touch', 'nohover', 'touch-sheet', 'nohover-sheet'].map((id) => {
+      // The block that shows only in the copy is told by the gap it opens between its neighbors.
+      const [one, next] = id === 'noscript' ? [row('slim'), row('dense')] : [row(id), row(id)];
+      if (!one || !next) return { id, off: null };
+      const off = id === 'noscript'
+        ? next.copyTop - one.copyTop - one.copyHeight - (next.top - one.top - one.height)
+        : one.copyHeight - one.height;
+      return { id, off };
+    });
+    const wrong = cases.filter((one) => one.off === null || Math.abs(one.off) > DRIFT);
+    check(
+      'each case a picture reads otherwise than the frame takes the same height in the copy',
+      wrong.length === 0,
+      wrong.length === 0
+        ? `${cases.length} cases as the page has them`
+        : wrong.map((one) => `${one.id} ${one.off === null ? 'not found' : `${one.off > 0 ? '+' : ''}${one.off.toFixed(1)} px`}`).join(', '),
+    );
+    // Its own page's string and url that hold a viewport length reach the copy as they are.
+    const kept = await tab.evaluate(() => {
+      const picture = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot?.querySelector<HTMLImageElement>('.underbar > img');
+      const svg = picture ? decodeURIComponent(picture.src.slice(picture.src.indexOf(',') + 1)).replaceAll('&quot;', '"') : '';
+      return {
+        string: /content:\s*\\?"100vh\\?"/.test(svg),
+        url: svg.includes("class='9vh/'"),
+        quote: /\.quote::before\s*\{[^}]*\}/.exec(svg)?.[0] ?? 'no rule',
+        rect: /rect class=[^ ]*/.exec(svg)?.[0] ?? 'no rect',
+      };
+    });
+    check(
+      'a string and a url that hold a viewport length reach the copy as they are',
+      kept.string && kept.url,
+      `content "100vh" ${kept.string ? 'kept' : `changed: ${kept.quote}`}, the url's 9vh/ ${kept.url ? 'kept' : `changed: ${kept.rect}`}`,
+    );
+  }
+  // And after a scroll: the picture is moved, not taken again, so each element must still lie where the page has it.
+  const downs = await tab.evaluate((fixture) => {
+    const shadow = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot;
+    const view = shadow?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')?.contentWindow;
+    if (!view) return [];
+    const { body, documentElement: root } = view.document;
+    if (fixture) {
+      const pin = view.document.getElementById('pin')?.getBoundingClientRect();
+      return pin ? [Math.round(pin.top + view.scrollY + (pin.height - view.innerHeight) / 2)] : [];
+    }
+    const inBody = root.scrollHeight <= view.innerHeight && body && body.scrollHeight > body.clientHeight;
+    const most = inBody ? body.scrollHeight - body.clientHeight : root.scrollHeight - view.innerHeight;
+    return [Math.round(most / 3), Math.round((most * 2) / 3)];
+  }, !target);
+  for (const down of [...(target && scrollAt !== null ? [Number(scrollAt)] : []), ...downs]) {
+    await scrollFrame(tab, down);
+    const at = await measure(tab);
+    await layout(`at scroll ${at?.scrollY ?? down}`);
+  }
+  await scrollFrame(tab, 0);
   // Its own page has animations the copy must not run again, nor run on from their start.
   if (!target) {
     const wrong = await firstFrame(tab);

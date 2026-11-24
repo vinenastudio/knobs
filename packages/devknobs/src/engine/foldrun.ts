@@ -867,12 +867,12 @@ export function foldDevice(
   const now = turn(sideOf(scene, from, scene.screenRect()));
   const next = turn(sideOf(scene, value, to));
   // Pictures of the page as it is, and as laid out for the other screen, for
-  // which the frame is drawn that way a moment, unseen.
-  const copy = copyPage(scene.frame);
+  // which the frame is drawn that way a moment, unseen. Each from a copy of
+  // its own, as a copy's media queries are decided by the frame's size then.
   const turnPicture = (picture: Picture, size: Room) => (flip ? flipPicture(picture, size) : picture);
-  const before = turnPicture(pictureOf(scene.frame, scene.glass, from, now.size, color, copy), now.size);
+  const before = turnPicture(pictureOf(scene.frame, scene.glass, from, now.size, color, copyPage(scene.frame)), now.size);
   draw(value);
-  const after = turnPicture(pictureOf(scene.frame, scene.glass, value, next.size, color, copy), next.size);
+  const after = turnPicture(pictureOf(scene.frame, scene.glass, value, next.size, color, copyPage(scene.frame)), next.size);
   draw(from);
   const closed = opening ? now : next;
   const open = opening ? next : now;
