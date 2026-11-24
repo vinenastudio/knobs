@@ -1,5 +1,10 @@
 # changelog
 
+## 0.7.5
+
+- the page under Safari's bottom bar lines up with the page above it on pages that pin a section while they scroll, and on any page with a viewport length in a class name, such as Tailwind's `h-[260svh]`
+- the page under the bar and the fold pictures read media queries as the page does: height, aspect ratio, resolution, scripting and pointer
+
 ## 0.7.4
 
 - the page under Safari's bottom bar lines up with the page above it on sites that style `:root` with a theme or look attribute, such as `:root[data-theme=dark]`
