@@ -2145,11 +2145,14 @@ describe("the pictures of the page a fold turns", () => {
   let log: string[] = [];
   /** Changes to the page its watcher has not been told of yet. */
   let pending: unknown[] = [];
+  /** The width of the page each time the frame was asked whether its page's one media query holds. */
+  let asked: number[] = [];
 
   beforeEach(() => {
     paints = Promise.resolve();
     log = [];
     pending = [];
+    asked = [];
   });
 
   afterEach(() => {
@@ -2162,8 +2165,10 @@ describe("the pictures of the page a fold turns", () => {
    * The frame with a page in it whose whole content is one picture that
    * covers the viewport, no bezels, so the fold turns copies. The browser
    * does not draw the page here, so the rough picture stays on each screen.
+   * With `queried`, the page also has one rule for narrow screens, which the
+   * frame decides by the page's width when it is asked.
    */
-  function pictured(): FoldScene {
+  function pictured(queried = false): FoldScene {
     class Watcher {
       observe(): void {}
       disconnect(): void {}
@@ -2195,14 +2200,39 @@ describe("the pictures of the page a fold turns", () => {
       },
     };
     const css = { fontSize: "16px", objectFit: "cover", objectPosition: "50% 50%" };
+    const NARROW = "(max-width: 500px)";
+    /** A constructable sheet that reads one `@media` rule, as the frame's window has one. */
+    class Sheet {
+      cssRules: { media: { mediaText: string }; cssText: string }[] = [];
+      replaceSync(text: string): void {
+        const [, query = "", body = ""] = /^@media\s+([^{]*?)\s*\{(.*)\}$/s.exec(text.trim()) ?? [];
+        const media = { mediaText: query };
+        this.cssRules = [
+          {
+            media,
+            get cssText() {
+              return `@media ${media.mediaText} {${body}}`;
+            },
+          },
+        ];
+      }
+    }
+    const matchMedia = (query: string) => {
+      if (query !== NARROW) return { matches: false };
+      asked.push(page.width);
+      return { matches: page.width <= 500 };
+    };
+    const media = queried
+      ? { styleSheets: [{ cssRules: [{ cssText: `@media ${NARROW} { .a { color: red } }` }], media: { mediaText: "" } }], view: { matchMedia, CSSStyleSheet: Sheet } }
+      : { styleSheets: [], view: {} };
     const doc = {
       documentElement: new FakePage(),
       body: { children: [] },
-      styleSheets: [],
+      styleSheets: media.styleSheets,
       implementation: { createHTMLDocument: () => ({ importNode: () => new FakePage(), createElement: () => new FakeNode() }) },
       querySelectorAll: () => [picture],
       createRange: () => ({}),
-      defaultView: { MutationObserver: Watcher, getComputedStyle: () => css },
+      defaultView: { MutationObserver: Watcher, getComputedStyle: () => css, ...media.view },
     };
     const view = {
       get innerWidth() {
@@ -2221,8 +2251,8 @@ describe("the pictures of the page a fold turns", () => {
   }
 
   /** Fold from `from` to `to`, the frame's page laid out for each screen it is drawn for. */
-  function folds(from: ViewportValue, to: ViewportValue): void {
-    foldDevice(from, to, pictured(), (value) => {
+  function folds(from: ViewportValue, to: ViewportValue, queried = false): void {
+    foldDevice(from, to, pictured(queried), (value) => {
       drawn.push(value);
       page.width = Number(value.width);
       page.height = Number(value.height);
@@ -2251,6 +2281,13 @@ describe("the pictures of the page a fold turns", () => {
     // The page has not heard of the open screen yet, so it still shows the folded screen's picture on it.
     expect(log).toEqual(["cover.jpg in 466 by 678", "frame open", "cover.jpg in 951 by 669", "frame closed"]);
     expect([page.width, page.height]).toEqual([466, 678]);
+  });
+
+  test("unfolding, each screen's picture has its media queries decided by the frame laid out for that screen", () => {
+    page = { ...FOLDED };
+    folds(SHUT, OPEN, true);
+    expect(asked).toContain(FOLDED.width);
+    expect(asked).toContain(UNFOLDED.width);
   });
 
   test("unfolding, takes the open screen's picture again once the frame is drawn open and the page has picked its picture for it", async () => {

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { MediaFeature } from "../src/engine/media";
 import { copyPage, forgetShots } from "../src/engine/pageshot";
-import { eitherScheme, frameMedia, freezeMedia, prefixedNamespace } from "../src/engine/shotmedia";
+import { eitherScheme, frameDecides, frameMedia, freezeMedia, prefixedNamespace } from "../src/engine/shotmedia";
 
 const TRUE_TOKEN = "(min-width: 0px)";
 /** The copy's own first layer, named before the page's rules. */
@@ -55,10 +55,16 @@ class FakeRule {
     if (name === "@namespace") return;
     if (name === "@media") this.media = { mediaText: condition };
     if (name.startsWith("@")) this.cssRules = parse(body, prefixes);
-    else this.style = new FakeStyle(body);
+    else {
+      // A rule nested in a style rule comes after its declarations.
+      const nested = body.indexOf("@");
+      this.style = new FakeStyle(nested < 0 ? body : body.slice(0, nested));
+      if (nested >= 0) this.cssRules = parse(body.slice(nested), prefixes);
+    }
   }
   get cssText(): string {
     if (this.name === "@namespace") return `@namespace ${this.condition};`;
+    if (this.style && this.cssRules) return `${this.name} { ${this.style.cssText} ${this.cssRules.map((rule) => rule.cssText).join(" ")} }`;
     if (this.style) return `${this.name} { ${this.style.cssText} }`;
     const head = this.media ? this.media.mediaText : this.condition;
     return `${this.name} ${head} { ${(this.cssRules ?? []).map((rule) => rule.cssText).join(" ")} }`;
@@ -246,6 +252,105 @@ describe("freezeMedia", () => {
   });
 });
 
+describe("freezeMedia, with the frame to decide each query", () => {
+  /** What a frame 402 by 618 css px decides, upright, at 3 device px to a css px, running scripts. */
+  const HOLDS = new Set(["(max-height: 799px)", "(min-height: 600px)", "(min-resolution: 2dppx)", "(orientation: landscape), (min-width: 400px)"]);
+  const decide = (query: string) => {
+    if (query.includes("boom")) throw new Error("no answer");
+    return HOLDS.has(query);
+  };
+  const decided = (rules: string[], read: [MediaFeature, string][] = LIGHT_READ) => freezeMedia(rules, read, Sheet, decide).rules;
+
+  test("turns each query on or off as the frame decides it, the picture's own size and media never asked", () => {
+    const rules = [
+      "@media (max-height: 799px) { p { color: red; } }",
+      "@media (min-height: 600px) { p { margin: 0; } }",
+      "@media (orientation: landscape) { p { padding: 0; } }",
+      "@media (min-resolution: 2dppx) { p { border: 0; } }",
+      "@media (scripting: none) { p { display: none; } }",
+      "@media (orientation: landscape), (min-width: 400px) { p { width: 0; } }",
+    ];
+    expect(decided(rules)).toEqual([
+      "@media all { p { color: red; } }",
+      "@media all { p { margin: 0; } }",
+      "@media not all { p { padding: 0; } }",
+      "@media all { p { border: 0; } }",
+      "@media not all { p { display: none; } }",
+      "@media all { p { width: 0; } }",
+    ]);
+  });
+
+  test("decides a query in a layer, in @supports and in a style rule, with nothing read of the frame's preferences", () => {
+    const rules = [
+      "@layer base { @media (min-height: 600px) { p { margin: 0; } } }",
+      "@supports (display: grid) { @media (scripting: none) { p { display: none; } } }",
+      ".a { color: red; @media (orientation: landscape) { & { color: blue; } } }",
+    ];
+    expect(decided(rules, [])).toEqual([
+      "@layer base { @media all { p { margin: 0; } } }",
+      "@supports (display: grid) { @media not all { p { display: none; } } }",
+      ".a { color: red; @media not all { & { color: blue; } } }",
+    ]);
+  });
+
+  test("leaves a rule with no media query as it is, and one for all media", () => {
+    const rules = ["p { margin: 0; }", "@media all { p { color: red; } }"];
+    expect(decided(rules, [])).toEqual(rules);
+  });
+
+  test("rewrites the features of a query the frame will not decide, as without it", () => {
+    expect(decided(["@media (boom), (prefers-color-scheme: dark) { p { color: white; } }"])).toEqual([
+      `@media (boom), ${FALSE_TOKEN} { p { color: white; } }`,
+    ]);
+  });
+});
+
+describe("frameDecides", () => {
+  /** A list as this window's own `matchMedia` hands it out: what it holds, read only through its own `matches`. */
+  const HOLDS_OF = new WeakMap<object, boolean>();
+  const read = function (this: MediaQueryList) {
+    return HOLDS_OF.get(this) ?? false;
+  };
+
+  test("asks this window's own matchMedia on the frame, read with its own matches, once for each query, never the frame's patch", () => {
+    const asked: [unknown, string][] = [];
+    // The frame's own, patched as a touch screen: it says yes to all.
+    const view = viewOf(new Set(), { matchMedia: () => ({ matches: true }) });
+    const match = function (this: unknown, query: string) {
+      asked.push([this, query]);
+      const list = {};
+      HOLDS_OF.set(list, query === "(min-height: 600px)");
+      return list as MediaQueryList;
+    };
+    const decide = frameDecides(view, match, read);
+    expect(decide?.("(min-height: 600px)")).toBe(true);
+    expect(decide?.("(pointer: coarse)")).toBe(false);
+    expect(decide?.("(min-height: 600px)")).toBe(true);
+    expect(asked).toEqual([
+      [view, "(min-height: 600px)"],
+      [view, "(pointer: coarse)"],
+    ]);
+  });
+
+  test("asks the frame's matchMedia where this window's own will not answer for it, or is missing", () => {
+    const refuses = () => {
+      throw new TypeError("Illegal invocation");
+    };
+    const view = viewOf(new Set(["print"]));
+    expect(frameDecides(view, refuses, read)?.("print")).toBe(true);
+    expect(frameDecides(view, null, null)?.("print")).toBe(true);
+    expect(frameDecides(view, refuses, null)?.("screen")).toBe(false);
+  });
+
+  test("is none where there is nothing to ask", () => {
+    expect(frameDecides({} as Window, null, null)).toBeNull();
+  });
+
+  test("with no browser window to take them from, asks the frame's own", () => {
+    expect(frameDecides(viewOf(new Set(["print"])))?.("print")).toBe(true);
+  });
+});
+
 describe("prefixedNamespace", () => {
   test("is a namespace with a prefix, not a default one", () => {
     expect(prefixedNamespace('@namespace svg url("http://www.w3.org/2000/svg");')).toBe(true);
@@ -335,11 +440,12 @@ interface PageSheet {
 describe("copyPage, of a frame that reads another scheme than the system", () => {
   afterEach(() => forgetShots());
 
-  function copied(sheets: (string[] | PageSheet)[], live: El, leave?: (node: El) => boolean): El {
+  function copied(sheets: (string[] | PageSheet)[], live: El, leave?: (node: El) => boolean, own: Record<string, unknown> = {}): El {
     const inert = { importNode: (node: El) => node.clone(), createElement: (name: string) => new El(name) };
     const view = viewOf(LIGHT_FRAME, {
       CSSStyleSheet: FakeSheet,
       getComputedStyle: (node: El) => ({ getPropertyValue: () => node.scheme }),
+      ...own,
     });
     const doc = {
       documentElement: live,
@@ -377,7 +483,18 @@ describe("copyPage, of a frame that reads another scheme than the system", () =>
 
   test("draws the frame's light rules, not the system's dark ones", () => {
     const copy = copied([["@media (prefers-color-scheme: dark) { body { background: black; } }"]], page("normal"));
-    expect(copy.querySelector("style")?.text).toBe(`${STILL}@media ${FALSE_TOKEN} { body { background: black; } }`);
+    expect(copy.querySelector("style")?.text).toBe(`${STILL}@media not all { body { background: black; } }`);
+  });
+
+  test("decides a width query by the frame's width when copied, so a copy after the frame is laid out wider decides it otherwise", () => {
+    let width = 402;
+    const matchMedia = (query: string) => ({ matches: query === "(max-width: 500px)" ? width <= 500 : LIGHT_FRAME.has(query) });
+    const rules = [["@media (max-width: 500px) { p { color: red; } }"]];
+    const narrow = copied(rules, page("normal"), undefined, { matchMedia });
+    width = 838;
+    const wide = copied(rules, page("normal"), undefined, { matchMedia });
+    expect(narrow.querySelector("style")?.text).toBe(`${STILL}@media all { p { color: red; } }`);
+    expect(wide.querySelector("style")?.text).toBe(`${STILL}@media not all { p { color: red; } }`);
   });
 
   test("keeps a sheet for some media only for those media, as the frame reads them", () => {
@@ -388,7 +505,7 @@ describe("copyPage, of a frame that reads another scheme than the system", () =>
       ],
       page("normal"),
     );
-    expect(copy.querySelector("style")?.text).toBe(`${STILL}@media ${FALSE_TOKEN} { p { color: white; } }\np { margin: 0; }`);
+    expect(copy.querySelector("style")?.text).toBe(`${STILL}@media not all { p { color: white; } }\np { margin: 0; }`);
   });
 
   test("sets the rules' schemes to the frame's, and pins only the root inline, not each element under it", () => {

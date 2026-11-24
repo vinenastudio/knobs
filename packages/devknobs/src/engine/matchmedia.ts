@@ -8,7 +8,7 @@
 
 import { systemMedia } from "./system";
 
-type MatchMedia = (query: string) => MediaQueryList;
+export type MatchMedia = (query: string) => MediaQueryList;
 
 /** One step of the patch. It gets the query and the rest of the chain below it. */
 export type Layer = (query: string, next: MatchMedia) => MediaQueryList;
@@ -37,6 +37,13 @@ function run(at: number, query: string, below: MatchMedia): MediaQueryList {
 /** Match a query under every layer, as `matchMedia` did before the patch. */
 export function baseMatchMedia(query: string): MediaQueryList {
   return (base ?? window.matchMedia).call(window, query);
+}
+
+/** The browser's own `matchMedia` of this window, as it was before the patch, or null where the window has none. */
+export function nativeMatchMedia(): MatchMedia | null {
+  if (typeof window === "undefined") return null;
+  const own = base ?? window.matchMedia;
+  return typeof own === "function" ? own : null;
 }
 
 /** Put a layer in. The patch goes on with the first one. */
