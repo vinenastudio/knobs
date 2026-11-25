@@ -152,6 +152,13 @@ body .col .gone-specific { animation: fadein 400ms !important; }
 .bar { position: relative; background: rgb(0, 0, 255); }
 .bar::before { content: ""; position: absolute; inset: 0; background: rgb(229, 72, 77); transform-origin: left; animation: grow 100s linear -30s paused; }
 .painted { background: none; animation: paint 1s both; }
+/*
+ * Entrance animations as a site staggers them, each of which moves its top: done, running, in its delay or held part way
+ * when the page is held, each must stand in the copy where the page holds it. One every 200 ms, so some end while the copy loads.
+ */
+@keyframes rise { 0% { opacity: 0; transform: translateY(8px); } 100% { opacity: 1; transform: none; } }
+.rise { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 8px; }
+.rise i { width: 6px; height: 8px; background: #f5d90a; animation: rise 300ms backwards; }
 /* What a picture reads otherwise than the frame: each block's height moves what follows when the copy gets it wrong. */
 .h-\\[260svh\\] { height: 260svh; }
 .h-svh { height: 100svh; }
@@ -207,6 +214,7 @@ body .col .gone-specific { animation: fadein 400ms !important; }
 <div class="still gone-specific" data-oracle-color="229,72,77"></div>
 <div class="still bar" data-oracle-color="0,0,255"></div>
 <div class="still painted" data-oracle-color="229,72,77"></div>
+<div class="rise" id="rise"><i></i><i style="animation-delay: 2s"></i><i style="animation-delay: 60s"></i><i style="animation: rise 600ms -300ms backwards paused"></i>${Array.from({ length: 40 }, (_, at) => `<i style="animation-delay: ${at * 200}ms"></i>`).join('')}</div>
 <section class="h-[260svh]" id="pin"><div class="sticky top-0 h-svh" style="background: #2b2b28"><p style="margin: 0">pinned</p></div></section>
 <p id="after-pin" style="margin: 0; height: 24px">after the pin</p>
 <div class="min-h-[calc(100vh-4rem)]" id="calc"><p style="margin: 0">a class with a viewport length in its name</p></div>
@@ -676,7 +684,15 @@ async function measureDrift(tab: Page): Promise<Omit<Drift, 'pinned'>> {
     const view = shadow?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')?.contentWindow;
     const picture = shadow?.querySelector<HTMLImageElement>('.underbar > img');
     if (!view || !picture) return { marked: 0, found: 0, moved: 0, blocked: false, rows: [] };
-    const svg = decodeURIComponent(picture.src.slice(picture.src.indexOf(',') + 1));
+    const drawing = new DOMParser().parseFromString(decodeURIComponent(picture.src.slice(picture.src.indexOf(',') + 1)), 'image/svg+xml');
+    // The copy's animations stand from the first moment where the picture starts them, which is where the page held them: in the
+    // copy's still layer, named before the page's, so this wins over the page's own important rules. Left to run while the frame
+    // loads, one that ends in that time would show its end where the page holds its start.
+    const xhtml = 'http://www.w3.org/1999/xhtml';
+    const hold = drawing.createElementNS(xhtml, 'style');
+    hold.textContent = '@layer knobs-still { *, ::before, ::after { animation-play-state: paused !important; } }';
+    (drawing.getElementsByTagNameNS(xhtml, 'head')[0] ?? drawing.getElementsByTagNameNS(xhtml, 'html')[0])?.append(hold);
+    const svg = new XMLSerializer().serializeToString(drawing);
     const probe = document.createElement('iframe');
     // A picture is laid out at one device pixel a px, whatever the screen's, so the frame that lays it out here is too: its zoom takes the screen's ratio back out.
     probe.style.cssText = `position: fixed; left: -100000px; top: 0; width: ${picture.naturalWidth}px; height: ${picture.naturalHeight}px; border: 0; zoom: ${1 / (window.devicePixelRatio || 1)}`;
@@ -697,7 +713,7 @@ async function measureDrift(tab: Page): Promise<Omit<Drift, 'pinned'>> {
       return { marked: 0, found: 0, moved: 0, blocked: true, rows: [] };
     }
     const byHeight = new Set((Reflect.get(view, 'oracleByHeight') as string[] | undefined) ?? []);
-    // The copy's animations stand where the picture starts them, which is where the page held them.
+    // And set back to their start, should one have run before its rule held it.
     for (const animation of probe.contentDocument?.getAnimations() ?? []) {
       animation.pause();
       animation.currentTime = 0;
