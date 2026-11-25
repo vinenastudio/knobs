@@ -6,12 +6,27 @@ import { quietFetch } from "../requests/quiet";
  * font it shows has to be in the copy's `@font-face` rule itself, as data.
  * Fetching one takes longer than a fold may wait, so each is fetched ahead and
  * kept, and a copy takes those kept by then: a font not there yet is fetched
- * for the next copy, and its rule is left as it is. Only the faces the page
- * has loaded are fetched, and of each only the source the browser reads.
+ * for the next copy, and its rule is left as it is. Those that listen are
+ * told when it comes, as the page may not change again to ask for that copy.
+ * Only the faces the page has loaded are fetched, and of each only the source
+ * the browser reads.
  */
 
 /** The fonts of the page they were fetched for, each by its address: as data, or null while it is on its way or where it will not come. */
 let kept: { doc: Document; fonts: Map<string, string | null>; stop: () => void } | null = null;
+
+/** Who is told when a font comes for the page its fonts are kept for, with that page. */
+const arrivals = new Set<(doc: Document) => void>();
+
+/**
+ * Tell `listener` each time a font fetched for the page whose fonts are kept
+ * comes, with that page, so a copy taken now has it. One that comes for a
+ * page let go of since, or does not come, tells nothing. Gives what stops it.
+ */
+export function onFontArrive(listener: (doc: Document) => void): () => void {
+  arrivals.add(listener);
+  return () => arrivals.delete(listener);
+}
 
 /** The formats of a font a browser reads. */
 const READ = /^(woff2?|truetype|opentype|collection)(-variations)?$/;
@@ -88,6 +103,9 @@ function fetchFont(url: string, fonts: Map<string, string | null>): void {
       const type = /^[\w.+-]+\/[\w.+-]+/.exec(response.headers.get("content-type") ?? "")?.[0];
       const bytes = new Uint8Array(await response.arrayBuffer());
       fonts.set(url, `data:${type ?? "application/octet-stream"};base64,${base64(bytes)}`);
+      if (kept?.fonts !== fonts) return;
+      const { doc } = kept;
+      for (const listener of arrivals) listener(doc);
     })
     .catch(() => {
       // A font from another origin that does not share itself is left out.

@@ -1235,6 +1235,9 @@ class Tag {
   complete = false;
   naturalWidth = 0;
   naturalHeight = 0;
+  /** A video's size, where the page has loaded it. */
+  videoWidth = 0;
+  videoHeight = 0;
   text = "";
   /** A shadow root of its own, which a copy does not take along. */
   shadowRoot: object | null = null;
@@ -1350,7 +1353,7 @@ describe("copyPage, of a page with pictures and with what devknobs put on it", (
         new Tag("source", { media: "(orientation: landscape), (width > 600px)", srcset: "inner.jpg" }),
         new Tag("img", { src: "cover.jpg", srcset: "cover@2x.jpg 2x", sizes: "100vw", loading: "lazy", alt: "lock screen" }).loaded(1600, 1125),
       ]),
-      new Tag("img", { src: "late.jpg" }),
+      new Tag("img", { src: "late.jpg" }).loaded(0, 0),
     ]);
     const [first, late] = copy.querySelectorAll("img");
     expect(first?.attributes.get("src")).toBe(blankUrl(1600, 1125));
@@ -1358,11 +1361,138 @@ describe("copyPage, of a page with pictures and with what devknobs put on it", (
     // Nothing is left to pick another source by.
     expect([...(first?.attributes.keys() ?? [])].sort()).toEqual(["alt", "src"]);
     expect(copy.querySelectorAll("source")).toEqual([]);
-    // One that has not loaded is as the page shows it: missing.
+    // One that failed to load is as the page shows it: missing.
     expect(late?.attributes.get("src")).toBe("late.jpg");
     // And the page's own are untouched.
     expect(live.querySelector("img")?.attributes.get("src")).toBe("cover.jpg");
     expect(live.querySelectorAll("source").length).toBe(1);
+  });
+
+  /** The copy of a page with `body`, each element's computed style `styleOf` has it, on top of a plain block's. */
+  function laidOut(body: Tag[], styleOf: (node: Tag) => Record<string, string> = () => ({})): Tag {
+    const live = new Tag("html", {}, [new Tag("head"), new Tag("body", {}, body)]);
+    const inert = { importNode: (node: Tag) => node.clone(), createElement: (name: string) => new Tag(name) };
+    const doc = {
+      documentElement: live,
+      body: live.children[1],
+      styleSheets: [],
+      implementation: { createHTMLDocument: () => inert },
+      defaultView: {
+        getComputedStyle: (node: Tag) => ({ display: "block", animationName: "none", overflowX: "visible", overflowY: "visible", ...styleOf(node) }),
+        matchMedia: () => ({ matches: false }),
+      },
+    };
+    const copy = copyPage({ contentDocument: doc } as unknown as HTMLIFrameElement) as unknown as Tag | null;
+    if (!copy) throw new Error("the page was not copied");
+    return copy;
+  }
+
+  test("gives a loaded picture whose whole px round its real size off the shape its attributes give, where the rounding explains them", () => {
+    // As Chromium gives one of mertduzgun.com: 3184 by 2058 at 402 px wide is 259.84 px tall, its file 2000 by 1293, given as 259.
+    const picked = new Tag("img", { src: "shot-2000.jpg", srcset: "shot-2000.jpg 2000w", sizes: "100vw", width: "3184", height: "2058" }).loaded(402, 259);
+    const cropped = new Tag("img", { src: "square.jpg", width: "800", height: "800" }).loaded(400, 300);
+    const plain = new Tag("img", { src: "plain.jpg" }).loaded(368, 237);
+    const copy = laidOut([picked, cropped, plain]);
+    const [pickedCopy, croppedCopy, plainCopy] = copy.querySelectorAll("img");
+    // As wide as the picture, so a page that leaves it its own width has it, and of the real shape.
+    expect(pickedCopy?.attributes.get("src")).toBe(blankUrl(402, (402 * 2058) / 3184));
+    // Attributes of another shape are cropped to by the page's css: the picture keeps its own.
+    expect(croppedCopy?.attributes.get("src")).toBe(blankUrl(400, 300));
+    expect(plainCopy?.attributes.get("src")).toBe(blankUrl(368, 237));
+  });
+
+  test("keeps the natural size of a loaded picture not picked by its width, whatever shape its attributes give", () => {
+    // A placeholder of one px a lazy loader shows, sized by attributes the page's css lets go.
+    const dot = new Tag("img", { src: "dot.gif", width: "800", height: "600" }).loaded(1, 1);
+    // Picked by density, so the browser's size is the file's over a whole density.
+    const dense = new Tag("img", { src: "a.png", srcset: "a.png 1x, b.png 2x", width: "3184", height: "2058" }).loaded(402, 259);
+    // A "w" in the url is not a width.
+    const named = new Tag("img", { src: "shot-2000w.jpg", srcset: "shot-2000w.jpg 1x", width: "3184", height: "2058" }).loaded(402, 259);
+    // Picked by width from a source of its picture.
+    const sourced = new Tag("img", { src: "shot.jpg", width: "3184", height: "2058" }).loaded(402, 259);
+    const copy = laidOut([dot, dense, named, new Tag("picture", {}, [new Tag("source", { srcset: "shot-800.jpg 800w, shot-2000.jpg 2000w" }), sourced])]);
+    const [dotCopy, denseCopy, namedCopy, sourcedCopy] = copy.querySelectorAll("img");
+    expect(dotCopy?.attributes.get("src")).toBe(blankUrl(1, 1));
+    expect(denseCopy?.attributes.get("src")).toBe(blankUrl(402, 259));
+    expect(namedCopy?.attributes.get("src")).toBe(blankUrl(402, 259));
+    expect(sourcedCopy?.attributes.get("src")).toBe(blankUrl(402, (402 * 2058) / 3184));
+  });
+
+  test("gives a picture still loading a picture of nothing of the size its attributes give, which the page lays it out by", () => {
+    const copy = laidOut([
+      new Tag("picture", {}, [
+        new Tag("source", { media: "(width > 600px)", srcset: "wide.jpg" }),
+        new Tag("img", { src: "sale.jpg", srcset: "sale@2x.jpg 2x", sizes: "100vw", loading: "lazy", width: "910", height: "102", alt: "a new sale" }),
+      ]),
+    ]);
+    const image = copy.querySelector("img");
+    expect(image?.attributes.get("src")).toBe(blankUrl(910, 102));
+    expect([...(image?.attributes.keys() ?? [])].sort()).toEqual(["alt", "height", "src", "width"]);
+    expect(copy.querySelectorAll("source")).toEqual([]);
+  });
+
+  test("gives a picture still loading, of a source with size attributes, a picture of nothing as large as its box on the page, which that source's give", () => {
+    const image = new Tag("img", { src: "sale.jpg", loading: "lazy", width: "400", height: "300" });
+    const box = { width: "400px", height: "100px", boxSizing: "content-box" };
+    const copy = laidOut(
+      [new Tag("picture", {}, [new Tag("source", { media: "(width > 600px)", srcset: "wide.jpg", width: "400", height: "100" }), image])],
+      (node) => (node === image ? box : {}),
+    );
+    expect(copy.querySelector("img")?.attributes.get("src")).toBe(blankUrl(400, 100));
+  });
+
+  test("gives one still loading with no size in its attributes a picture of nothing as large as its box on the page, and leaves one that failed or has no source missing", () => {
+    const bare = new Tag("img", { src: "late.jpg", alt: "a long text in place of the picture" });
+    const padded = new Tag("img", { src: "late.jpg", width: "50%" });
+    const failed = new Tag("img", { src: "gone.jpg", loading: "lazy", width: "910", height: "102" }).loaded(0, 0);
+    const empty = new Tag("img", { alt: "nothing" });
+    // An image with no source is complete, as the browser has it.
+    empty.complete = true;
+    const boxes = new Map<Tag, Record<string, string>>([
+      [bare, { width: "354px", height: "0px", boxSizing: "content-box" }],
+      [padded, { width: "120px", height: "40px", boxSizing: "border-box", paddingLeft: "10px", paddingRight: "10px", borderLeftWidth: "2px", borderRightWidth: "2px", paddingTop: "4px", paddingBottom: "4px" }],
+    ]);
+    const copy = laidOut([bare, padded, failed, empty], (node) => boxes.get(node) ?? {});
+    const [bareCopy, paddedCopy, failedCopy, emptyCopy] = copy.querySelectorAll("img");
+    expect(bareCopy?.attributes.get("src")).toBe(blankUrl(354, 0));
+    // What it holds is inside its border and padding.
+    expect(paddedCopy?.attributes.get("src")).toBe(blankUrl(96, 32));
+    expect(Object.fromEntries(failedCopy?.attributes ?? [])).toEqual({ src: "gone.jpg", loading: "lazy", width: "910", height: "102" });
+    expect(Object.fromEntries(emptyCopy?.attributes ?? [])).toEqual({ alt: "nothing" });
+  });
+
+  test("gives a video the page has loaded a poster of nothing as large as the video, so its box has the video's shape with size attributes of any shape or none", () => {
+    const bare = new Tag("video", { src: "clip.mp4" });
+    const sized = new Tag("video", { src: "clip.mp4", width: "640", height: "480", poster: "still.jpg" });
+    for (const video of [bare, sized]) {
+      video.videoWidth = 1920;
+      video.videoHeight = 1080;
+    }
+    const copy = laidOut([bare, sized]);
+    const [bareCopy, sizedCopy] = copy.querySelectorAll("video");
+    expect(Object.fromEntries(bareCopy?.attributes ?? [])).toEqual({ src: "clip.mp4", poster: blankUrl(1920, 1080) });
+    expect(Object.fromEntries(sizedCopy?.attributes ?? [])).toEqual({ src: "clip.mp4", width: "640", height: "480", poster: blankUrl(1920, 1080) });
+  });
+
+  test("gives a video that shows its poster a poster of nothing as large as its box on the page, and leaves one with neither as it is", () => {
+    const waiting = new Tag("video", { src: "clip.mp4", poster: "still.jpg", preload: "none" });
+    const plain = new Tag("video", { src: "clip.mp4", preload: "none" });
+    const box = { width: "354px", height: "199.125px", boxSizing: "content-box" };
+    const copy = laidOut([waiting, plain], (node) => (node === waiting ? box : {}));
+    const [waitingCopy, plainCopy] = copy.querySelectorAll("video");
+    expect(waitingCopy?.attributes.get("poster")).toBe(blankUrl(354, 199.125));
+    expect(Object.fromEntries(plainCopy?.attributes ?? [])).toEqual({ src: "clip.mp4", preload: "none" });
+  });
+
+  test("keeps a video's poster that is data, which a picture shows, and gives one from the network a poster of nothing", () => {
+    const still = "data:image/png;base64,iVBORw0KGgo=";
+    const kept = new Tag("video", { src: "clip.mp4", poster: ` ${still.toUpperCase()}`, preload: "none" });
+    const fetched = new Tag("video", { src: "clip.mp4", poster: "https://example.com/still.jpg", preload: "none" });
+    const box = { width: "354px", height: "199.125px", boxSizing: "content-box" };
+    const copy = laidOut([kept, fetched], () => box);
+    const [keptCopy, fetchedCopy] = copy.querySelectorAll("video");
+    expect(keptCopy?.attributes.get("poster")).toBe(` ${still.toUpperCase()}`);
+    expect(fetchedCopy?.attributes.get("poster")).toBe(blankUrl(354, 199.125));
   });
 
   test("gives a shadow host its box as the page lays it out, and one with nothing of its own a character that shows nothing, to sit on its line", () => {

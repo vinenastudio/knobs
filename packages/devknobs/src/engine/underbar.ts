@@ -2,6 +2,7 @@ import { bandMedia, bandSpan, drawAbove, forgetPixels, inSpan, meets, type Overl
 import { el, type Look, place } from "./browserkit";
 import type { Bars } from "./browserui";
 import type { Rect } from "./mock";
+import { onFontArrive } from "./pagefonts";
 import { copyPage, cuts, drawing, layoutZoom, MEDIA, ownZoom, rootSize, rootZoom, svgUrl, viewportOverflow } from "./pageshot";
 
 /**
@@ -418,6 +419,10 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
     changed = true;
     soon();
   };
+  // A font of the page pictured that comes after its picture is in the next one, which the page may not change again to ask for. Those that come together take one picture, as `soon` spaces them.
+  const stopFonts = onFontArrive((doc) => {
+    if (doc === watched) again();
+  });
   /** The band's height in the document's css px, `across` of them as wide as the band. */
   const bandOf = (across: number) => (wide > 0 ? (high * across) / wide : 0);
   /** A picture or video near the band came in or shows another frame, which no change to the page tells of. */
@@ -640,6 +645,7 @@ export function createUnderbar(glass: HTMLElement, frame: HTMLIFrameElement): Un
     },
     remove() {
       clearTimeout(waiting);
+      stopFonts();
       observer?.disconnect();
       observer = null;
       for (const type of LOADS) watched?.removeEventListener(type, onLoad, true);
