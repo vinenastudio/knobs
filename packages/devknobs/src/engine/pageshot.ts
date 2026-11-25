@@ -434,24 +434,123 @@ export function blankUrl(width: number, height: number): string {
   return svgUrl(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"/>`);
 }
 
+/** The size of what `node` holds as the page lays it out now, inside its border and padding, in css px: 0 by 0 where it has no box. */
+function contentSize(node: Element, view: Window): { width: number; height: number } {
+  const style = view.getComputedStyle(node);
+  const px = (value: string) => Number.parseFloat(value) || 0;
+  // A width or height in its style is of its border box where it is sized so.
+  const border = style.boxSizing === "border-box";
+  const across = border ? px(style.borderLeftWidth) + px(style.paddingLeft) + px(style.borderRightWidth) + px(style.paddingRight) : 0;
+  const down = border ? px(style.borderTopWidth) + px(style.paddingTop) + px(style.borderBottomWidth) + px(style.paddingBottom) : 0;
+  return { width: Math.max(0, px(style.width) - across), height: Math.max(0, px(style.height) - down) };
+}
+
+/** The positive number an attribute of `node` holds, or null. */
+function sizeAttribute(node: Element, name: string): number | null {
+  const value = Number(node.getAttribute(name) ?? "");
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+/** Whether a `srcset` has a source given by its width, as "shot.jpg 2000w": read after each url, as a url may hold a "w" too. */
+function widthSet(srcset: string | null): boolean {
+  return (srcset ?? "").split(",").some((candidate) => /^\d+w$/i.test(candidate.trim().split(/\s+/)[1] ?? ""));
+}
+
+/** Whether the browser may have picked `image` from a set by its width: its own `srcset`, or one of a source of its picture, has a width in it. */
+function pickedByWidth(image: Element): boolean {
+  const holder = image.parentElement;
+  const sources = holder?.localName === "picture" ? [...holder.querySelectorAll("source")] : [];
+  return [image, ...sources].some((node) => widthSet(node.getAttribute("srcset")));
+}
+
 /**
- * Give each picture in `copy` of the page `live` a picture of nothing in its
- * place, as large as the page's is as made. A drawing of the copy cannot
- * load the page's own, and the browser draws its box for a missing picture
- * there, an outline, a mark and the picture's text, which shows wherever the
- * picture drawn over it by hand does not cover its whole box. One as large
- * lays the page out as the real one does, and draws nothing.
+ * The size as made of a blank for a loaded picture `natural` px, whole as
+ * the browser gives it, with `width` and `height` attributes where it has
+ * them, `picked` where the browser may have picked it from a set by its
+ * width. Such a picture is the file's size over a density that need not be
+ * whole, so its real size is not whole either, and one of the whole px has a
+ * shape a little off, which moves what follows on a long page. Its
+ * attributes, where of a shape the rounding explains, each side of the
+ * natural size off by a px at most, are taken as the real shape: the browser
+ * may cut the part of a px off rather than round it, and the file's own size
+ * was rounded once already as it was made from a larger one. Then the
+ * blank is as wide as the picture and of their shape, so where the page's css
+ * leaves the picture its own width it still has it. Others are of another
+ * shape the page's css crops to, and the natural size stays. So does that of
+ * one not picked by width: its size is whole, and a tiny one, as a 1 by 1
+ * placeholder, fits attributes of almost any shape.
  */
-function blankPictures(live: Element, copy: Element): void {
+function loadedSize(naturalWidth: number, naturalHeight: number, width: number | null, height: number | null, picked: boolean): { width: number; height: number } {
+  const natural = { width: naturalWidth, height: naturalHeight };
+  if (!picked || width === null || height === null) return natural;
+  const shape = width / height;
+  const least = (naturalWidth - 1) / (naturalHeight + 1);
+  const most = naturalHeight > 1 ? (naturalWidth + 1) / (naturalHeight - 1) : Number.POSITIVE_INFINITY;
+  return shape >= least && shape <= most ? { width: naturalWidth, height: naturalWidth / shape } : natural;
+}
+
+/**
+ * Give each picture in `copy` of the page `live`, as `view` lays it out, a
+ * picture of nothing in its place. A drawing of the copy loads none of the
+ * page's own, and the browser lays out and draws its box for a missing
+ * picture there, an outline, a mark and the picture's text, which shows
+ * wherever the picture drawn over it by hand does not cover its whole box.
+ * One that has loaded gets one as large as it is as made. One that is still
+ * loading, or lazy and not started, is laid out by its size attributes on the
+ * page, or by none: it gets one of the size its attributes give, or else of
+ * its box on the page now, which may be 0 by 0 and then lays out as 0 by 0
+ * too. One of a picture whose sources have size attributes is laid out by the
+ * source picked, and gets one of its box too. Either lays the page out as the page does, and draws nothing. One
+ * that failed or has no source is missing on the page too, and stays so.
+ *
+ * And each video a poster of nothing, as the copy loads none of a video's
+ * own either. One the page has loaded gets one as large as the video, so its
+ * box has the video's shape, as the page's has, sized by its css or not, also
+ * where its size attributes are of another shape. One that shows its poster
+ * gets one of its box on the page now, which follows the poster. One whose
+ * poster is data keeps it, as a picture shows that one.
+ */
+function blankPictures(live: Element, copy: Element, view: Window | null): void {
   const shown = live.querySelectorAll("img");
   copy.querySelectorAll("img").forEach((image, index) => {
     const from = shown[index];
-    if (!from || !from.complete || !(from.naturalWidth > 0 && from.naturalHeight > 0)) return;
+    if (!from) return;
+    const loaded = from.complete && from.naturalWidth > 0 && from.naturalHeight > 0;
+    if (from.complete && !loaded) return;
+    const width = sizeAttribute(from, "width");
+    const height = sizeAttribute(from, "height");
+    const parent = from.parentElement;
+    // The page lays one still loading out by the size attributes of the source it picked, where its sources have them, not by its own.
+    const sourceSized =
+      parent?.localName === "picture" && [...parent.querySelectorAll("source")].some((source) => source.getAttribute("width") !== null || source.getAttribute("height") !== null);
+    const size = loaded
+      ? loadedSize(from.naturalWidth, from.naturalHeight, width, height, pickedByWidth(from))
+      : width !== null && height !== null && !sourceSized
+        ? { width, height }
+        : view
+          ? contentSize(from, view)
+          : null;
+    if (!size) return;
     // Nothing else is left to pick a source by.
     for (const name of ["srcset", "sizes", "loading"]) image.removeAttribute(name);
     const holder = image.parentElement;
     if (holder?.localName === "picture") for (const source of holder.querySelectorAll("source")) source.remove();
-    image.setAttribute("src", blankUrl(from.naturalWidth, from.naturalHeight));
+    image.setAttribute("src", blankUrl(size.width, size.height));
+  });
+  const videos = live.querySelectorAll("video");
+  copy.querySelectorAll("video").forEach((video, index) => {
+    const from = videos[index];
+    if (!from) return;
+    // A picture shows a poster that is data, as the page does.
+    if (/^\s*data:/i.test(from.getAttribute("poster") ?? "")) return;
+    // A poster, not size attributes: those set its width and height too, where the page's css leaves the height to the video.
+    const size =
+      from.videoWidth > 0 && from.videoHeight > 0
+        ? { width: from.videoWidth, height: from.videoHeight }
+        : from.getAttribute("poster") && view
+          ? contentSize(from, view)
+          : null;
+    if (size) video.setAttribute("poster", blankUrl(size.width, size.height));
   });
 }
 
@@ -702,7 +801,7 @@ export function copyPage(
       each?.(node, copy);
     }
   }
-  blankPictures(doc.documentElement, root);
+  blankPictures(doc.documentElement, root, view);
   // The overflow the viewport took from the page, visible in the copy, as the page lays it out.
   const lifted = view ? viewportOverflow(doc, view) : null;
   const liftedCopy = lifted === doc.documentElement ? root : lifted ? root.querySelector("body") : null;

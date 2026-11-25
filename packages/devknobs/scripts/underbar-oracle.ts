@@ -15,7 +15,7 @@
 // element that lies where its `top` or `bottom` holds it in the viewport, or at the end of its
 // parent, has stuck, at any scroll, and it and what is in it are checked by their height only: the picture sticks
 // nothing, so the copy draws it where it lies before it sticks. The rest are checked whole.
-// Build first, then: pnpm --filter @vinena/knobs underbar-oracle [index.global.js] [screenshot dir] [--url URL] [--scroll PX] [--dark] [--device ID] [--posture closed|open] [--bypass-csp]
+// Build first, then: pnpm --filter @vinena/knobs underbar-oracle [index.global.js] [screenshot dir] [--url URL] [--scroll PX] [--dark] [--device ID] [--posture closed|open] [--bypass-csp] [--first]
 // With --url and no --scroll it puts the page's first large picture across the band.
 // --bypass-csp turns the site's content security policy off for the tab. The copy's layout is
 // read in a frame of the page's own, which a strict policy keeps from loading; without the
@@ -39,14 +39,22 @@
 // vmax, vb and dvb, media rules on the viewport's height, its aspect ratio, scripting and
 // resolution (a picture is as tall as the whole document, runs no script and draws at one
 // device px a px), one in a layer, and a string and a url that hold a viewport length and
-// must stay as they are.
+// must stay as they are. And what a picture loads otherwise: nothing. The probe frame that
+// lays the copy out is kept from the network as a picture is, so a picture or a video the
+// copy still asks for lays out there as it does in the band, missing. Its cases: a picture
+// that never loads, with its size in its attributes, without, and without its alt too, and a
+// video the page has loaded that has no size in its attributes, and five pictures picked from
+// a set by their width at a density that is not whole, whose whole px give another shape. And a web font that comes
+// after the band's first picture, which the band must hold as data with no change to the page.
+// --first prints, for each layout check that fails, the rows where a drift starts, in
+// document order: a height that differs, or a top that does while its parent's does not.
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
-import type { Page } from 'playwright-core';
+import type { Page, Route } from 'playwright-core';
 
 const root = join(import.meta.dirname, '..');
 // Playwright comes from the ui package, the one that has it.
@@ -68,6 +76,8 @@ const dark = args.includes('--dark');
 if (dark) args.splice(args.indexOf('--dark'), 1);
 const bypassCSP = args.includes('--bypass-csp');
 if (bypassCSP) args.splice(args.indexOf('--bypass-csp'), 1);
+const firstRows = args.includes('--first');
+if (firstRows) args.splice(args.indexOf('--first'), 1);
 const script = resolve(args[0] ?? join(root, 'dist/index.global.js'));
 const out = args[1] ? resolve(args[1]) : null;
 
@@ -113,11 +123,19 @@ const pictures: Record<string, Buffer> = {
   '/paper.png': png(240, 160, (x, y) => [(x * 7) % 256, (y * 5) % 256, ((x + y) * 3) % 256]),
   '/away.png': png(300, 200, (x, y) => [240, Math.round((y / 200) * 255), Math.round((x / 300) * 255)]),
   '/still.png': png(640, 360, (x, y) => [Math.floor(x / 40) % 2 ? 230 : 40, Math.round((y / 360) * 255), 120]),
+  '/wide.png': png(1000, 646, (x, y) => [Math.round((x / 1000) * 255), 90, Math.round((y / 646) * 255)]),
 };
+/** A font of one glyph, a box for the letter A, the one the site's demo serves (`apps/web/src/routes/api.demo.$.ts`). */
+const FONT = Buffer.from(
+  'd09GMgABAAAAAAEcAAoAAAAAAoQAAADUAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAABmAANAo4QAE2AiQDBgsGAAQgBVcHJhvQAQCeB7YtY49aH2Jmkdrn1a/E8/V73bn7NqVRqu1CgmViXMZHO4z9TjPI6vmmeC8vOS7HI0Uea7VaQvLQ5389sE6OTxSABNSWRFigkGSlAQaY7pAxtmNE6jjTRaMOYaaJArxxYU/U3YHCwJUhuNLu0Fqw/5ceCYACjcISa0CDSPdmtkMcJxOmQRBu3180Tns5xid8fF0/e+YI8lcThgJh3GHqoFQWAECmiyBKCygAALRXAdEIKAttSK/E0qb3cuLy1lA/R/3BtONybXwrPaTIjj0BAAA=',
+  'base64',
+);
+/** How late the font comes, in ms. */
+const FONT_LATE = 2000;
 /** The clip the videos show, recorded in the browser before the page loads. */
 let clip: Buffer | null = null;
 
-const page = (away: string) => `<!doctype html><html data-look="a"><head><meta charset="utf-8">
+const page = (away: string, never: string) => `<!doctype html><html data-look="a"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>band oracle</title>
 <style>
 html { color-scheme: dark; }
@@ -152,6 +170,13 @@ body .col .gone-specific { animation: fadein 400ms !important; }
 .bar { position: relative; background: rgb(0, 0, 255); }
 .bar::before { content: ""; position: absolute; inset: 0; background: rgb(229, 72, 77); transform-origin: left; animation: grow 100s linear -30s paused; }
 .painted { background: none; animation: paint 1s both; }
+/*
+ * Entrance animations as a site staggers them, each of which moves its top: done, running, in its delay or held part way
+ * when the page is held, each must stand in the copy where the page holds it. One every 200 ms, so some end while the copy loads.
+ */
+@keyframes rise { 0% { opacity: 0; transform: translateY(8px); } 100% { opacity: 1; transform: none; } }
+.rise { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 8px; }
+.rise i { width: 6px; height: 8px; background: #f5d90a; animation: rise 300ms backwards; }
 /* What a picture reads otherwise than the frame: each block's height moves what follows when the copy gets it wrong. */
 .h-\\[260svh\\] { height: 260svh; }
 .h-svh { height: 100svh; }
@@ -181,6 +206,15 @@ body .col .gone-specific { animation: fadein 400ms !important; }
 @media (hover: none) { .nohover { height: 44px; } }
 .touch-sheet, .nohover-sheet { height: 20px; }
 .quote::before { content: "100vh"; display: block; height: 20px; }
+/* What a picture loads otherwise: each holder's height moves what follows when the copy lays its picture or video out otherwise than the page. */
+.hold { display: flow-root; padding: 0 0 1px; }
+.hold img, .hold video { display: block; width: 100%; height: auto; }
+/*
+ * A web font the page uses, which comes late, after the band's first picture and after the page's other loads: the band must
+ * get it with no change to the page. Held for, so the page shows it once it comes, as an optional one coming that late would not.
+ */
+@font-face { font-family: "oracle box"; src: url(/font.woff2) format("woff2"); font-display: block; }
+.boxed { margin: 0; height: 24px; font: 20px/24px "oracle box", system-ui; }
 .url { height: 40px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8'%3E%3Crect class='9vh/' width='8' height='8' fill='%23e5484d'/%3E%3C/svg%3E"); }
 </style><style media="(pointer: coarse)">.touch-sheet { height: 44px; }</style><style media="(hover: none)">.nohover-sheet { height: 44px; }</style><script src="/devknobs.js"></script></head><body><div class="col">
 <div class="lead"></div>
@@ -207,6 +241,7 @@ body .col .gone-specific { animation: fadein 400ms !important; }
 <div class="still gone-specific" data-oracle-color="229,72,77"></div>
 <div class="still bar" data-oracle-color="0,0,255"></div>
 <div class="still painted" data-oracle-color="229,72,77"></div>
+<div class="rise" id="rise"><i></i><i style="animation-delay: 2s"></i><i style="animation-delay: 60s"></i><i style="animation: rise 600ms -300ms backwards paused"></i>${Array.from({ length: 40 }, (_, at) => `<i style="animation-delay: ${at * 200}ms"></i>`).join('')}</div>
 <section class="h-[260svh]" id="pin"><div class="sticky top-0 h-svh" style="background: #2b2b28"><p style="margin: 0">pinned</p></div></section>
 <p id="after-pin" style="margin: 0; height: 24px">after the pin</p>
 <div class="min-h-[calc(100vh-4rem)]" id="calc"><p style="margin: 0">a class with a viewport length in its name</p></div>
@@ -225,6 +260,12 @@ body .col .gone-specific { animation: fadein 400ms !important; }
 <div class="reads nohover-sheet" id="nohover-sheet"></div>
 <p class="quote" id="quote" style="margin: 0">a string that holds a viewport length</p>
 <div class="url" id="url"></div>
+<div class="hold" id="pending"><img loading="lazy" src="${never}/never.png" width="910" height="102" alt="a picture that never loads, with a long text in its alt that takes a few lines where the browser shows it in place of the picture"></div>
+<div class="hold" id="pending-bare"><img loading="lazy" src="${never}/never.png" alt="a picture that never loads, with a long text in its alt that takes a few lines where the browser shows it in place of the picture"></div>
+<div class="hold" id="pending-plain"><img loading="lazy" src="${never}/never.png"></div>
+<div class="hold" id="video-bare"><video id="bare" src="/clip.webm" muted playsinline preload="auto"></video></div>
+<div class="hold" id="picked">${'<img class="pick" src="/wide.png" srcset="/wide.png 1000w" sizes="380px" width="1000" height="646" alt="">'.repeat(5)}</div>
+<p class="boxed" id="boxed">AAAA</p>
 <div class="tail"></div>
 </div><script>
 const pen = document.getElementById('chart').getContext('2d');
@@ -313,6 +354,10 @@ const serve = (html: () => string) => (request: IncomingMessage, response: Serve
   } else if (path === '/sprite.svg') {
     response.setHeader('content-type', 'image/svg+xml');
     response.end(SPRITE);
+  } else if (path === '/font.woff2') {
+    // Late each time it is asked for, by the page and by knobs, so it comes once the page's other loads are done.
+    response.setHeader('content-type', 'font/woff2');
+    setTimeout(() => response.end(FONT), FONT_LATE);
   } else {
     response.setHeader('content-type', 'text/html');
     response.end(html());
@@ -328,8 +373,10 @@ const other = await listen(
   serve(() => ''),
   '127.0.0.1',
 );
+// One that never answers, so a picture from it stays loading for the whole run. A port of its own, so the requests it holds open take none of the others' connections.
+const never = await listen(() => {}, '127.0.0.1');
 const own = await listen(
-  serve(() => page(`http://localhost:${other.port}`)),
+  serve(() => page(`http://localhost:${other.port}`, `http://127.0.0.1:${never.port}`)),
   '127.0.0.1',
 );
 const base = target ?? `http://127.0.0.1:${own.port}/`;
@@ -519,7 +566,7 @@ interface Drift {
   pinned: number;
   /** The frame that lays the copy out did not load: the site's content security policy keeps it out. */
   blocked: boolean;
-  rows: { name: string; top: number; height: number; copyTop: number; copyHeight: number; off: number }[];
+  rows: { name: string; top: number; height: number; copyTop: number; copyHeight: number; off: number; parentOff: number | null }[];
 }
 
 /**
@@ -669,19 +716,59 @@ async function layoutDrift(tab: Page): Promise<Drift> {
   return drift;
 }
 
+/** The name of the frame that lays the copy out, by which its requests are told from the page's. */
+const PROBE = 'oracle-probe';
+
+/** A request of the probe frame is refused, as a picture loads nothing; every other goes on. A data url is no request and still loads. */
+async function probeOffline(route: Route): Promise<void> {
+  let frame = null;
+  try {
+    frame = route.request().frame();
+  } catch {
+    // A worker's request has no frame.
+  }
+  if (frame?.name() === PROBE) await route.abort();
+  else await route.fallback();
+}
+
 /** The marked elements of the page against their copies in the band's picture, as `layoutDrift` tells. */
 async function measureDrift(tab: Page): Promise<Omit<Drift, 'pinned'>> {
-  return tab.evaluate(async () => {
+  // Only while the probe lays the copy out: a tab with a route takes nothing from its cache.
+  await tab.route('**/*', probeOffline);
+  try {
+    return await probeDrift(tab);
+  } finally {
+    await tab.unroute('**/*', probeOffline);
+  }
+}
+
+async function probeDrift(tab: Page): Promise<Omit<Drift, 'pinned'>> {
+  return tab.evaluate(async (named) => {
     const shadow = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot;
     const view = shadow?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')?.contentWindow;
     const picture = shadow?.querySelector<HTMLImageElement>('.underbar > img');
     if (!view || !picture) return { marked: 0, found: 0, moved: 0, blocked: false, rows: [] };
-    const svg = decodeURIComponent(picture.src.slice(picture.src.indexOf(',') + 1));
+    const drawing = new DOMParser().parseFromString(decodeURIComponent(picture.src.slice(picture.src.indexOf(',') + 1)), 'image/svg+xml');
+    // The copy's animations stand from the first moment where the picture starts them, which is where the page held them: in the
+    // copy's still layer, named before the page's, so this wins over the page's own important rules. Left to run while the frame
+    // loads, one that ends in that time would show its end where the page holds its start.
+    const xhtml = 'http://www.w3.org/1999/xhtml';
+    const hold = drawing.createElementNS(xhtml, 'style');
+    hold.textContent = '@layer knobs-still { *, ::before, ::after { animation-play-state: paused !important; } }';
+    (drawing.getElementsByTagNameNS(xhtml, 'head')[0] ?? drawing.getElementsByTagNameNS(xhtml, 'html')[0])?.append(hold);
+    // A picture uses a font that is data in its copy whatever the face's font-display. A document uses an optional one only where
+    // it is there by its first paint, which a data font may not be: so each face is held for in the frame that lays the copy out.
+    for (const style of drawing.getElementsByTagNameNS(xhtml, 'style')) {
+      const text = style.textContent ?? '';
+      if (text.includes('font-display')) style.textContent = text.replace(/(@font-face\s*\{[^}]*?)font-display\s*:\s*[\w-]+/g, '$1font-display: block');
+    }
+    const svg = new XMLSerializer().serializeToString(drawing);
     const probe = document.createElement('iframe');
     // A picture is laid out at one device pixel a px, whatever the screen's, so the frame that lays it out here is too: its zoom takes the screen's ratio back out.
     probe.style.cssText = `position: fixed; left: -100000px; top: 0; width: ${picture.naturalWidth}px; height: ${picture.naturalHeight}px; border: 0; zoom: ${1 / (window.devicePixelRatio || 1)}`;
     // A picture runs no script, so neither does the frame that lays it out: `(scripting: none)` reads there as in the picture.
     probe.sandbox.add('allow-same-origin');
+    probe.name = named;
     const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
     const loaded = new Promise((done) => probe.addEventListener('load', done, { once: true }));
     probe.src = url;
@@ -697,7 +784,7 @@ async function measureDrift(tab: Page): Promise<Omit<Drift, 'pinned'>> {
       return { marked: 0, found: 0, moved: 0, blocked: true, rows: [] };
     }
     const byHeight = new Set((Reflect.get(view, 'oracleByHeight') as string[] | undefined) ?? []);
-    // The copy's animations stand where the picture starts them, which is where the page held them.
+    // And set back to their start, should one have run before its rule held it.
     for (const animation of probe.contentDocument?.getAnimations() ?? []) {
       animation.pause();
       animation.currentTime = 0;
@@ -723,7 +810,11 @@ async function measureDrift(tab: Page): Promise<Omit<Drift, 'pinned'>> {
         moved++;
         continue;
       }
+      const liveParent = node.parentElement?.getBoundingClientRect();
+      const drawnParent = copy.parentElement?.getBoundingClientRect();
       rows.push({
+        // How far its parent's top lies apart, to tell where a drift starts from where it is carried down.
+        parentOff: liveParent && drawnParent ? Math.abs(drawnParent.top - (liveParent.top + scrolled)) : null,
         name: `${node.parentElement ? `${name(node.parentElement)} > ` : ''}${name(node)}`,
         top,
         height: live.height,
@@ -739,7 +830,7 @@ async function measureDrift(tab: Page): Promise<Omit<Drift, 'pinned'>> {
     probe.remove();
     URL.revokeObjectURL(url);
     return { marked: marked.length, found: rows.length + moved, moved, blocked: false, rows: rows.sort((a, b) => b.off - a.off) };
-  });
+  }, PROBE);
 }
 
 if (out) await mkdir(out, { recursive: true });
@@ -782,6 +873,39 @@ try {
     undefined,
     { timeout: 15000 },
   );
+  // Its own page's video with no size in its attributes takes the clip's once the page knows it, and its pictures picked by width are in.
+  if (!target) {
+    await tab.waitForFunction(
+      () => {
+        const view = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')?.contentWindow;
+        const picked = [...(view?.document.querySelectorAll<HTMLImageElement>('.pick') ?? [])];
+        return (view?.document.querySelector<HTMLVideoElement>('#bare')?.readyState ?? 0) >= 1 && picked.length > 0 && picked.every((image) => image.complete && image.naturalWidth > 0);
+      },
+      undefined,
+      { timeout: 15000 },
+    );
+    // Its own page's web font comes after the band's first picture, and the page does not change again till it is marked: the band must take a picture with the font in it as data on its own.
+    const font = /@font-face\s*\{[^}]*font-family:\s*(?:"|&quot;)?oracle box[^}]*url\(\s*(?:"|'|&quot;)?data:/;
+    const boxed = await tab
+      .waitForFunction(
+        (source) => {
+          const picture = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot?.querySelector<HTMLImageElement>('.underbar > img');
+          return picture ? new RegExp(source).test(decodeURIComponent(picture.src.slice(picture.src.indexOf(',') + 1))) : false;
+        },
+        font.source,
+        { timeout: 10000 },
+      )
+      .then(() => true, () => false);
+    const faces = await tab.evaluate(() => {
+      const view = document.querySelector('[data-devknobs="viewport"]')?.shadowRoot?.querySelector<HTMLIFrameElement>('iframe[data-devknobs-frame]')?.contentWindow;
+      return [...(view?.document.fonts ?? [])].filter((face) => face.family.includes('oracle box')).map((face) => face.status).join(', ') || 'none';
+    });
+    check(
+      "a web font that comes after the band's picture reaches it with no change to the page",
+      boxed,
+      `${boxed ? 'the band holds it as data' : 'the band still points at its address after 10 seconds'}, the page's face ${faces}`,
+    );
+  }
   await tab.waitForTimeout(800);
   const first = await measure(tab);
   if (!first) throw new Error('no band under the bars');
@@ -805,13 +929,26 @@ try {
           .map((row) => `\n       ${row.name}: top ${row.top.toFixed(1)} height ${row.height.toFixed(1)}, copy top ${row.copyTop.toFixed(1)} height ${row.copyHeight.toFixed(1)}`)
           .join(''),
     );
+    if (firstRows && worst.length > 0) {
+      // Where each drift starts, in document order: a height that differs, or a top that does while its parent's does not.
+      const starts = drift.rows
+        .filter((row) => Math.abs(row.copyHeight - row.height) > 0.3 || (Math.abs(row.copyTop - row.top) > 1 && row.parentOff !== null && row.parentOff <= 1))
+        .sort((a, b) => a.top - b.top)
+        .slice(0, 6);
+      results.push(
+        `     where it starts ${where}:` +
+          (starts.length === 0
+            ? ' no row'
+            : starts.map((row) => `\n       ${row.name}: top ${row.top.toFixed(1)} height ${row.height.toFixed(1)}, copy top ${row.copyTop.toFixed(1)} height ${row.copyHeight.toFixed(1)}, parent ${row.parentOff?.toFixed(1) ?? 'none'} apart`).join('')),
+      );
+    }
     return drift;
   };
   const top = await layout('at the top');
   if (!target) {
     // Each case of its own page that a picture reads otherwise, by how much it changes its block's height in the copy.
     const row = (id: string) => top.rows.find((one) => new RegExp(`> [a-z]+#${id}(\\.|$)`).test(one.name));
-    const cases = ['pin', 'calc', 'vmax', 'vb', 'dvb', 'mh', 'tall', 'slim', 'noscript', 'dense', 'mh-layer', 'touch', 'nohover', 'touch-sheet', 'nohover-sheet'].map((id) => {
+    const cases = ['pin', 'calc', 'vmax', 'vb', 'dvb', 'mh', 'tall', 'slim', 'noscript', 'dense', 'mh-layer', 'touch', 'nohover', 'touch-sheet', 'nohover-sheet', 'pending', 'pending-bare', 'pending-plain', 'video-bare', 'picked'].map((id) => {
       // The block that shows only in the copy is told by the gap it opens between its neighbors.
       const [one, next] = id === 'noscript' ? [row('slim'), row('dense')] : [row(id), row(id)];
       if (!one || !next) return { id, off: null };
@@ -981,6 +1118,9 @@ try {
   await browser.close();
   own.server.close();
   other.server.close();
+  // The requests it never answers are still open: closed too, so the run ends.
+  never.server.closeAllConnections();
+  never.server.close();
 }
 
 console.log(results.join('\n'));

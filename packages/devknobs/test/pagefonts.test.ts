@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { embedFonts, faceKey, warmFonts } from "../src/engine/pagefonts";
+import { embedFonts, faceKey, onFontArrive, warmFonts } from "../src/engine/pagefonts";
 import { copyPage, forgetShots } from "../src/engine/pageshot";
 
 /** A font face as far as the page tells which it has loaded. */
@@ -193,6 +193,46 @@ describe("warmFonts", () => {
     expect(next.fonts.listeners.length).toBe(0);
     expect(written(next.doc, rule(INTER))).toBe(INTER);
     expect(fetched.length).toBe(3);
+  });
+});
+
+describe("onFontArrive", () => {
+  test("tells the page once a font fetched for it comes, so a page that does not change again still gets a copy with it", async () => {
+    const told: Document[] = [];
+    const stop = onFontArrive((doc) => told.push(doc));
+    const { doc } = pageOf([loaded("Inter")], [rule(INTER)]);
+    written(doc, rule(INTER));
+    expect(told).toEqual([]);
+    await settle();
+    expect(told).toEqual([doc]);
+    stop();
+  });
+
+  test("tells nothing for a font that does not come, nor for one that comes for a page let go of", async () => {
+    const told: Document[] = [];
+    const stop = onFontArrive((doc) => told.push(doc));
+    fails = () => true;
+    const failed = pageOf([loaded("Inter")], [rule(INTER)]);
+    written(failed.doc, rule(INTER));
+    await settle();
+    expect(told).toEqual([]);
+    fails = () => false;
+    const old = pageOf([loaded("Inter")], [rule(INTER)]);
+    written(old.doc, rule(INTER));
+    // The frame loads another page before the font comes.
+    const next = pageOf([], []);
+    warmFonts(next.doc);
+    await settle();
+    expect(told).toEqual([]);
+    stop();
+  });
+
+  test("tells no one once stopped", async () => {
+    const told: Document[] = [];
+    onFontArrive((doc) => told.push(doc))();
+    written(pageOf([loaded("Inter")], [rule(INTER)]).doc, rule(INTER));
+    await settle();
+    expect(told).toEqual([]);
   });
 });
 
