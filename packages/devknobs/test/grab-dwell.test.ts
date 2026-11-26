@@ -62,6 +62,8 @@ const overlay: Overlay = {
   draw: (element, label, picked) => draws.push({ element, tag: label.tag, picked }),
   point: () => undefined,
   toast: (_text, near) => toasts.push(near),
+  marquee: () => undefined,
+  mount: () => undefined,
   destroy: () => undefined,
 };
 

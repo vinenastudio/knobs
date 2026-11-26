@@ -22,6 +22,8 @@ function layers() {
       },
       point: () => undefined,
       toast: () => undefined,
+      marquee: () => undefined,
+      mount: () => undefined,
       area: (ring) => {
         layer.areas.push(ring);
       },

@@ -33,6 +33,8 @@ const overlay: Overlay = {
   toast: () => {
     toasts++;
   },
+  marquee: () => undefined,
+  mount: () => undefined,
   destroy: () => {
     overlays--;
   },
