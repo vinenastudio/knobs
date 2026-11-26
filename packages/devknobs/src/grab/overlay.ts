@@ -493,7 +493,10 @@ export interface Overlay {
    * element it would gather. Null takes both away.
    */
   marquee(rect: { left: number; top: number; right: number; bottom: number } | null, preview: Element[]): void;
-  /** Put a node of another part of grab on the layer, over all of it, with its own styles. It goes with the layer. */
+  /**
+   * Put a node of another part of grab on the layer, over all of it, with its own styles. It
+   * gets the page's theme as `data-page`, not the label's inverted one, and goes with the layer.
+   */
   mount(node: HTMLElement, css?: string): void;
   /** Fade out and go, once a toast is over where there is one. */
   destroy(): void;
@@ -722,8 +725,7 @@ export function createOverlay(quiet = false, model = false): BoxOverlay {
       if (isCustomColor(name)) layer.style.setProperty("--grab", name);
       else layer.style.removeProperty("--grab");
     }
-    if (!bar) return;
-    for (const node of [label, ...mounted]) if (node.dataset.bar !== bar) node.dataset.bar = bar;
+    if (bar && label.dataset.bar !== bar) label.dataset.bar = bar;
   }
 
   function schedule(): void {
@@ -1083,7 +1085,8 @@ export function createOverlay(quiet = false, model = false): BoxOverlay {
         mountedCss.add(css);
         addStyle(root, css);
       }
-      if (bar) node.dataset.bar = bar;
+      // The page's own theme, read now: a mount can come before any element was read.
+      node.dataset.page = read(null).theme;
       for (let at = mounted.length - 1; at >= 0; at--) if (!mounted[at]?.isConnected) mounted.splice(at, 1);
       layer.append(node);
       mounted.push(node);

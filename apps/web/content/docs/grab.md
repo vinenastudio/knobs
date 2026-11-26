@@ -18,16 +18,15 @@ the components that rendered it and where they live go on the clipboard:
 paste that into your agent and it can find the code.
 
 - drag a box, or shift and a click, to gather several elements. each gets a
-  number, and a tray at the bottom lists them, with a note for each and one
-  for all. `n` writes a note.
-- enter, `c` or the tray's copy button copies them all, numbered, each note
-  under its element.
+  number, and a tray at the bottom lists them, with one note for them all.
+  `n` writes the note.
+- enter, `c` or the tray's copy button copies them all, numbered, the note
+  last.
 - the arrows move to the parent, a child or a sibling.
 - escape or `⇧G` again turns grab off.
 
 ```
 1. [<button type="button">Save</button> in SaveButton (at src/App.jsx:5:5)]
-   Note: make it blue
 2. [<a href="/docs">Docs</a> in Nav (at src/Nav.jsx:12:9)]
 
 Note: same spacing for all of these

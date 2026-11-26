@@ -52,11 +52,11 @@ while it is on:
   gathered, in a badge at its box's top left. the numbers close up when one
   goes.
 - a tray at the bottom of the window lists them: the number, the tag and the
-  component, a one-line note and a remove button. under the list are a note
-  for all and a "Copy N" button. `n` writes the boxed element's note where it
-  is gathered, or else the note for all. enter in a note, or `⌘↩` (`Ctrl
-Enter` off a Mac) anywhere, copies. escape in the tray goes back to picking,
-  and what is typed in it never moves the box or copies.
+  component, and a remove button. under the list are one note for them all
+  and a "Copy N" button. `n` writes the note. `⌘↩` (`Ctrl Enter` off a Mac)
+  in the tray copies. escape in the tray goes back to picking, and what is
+  typed in it never moves the box or copies. the tray wears the page's theme:
+  dark on a dark page, light on a light one.
 - a click without shift, enter, `c` or the tray's button copies them all, the
   clicked one last where it is new, and grab ends.
 - up goes to the parent, down back the way it came or to the first child, left
@@ -65,19 +65,18 @@ Enter` off a Mac) anywhere, copies. escape in the tray goes back to picking,
   copies.
 - a check and "Copied" show by the element for a moment, the box still on it.
 
-one element with no notes copies as its line alone. more than one, or a note,
-and each element is numbered, its note on the next line under it, and the note
-for all goes last after a blank line. empty notes are left out:
+one element with no note copies as its line alone. more than one, or a note,
+and each element is numbered, and the note goes last after a blank line. an
+empty note is left out:
 
 ```
 1. [<button type="button">Save</button> in SaveButton (at src/App.jsx:5:5)]
-   Note: make it blue
 2. [<a href="/docs">Docs</a> in Nav (at src/Nav.jsx:12:9)]
 
 Note: same spacing for all of these
 ```
 
-the json carries each element's `note`, and the note for all as `note`.
+the json carries the note as `note`.
 
 the context of the element under the pointer is worked out while the pointer
 rests there, so a click copies it whole, inside the click, as Safari wants.

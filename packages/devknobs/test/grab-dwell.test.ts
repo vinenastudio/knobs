@@ -59,13 +59,12 @@ let marquees: (PageRect | null)[];
 let exits: number;
 let mode: Mode | null = null;
 
-/** A tray as the mode sees it: what it lists, the notes typed in it, and where the focus went. */
+/** A tray as the mode sees it: what it lists, the note typed in it, and how often the note took the focus. */
 interface FakeTray {
   options: TrayOptions;
   items: string[];
-  each: string[];
-  all: string;
-  focused: (number | null)[];
+  note: string;
+  focused: number;
   destroyed: boolean;
 }
 let trays: FakeTray[];
@@ -77,19 +76,18 @@ function tray(): FakeTray | undefined {
 }
 
 function createTray(options: TrayOptions): Tray {
-  const fake: FakeTray = { options, items: [], each: [], all: "", focused: [], destroyed: false };
+  const fake: FakeTray = { options, items: [], note: "", focused: 0, destroyed: false };
   trays.push(fake);
   return {
     node: {} as HTMLElement,
     update: (items) => {
       fake.items = items.map((item) => item.label.tag);
     },
-    remove: (index) => {
-      fake.each = fake.each.filter((_, at) => at !== index);
-      options.onRemove(index);
+    remove: (index) => options.onRemove(index),
+    note: () => fake.note,
+    focusNote: () => {
+      fake.focused++;
     },
-    notes: () => ({ each: fake.each, all: fake.all }),
-    focusNote: (index) => fake.focused.push(index),
     contains: (target) => target === inTray,
     destroy: () => {
       fake.destroyed = true;
@@ -398,7 +396,7 @@ function gathered(): Element[] {
 }
 
 describe("gathering many", () => {
-  test("one element with no notes copies its line alone", () => {
+  test("one element with no note copies its line alone", () => {
     start(50);
     click(50);
     expect(texts).toEqual(["a"]);
@@ -454,28 +452,26 @@ describe("gathering many", () => {
     expect(copies).toEqual([]);
   });
 
-  test("backspace takes the boxed element out, and its note with it", () => {
+  test("backspace takes the boxed element out", () => {
     start(50);
     click(50, true);
     wait(40);
     move(250);
     click(250, true);
-    const fake = tray();
-    if (fake) fake.each = ["", "for c"];
     press("Backspace");
     expect(gathered()).toEqual([as(a)]);
-    expect(fake?.each).toEqual([""]);
+    expect(tray()?.items).toEqual(["a"]);
     expect(copies).toEqual([]);
   });
 
-  test("a gathered element taken off the page loses its own note, and the others keep theirs", () => {
+  test("gathered elements taken off the page leave the tray, the note stays", () => {
     start(50);
     click(50, true);
     click(150, true);
     click(250, true);
     const fake = tray();
     expect(fake?.items).toEqual(["a", "b", "c"]);
-    if (fake) fake.each = ["for a", "for b", "for c"];
+    if (fake) fake.note = "all of these";
     a.isConnected = false;
     c.isConnected = false;
     wait(40);
@@ -484,35 +480,32 @@ describe("gathering many", () => {
     move(150);
     expect(gathered()).toEqual([as(b)]);
     expect(fake?.items).toEqual(["b"]);
-    expect(fake?.each).toEqual(["for b"]);
+    expect(fake?.note).toBe("all of these");
   });
 
-  test("n writes a note for the boxed element, or for all", () => {
+  test("n focuses the note", () => {
     start(50);
     click(50, true);
     wait(40);
     move(250);
     click(250, true);
     press("n");
-    expect(tray()?.focused).toEqual([1]);
+    expect(tray()?.focused).toBe(1);
     move(150);
     wait(40);
     press("n");
-    expect(tray()?.focused).toEqual([1, null]);
+    expect(tray()?.focused).toBe(2);
   });
 
-  test("a copy carries the notes, numbered", () => {
+  test("a copy carries the note last, the elements numbered", () => {
     start(50);
     click(50, true);
     click(250, true);
     const fake = tray();
-    if (fake) {
-      fake.each = ["make it blue", " "];
-      fake.all = "same spacing";
-    }
+    if (fake) fake.note = " same spacing ";
     press("Enter");
     expect(copies).toEqual([["a", "c"]]);
-    expect(texts).toEqual(["1. a\n   Note: make it blue\n2. c\n\nNote: same spacing"]);
+    expect(texts).toEqual(["1. a\n2. c\n\nNote: same spacing"]);
     expect(exits).toBe(1);
     expect(fake?.destroyed).toBe(true);
   });
@@ -535,7 +528,7 @@ describe("gathering many", () => {
     expect(copies).toEqual([]);
     expect(gathered()).toEqual([as(a), as(c)]);
     expect(draws.length).toBe(before);
-    expect(tray()?.focused).toEqual([]);
+    expect(tray()?.focused).toBe(0);
     expect(exits).toBe(0);
   });
 

@@ -1,8 +1,5 @@
 import type { GrabEntry, GrabPayload } from "./types";
 
-/** Indent for a note under a numbered element. */
-const NOTE_INDENT = "   ";
-
 /** What a copy takes: the gathered elements, in order, and the one clicked last if it is new. */
 export function flushPicks<T>(picked: readonly T[], clicked: T | null): T[] {
   if (clicked === null || picked.includes(clicked)) return [...picked];
@@ -21,35 +18,20 @@ function cleanNote(note: string | undefined): string | undefined {
 
 /**
  * The text a copy of the picks puts on the clipboard. One element with no note is its
- * line alone. Otherwise each element is numbered, its note on the next line under it,
- * and the note for all goes last after a blank line.
+ * line alone. Otherwise each element is numbered, and the note goes last after a blank line.
  */
 export function formatPicks(entries: readonly GrabEntry[], note?: string): string {
-  const overall = cleanNote(note);
+  const clean = cleanNote(note);
   const only = entries.length === 1 ? entries[0] : undefined;
-  if (only && !cleanNote(only.note) && !overall) return only.content;
-  const blocks = entries.map((entry, index) => {
-    const line = `${index + 1}. ${entry.content}`;
-    const own = cleanNote(entry.note);
-    if (!own) return line;
-    return `${line}\n${NOTE_INDENT}Note: ${own.split("\n").join(`\n${NOTE_INDENT}`)}`;
-  });
-  if (overall) blocks.push(`${blocks.length > 0 ? "\n" : ""}Note: ${overall}`);
+  if (only && !clean) return only.content;
+  const blocks = entries.map((entry, index) => `${index + 1}. ${entry.content}`);
+  if (clean) blocks.push(`${blocks.length > 0 ? "\n" : ""}Note: ${clean}`);
   return blocks.join("\n");
 }
 
-/** A payload from the picks and the tray's notes, one per pick and one for all. Empty notes are left out. */
-export function picksPayload(
-  entries: readonly GrabEntry[],
-  notes: readonly (string | undefined)[] = [],
-  note?: string,
-): GrabPayload {
-  const noted = entries.map((entry, index) => {
-    const { note: _old, ...rest } = entry;
-    const own = cleanNote(notes[index]);
-    return own ? { ...rest, note: own } : rest;
-  });
-  const overall = cleanNote(note);
-  const content = formatPicks(noted, overall);
-  return overall ? { content, entries: noted, note: overall } : { content, entries: noted };
+/** A payload from the picks and the tray's note. An empty note is left out. */
+export function picksPayload(entries: readonly GrabEntry[], note?: string): GrabPayload {
+  const clean = cleanNote(note);
+  const content = formatPicks(entries, clean);
+  return clean ? { content, entries: [...entries], note: clean } : { content, entries: [...entries] };
 }

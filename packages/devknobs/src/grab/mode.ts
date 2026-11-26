@@ -110,7 +110,7 @@ function onControl(event: Event): boolean {
 /**
  * Grab, on: the element under the pointer gets a box and a label, a click
  * copies it, shift and a click or a drag gather more, and the arrows walk the
- * tree. What is gathered is listed in a tray, with a note for each and one for all.
+ * tree. What is gathered is listed in a tray, with one note for them all.
  * The context of the element under the pointer is worked out while it rests
  * there, so a click can copy it whole in the click itself, as Safari wants.
  * The box goes to an element once the pointer settles on it, and not to those
@@ -142,7 +142,7 @@ export function startMode(options: ModeOptions, page: ModePage = PAGE): Mode {
   let hitTimer = 0;
   let settleTimer = 0;
   let stopped = false;
-  /** The gathered elements, with their notes, while there is one. */
+  /** The gathered elements, with the note, while there is one. */
   let tray: Tray | null = null;
   /** Where the primary button went down on the page, while it is down. */
   let down: Point | null = null;
@@ -184,7 +184,7 @@ export function startMode(options: ModeOptions, page: ModePage = PAGE): Mode {
     const kept = picked.filter((element) => element.isConnected);
     if (kept.length !== picked.length) {
       if (tray) {
-        // The tray drops the row's note too; its onRemove draws again, which takes the next one.
+        // The tray's onRemove draws again, which takes the next one.
         tray.remove(picked.findLastIndex((element) => !element.isConnected));
         return;
       }
@@ -218,7 +218,7 @@ export function startMode(options: ModeOptions, page: ModePage = PAGE): Mode {
     draw();
   }
 
-  /** Take one out, its note with it where the tray has one. */
+  /** Take one out, through the tray where there is one. */
   function unpick(element: Element): void {
     const index = picked.indexOf(element);
     if (index < 0) return;
@@ -255,8 +255,7 @@ export function startMode(options: ModeOptions, page: ModePage = PAGE): Mode {
     const entries = elements.map((element) => ready.get(element) ?? page.quickEntry(element));
     const anchor = elements[elements.length - 1] ?? null;
     overlay.toast(copiedText(elements.length), anchor, true);
-    const notes = tray?.notes();
-    void page.copyGrab(picksPayload(entries, notes?.each, notes?.all)).then((copied) => {
+    void page.copyGrab(picksPayload(entries, tray?.note())).then((copied) => {
       if (!copied) overlay.toast("Copy failed", anchor, false);
     });
     for (const element of elements) warm(element);
@@ -475,9 +474,7 @@ export function startMode(options: ModeOptions, page: ModePage = PAGE): Mode {
     if (tray && plain && !event.shiftKey && !isTyping(event) && letterMatches(event, "n")) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      resolve();
-      const index = current ? picked.indexOf(current) : -1;
-      tray.focusNote(index >= 0 ? index : null);
+      tray.focusNote();
       return;
     }
     if (event.key !== "Enter" && !isCLike(event.key, event.code)) return;
