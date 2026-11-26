@@ -69,6 +69,8 @@ interface FakeTray {
   destroyed: boolean;
 }
 let trays: FakeTray[];
+/** An element the fake tray holds, for keys typed in the tray. */
+const inTray = {} as EventTarget;
 
 function tray(): FakeTray | undefined {
   return trays[trays.length - 1];
@@ -88,7 +90,7 @@ function createTray(options: TrayOptions): Tray {
     },
     notes: () => ({ each: fake.each, all: fake.all }),
     focusNote: (index) => fake.focused.push(index),
-    contains: () => false,
+    contains: (target) => target === inTray,
     destroy: () => {
       fake.destroyed = true;
     },
@@ -188,8 +190,9 @@ function keyup(key: string): void {
   window.dispatchEvent(Object.assign(new Event("keyup"), { key, code: key }));
 }
 
-function press(key: string, shiftKey = false): void {
+function press(key: string, shiftKey = false, target: EventTarget | null = null): void {
   const event = Object.assign(new Event("keydown", { cancelable: true }), {
+    composedPath: () => (target ? [target] : []),
     key,
     code: key,
     shiftKey,
@@ -512,6 +515,28 @@ describe("gathering many", () => {
     expect(texts).toEqual(["1. a\n   Note: make it blue\n2. c\n\nNote: same spacing"]);
     expect(exits).toBe(1);
     expect(fake?.destroyed).toBe(true);
+  });
+
+  test("keys pressed in the tray are left to it", () => {
+    start(50);
+    click(50, true);
+    click(250, true);
+    const before = draws.length;
+    for (const [key, shift] of [
+      ["c", false],
+      ["Enter", false],
+      ["ArrowUp", false],
+      ["Backspace", false],
+      ["n", false],
+      ["Enter", true],
+    ] as const) {
+      press(key, shift, inTray);
+    }
+    expect(copies).toEqual([]);
+    expect(gathered()).toEqual([as(a), as(c)]);
+    expect(draws.length).toBe(before);
+    expect(tray()?.focused).toEqual([]);
+    expect(exits).toBe(0);
   });
 
   test("the tray's copy button copies them all", () => {

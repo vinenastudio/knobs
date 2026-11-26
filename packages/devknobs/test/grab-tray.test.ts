@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { alignNotes, isTrayEvent, TRAY_CSS } from "../src/grab/tray";
+import { alignNotes, TRAY_CSS } from "../src/grab/tray";
 
 describe("alignNotes", () => {
   test("keeps the notes of items that stay", () => {
@@ -24,13 +24,6 @@ describe("alignNotes", () => {
 
   test("ignores a removed index out of range", () => {
     expect(alignNotes(["a", "b"], 5, 2)).toEqual(["a", "b"]);
-  });
-});
-
-describe("isTrayEvent", () => {
-  test("is false with no tray", () => {
-    const event = { composedPath: () => [] } as unknown as Event;
-    expect(isTrayEvent(event)).toBe(false);
   });
 });
 

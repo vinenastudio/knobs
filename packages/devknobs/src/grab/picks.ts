@@ -3,14 +3,6 @@ import type { GrabEntry, GrabPayload } from "./types";
 /** Indent for a note under a numbered element. */
 const NOTE_INDENT = "   ";
 
-/**
- * Shift and a click gather elements, and a click again takes one back out.
- * They are copied together with a plain click, Enter, C or the tray's button.
- */
-export function togglePick<T>(picked: readonly T[], item: T): T[] {
-  return picked.includes(item) ? picked.filter((entry) => entry !== item) : [...picked, item];
-}
-
 /** What a copy takes: the gathered elements, in order, and the one clicked last if it is new. */
 export function flushPicks<T>(picked: readonly T[], clicked: T | null): T[] {
   if (clicked === null || picked.includes(clicked)) return [...picked];

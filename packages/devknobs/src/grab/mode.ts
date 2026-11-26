@@ -9,7 +9,7 @@ import { createNavigator, stepOf } from "./navigate";
 import { createOverlay, HIDE_WAIT, type Overlay } from "./overlay";
 import { copiedText, flushPicks, picksPayload } from "./picks";
 import { elementsInRect, isDrag, type Point, rectFrom } from "./rect";
-import { createTray, isTrayEvent, type Tray, TRAY_CSS } from "./tray";
+import { createTray, type Tray, TRAY_CSS } from "./tray";
 import type { GrabEntry } from "./types";
 import { ownSelector } from "../mark";
 import { letterMatches } from "../ui/keys";
@@ -206,7 +206,6 @@ export function startMode(options: ModeOptions, page: ModePage = PAGE): Mode {
       tray = page.createTray({
         onRemove: (index) => setPicks(picked.filter((_, at) => at !== index)),
         onCopy: () => copy(picked),
-        onEscape: () => undefined,
       });
       overlay.mount(tray.node, TRAY_CSS);
     }
@@ -419,7 +418,7 @@ export function startMode(options: ModeOptions, page: ModePage = PAGE): Mode {
 
   function keydown(event: KeyboardEvent): void {
     // What is typed in the tray is the tray's, its escape too.
-    if (isTrayEvent(event)) return;
+    if (tray?.contains(event.composedPath()[0] ?? null)) return;
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopImmediatePropagation();

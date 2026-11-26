@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { joinEntries } from "../src/grab/context";
-import { copiedText, flushPicks, formatPicks, picksPayload, togglePick } from "../src/grab/picks";
+import { copiedText, flushPicks, formatPicks, picksPayload } from "../src/grab/picks";
 import type { GrabEntry } from "../src/grab/types";
 
 function entry(content: string, note?: string): GrabEntry {
@@ -20,13 +20,6 @@ const SAVE = '[<button class="save"> in Save (at src/App.tsx:5:5) selector: butt
 const LINK = "[<a href=\"/docs\"> in Nav (at src/Nav.tsx:9:3)]";
 
 describe("picks", () => {
-  test("shift and a click gather, and a second one takes it back out", () => {
-    let picked = togglePick<string>([], "a");
-    picked = togglePick(picked, "b");
-    expect(picked).toEqual(["a", "b"]);
-    expect(togglePick(picked, "a")).toEqual(["b"]);
-  });
-
   test("a plain click copies the gathered ones and itself, once", () => {
     expect(flushPicks(["a", "b"], "c")).toEqual(["a", "b", "c"]);
     expect(flushPicks(["a", "b"], "a")).toEqual(["a", "b"]);

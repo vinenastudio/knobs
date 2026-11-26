@@ -113,7 +113,7 @@ export const TRAY_CSS = `
 }
 .tray input::placeholder, .tray textarea::placeholder { color: var(--quiet); }
 .tray input:focus-visible, .tray textarea:focus-visible, .tray button:focus-visible {
-  outline: 2px solid var(--grab, #0a84ff);
+  outline: 1px solid var(--quiet, #a7a7a7);
   outline-offset: -1px;
 }
 .tray button {
@@ -162,8 +162,6 @@ export interface TrayOptions {
   /** A row's remove button was pressed. The tray has dropped its note already. */
   onRemove(index: number): void;
   onCopy(): void;
-  /** Esc in the tray: the field is blurred, back to picking. */
-  onEscape(): void;
 }
 
 export interface Tray {
@@ -186,14 +184,6 @@ export interface Tray {
 export function alignNotes(notes: readonly string[], removed: number | null, length: number): string[] {
   const kept = removed === null ? [...notes] : notes.filter((_, index) => index !== removed);
   return Array.from({ length }, (_, index) => kept[index] ?? "");
-}
-
-const trays = new Set<HTMLElement>();
-
-/** Whether an event happened in a tray, so grab's own keys leave it alone. */
-export function isTrayEvent(event: Event): boolean {
-  if (trays.size === 0) return false;
-  return event.composedPath().some((node) => node instanceof HTMLElement && trays.has(node));
 }
 
 interface Row {
@@ -233,7 +223,6 @@ export function createTray(options: TrayOptions): Tray {
   copy.type = "button";
   foot.append(hint, copy);
   node.append(list, all, foot);
-  trays.add(node);
 
   const rows: Row[] = [];
   let shown = false;
@@ -314,7 +303,6 @@ export function createTray(options: TrayOptions): Tray {
       event.preventDefault();
       event.stopPropagation();
       if (target instanceof HTMLElement) target.blur();
-      options.onEscape();
       return;
     }
     if (event.key === "Enter" && !event.isComposing) {
@@ -333,6 +321,12 @@ export function createTray(options: TrayOptions): Tray {
     if (isField(event.composedPath()[0] ?? null)) event.stopPropagation();
   }
 
+  /** A press on a button keeps the focus where it was, so grab's keys stay grab's. */
+  function onPress(event: MouseEvent): void {
+    if (!isField(event.composedPath()[0] ?? null)) event.preventDefault();
+  }
+
+  node.addEventListener("mousedown", onPress);
   node.addEventListener("keydown", onKey);
   node.addEventListener("keyup", onType);
   node.addEventListener("keypress", onType);
@@ -354,7 +348,7 @@ export function createTray(options: TrayOptions): Tray {
       return target instanceof Node && node.contains(target);
     },
     destroy() {
-      trays.delete(node);
+      node.removeEventListener("mousedown", onPress);
       node.removeEventListener("keydown", onKey);
       node.removeEventListener("keyup", onType);
       node.removeEventListener("keypress", onType);
