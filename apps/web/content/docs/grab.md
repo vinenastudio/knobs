@@ -3,7 +3,7 @@ title: grab and inspect
 meta_title: Grab and inspect elements for a coding agent with knobs
 description: Grab any element on the page and copy its html, the components that rendered it and their source files for a coding agent, or inspect its box and css.
 order: 5
-updated: 2026-11-05
+updated: 2026-11-26
 ---
 
 ## grab
@@ -17,9 +17,21 @@ the components that rendered it and where they live go on the clipboard:
 
 paste that into your agent and it can find the code.
 
-- shift and a click gather several elements, one line each.
-- the arrows move to the parent, a child or a sibling. enter or `c` copies.
+- drag a box, or shift and a click, to gather several elements. each gets a
+  number, and a tray at the bottom lists them, with a note for each and one
+  for all. `n` writes a note.
+- enter, `c` or the tray's copy button copies them all, numbered, each note
+  under its element.
+- the arrows move to the parent, a child or a sibling.
 - escape or `⇧G` again turns grab off.
+
+```
+1. [<button type="button">Save</button> in SaveButton (at src/App.jsx:5:5)]
+   Note: make it blue
+2. [<a href="/docs">Docs</a> in Nav (at src/Nav.jsx:12:9)]
+
+Note: same spacing for all of these
+```
 
 for a file, a line and a column on every component, React needs a devtools
 hook from its first render: the React devtools extension, or the
