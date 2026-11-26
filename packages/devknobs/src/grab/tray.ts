@@ -24,7 +24,7 @@ export const TRAY_CSS = `
   flex-direction: column;
   gap: 6px;
   box-sizing: border-box;
-  width: min(380px, calc(100vw - 32px));
+  width: min(320px, calc(100vw - 32px));
   max-height: 40vh;
   padding: 6px;
   transform: translateX(-50%);
@@ -97,14 +97,19 @@ export const TRAY_CSS = `
   all: unset;
   display: block;
   box-sizing: border-box;
+  flex: none;
   width: 100%;
+  min-height: 24px;
+  max-height: 136px;
   padding: 4px 6px;
+  overflow-y: auto;
+  field-sizing: content;
   color: inherit;
   background: var(--field);
   border-radius: 8px;
   font: inherit;
   white-space: pre-wrap;
-  resize: none;
+  resize: vertical;
 }
 .tray textarea::placeholder { color: var(--quiet); }
 .tray textarea:focus-visible, .tray button:focus-visible {
@@ -132,9 +137,6 @@ export const TRAY_CSS = `
 .tray .hint {
   flex: 1 1 auto;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--quiet);
   font-size: 11px;
 }
@@ -197,7 +199,13 @@ export function createTray(options: TrayOptions): Tray {
   node.setAttribute("aria-label", "Picked elements");
   const list = element("div", "list");
   const note = element("textarea");
-  note.rows = 2;
+  note.rows = 1;
+  if (typeof CSS === "undefined" || !CSS.supports("field-sizing", "content")) {
+    note.addEventListener("input", () => {
+      note.style.height = "auto";
+      note.style.height = `${note.scrollHeight}px`;
+    });
+  }
   note.placeholder = "Note";
   note.setAttribute("aria-label", "Note");
   const foot = element("div", "foot");
