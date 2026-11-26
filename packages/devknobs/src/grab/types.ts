@@ -45,12 +45,16 @@ export interface GrabEntry {
   source: ResolvedSource | null;
   stackContext: string;
   frames: GrabFrame[];
+  /** What the user wrote about this element in the tray, trimmed. Left out when empty. */
+  note?: string;
 }
 
 export interface GrabPayload {
-  /** Every entry's line, one per line. */
+  /** Every entry's line, one per line, numbered with their notes when there is more than one or a note. */
   content: string;
   entries: GrabEntry[];
+  /** The tray's note for all the elements, trimmed. Left out when empty. */
+  note?: string;
 }
 
 /** What `grab` hands back: the payload, and whether it reached the clipboard. */

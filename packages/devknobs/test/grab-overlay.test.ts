@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
+  BADGE,
+  badgeOffset,
   type BoxParts,
   boxParts,
   boxRadius,
@@ -7,6 +9,7 @@ import {
   labelPlace,
   LERP,
   parseRadius,
+  pickNumber,
   snap,
   TOAST_TIME,
   tweenStep,
@@ -246,5 +249,34 @@ describe("CSS", () => {
     for (const [, , body] of part) expect(body).not.toContain("will-change");
     const glide = rules.find(([, selector]) => selector?.trim() === ".glide");
     expect(glide?.[2]).toContain("will-change: transform");
+  });
+
+  test("draws a gathered box's number round, in grab's color, on figures of one width", () => {
+    const num = [...CSS.matchAll(/([^{}]+)\{([^}]*)\}/g)].find(([, selector]) => selector?.trim() === ".pick-num");
+    expect(num?.[2]).toContain(`min-width: ${BADGE}px`);
+    expect(num?.[2]).toContain(`border-radius: ${BADGE / 2}px`);
+    expect(num?.[2]).toContain("background: var(--grab)");
+    expect(num?.[2]).toContain("font-variant-numeric: tabular-nums");
+  });
+
+  test("fades the boxes and the drag's rectangle in, and not at all with reduced motion", () => {
+    expect(CSS).toMatch(/\.pick, \.marquee \{ animation: appear 120ms ease-out; \}/);
+    expect(CSS).toContain(".layer[data-still] * { transition: none; animation: none; }");
+  });
+});
+
+describe("gathered numbers", () => {
+  test("count from one in the order they were picked", () => {
+    expect(["a", "b", "c"].map((_, index) => pickNumber(index))).toEqual(["1", "2", "3"]);
+  });
+
+  test("sit out over the box's top left corner", () => {
+    expect(badgeOffset({ left: 100, top: 80 })).toEqual({ x: -12, y: -12 });
+  });
+
+  test("come in as far as they must to stay in the window", () => {
+    expect(badgeOffset({ left: 4, top: 100 })).toEqual({ x: -4, y: -12 });
+    expect(badgeOffset({ left: 100, top: 5 })).toEqual({ x: -12, y: -5 });
+    expect(badgeOffset({ left: -30, top: -5 })).toEqual({ x: 30, y: 5 });
   });
 });

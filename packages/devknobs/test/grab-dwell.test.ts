@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import { DWELL, SLOW, settles, speedOf } from "../src/grab/dwell";
 import { type Mode, type ModePage, startMode } from "../src/grab/mode";
 import type { Overlay } from "../src/grab/overlay";
+import type { PageRect } from "../src/grab/rect";
+import type { Tray, TrayOptions } from "../src/grab/tray";
 import type { GrabEntry } from "../src/grab/types";
 import { as, type FakeElement, node } from "./grab-tree";
 
@@ -50,8 +52,50 @@ let draws: { element: Element | null; tag: string; picked: Element[] }[];
 let toasts: (Element | null)[];
 let warmed: Element[];
 let copies: string[][];
+/** The text of each copy. */
+let texts: string[];
+/** Each drag rectangle the overlay was told to draw, null where it was taken away. */
+let marquees: (PageRect | null)[];
 let exits: number;
 let mode: Mode | null = null;
+
+/** A tray as the mode sees it: what it lists, the notes typed in it, and where the focus went. */
+interface FakeTray {
+  options: TrayOptions;
+  items: string[];
+  each: string[];
+  all: string;
+  focused: (number | null)[];
+  destroyed: boolean;
+}
+let trays: FakeTray[];
+/** An element the fake tray holds, for keys typed in the tray. */
+const inTray = new EventTarget();
+
+function tray(): FakeTray | undefined {
+  return trays[trays.length - 1];
+}
+
+function createTray(options: TrayOptions): Tray {
+  const fake: FakeTray = { options, items: [], each: [], all: "", focused: [], destroyed: false };
+  trays.push(fake);
+  return {
+    node: {} as HTMLElement,
+    update: (items) => {
+      fake.items = items.map((item) => item.label.tag);
+    },
+    remove: (index) => {
+      fake.each = fake.each.filter((_, at) => at !== index);
+      options.onRemove(index);
+    },
+    notes: () => ({ each: fake.each, all: fake.all }),
+    focusNote: (index) => fake.focused.push(index),
+    contains: (target) => target === inTray,
+    destroy: () => {
+      fake.destroyed = true;
+    },
+  };
+}
 
 function entryOf(element: Element): GrabEntry {
   const tagName = element.tagName.toLowerCase();
@@ -62,6 +106,8 @@ const overlay: Overlay = {
   draw: (element, label, picked) => draws.push({ element, tag: label.tag, picked }),
   point: () => undefined,
   toast: (_text, near) => toasts.push(near),
+  marquee: (rect) => marquees.push(rect),
+  mount: () => undefined,
   destroy: () => undefined,
 };
 
@@ -69,9 +115,14 @@ const page: ModePage = {
   componentOf: () => null,
   copyGrab: async (payload) => {
     copies.push(payload.entries.map((entry) => entry.tagName));
+    texts.push(payload.content);
     return true;
   },
   createOverlay: () => overlay,
+  createTray,
+  // Each element is 100 px wide from the left, and the whole of it must be in the drag.
+  elementsInRect: (_doc, rect) =>
+    laid.filter((_, index) => rect.left <= index * 100 && rect.right >= index * 100 + 100).map(as),
   grabEntry: async (element) => {
     warmed.push(element);
     return entryOf(element);
@@ -114,11 +165,37 @@ function click(x: number, shiftKey = false): void {
   window.dispatchEvent(event);
 }
 
-function press(key: string): void {
+function pointer(type: string, x: number): void {
+  const event = Object.assign(new Event(type, { cancelable: true }), {
+    isPrimary: true,
+    button: 0,
+    clientX: x,
+    clientY: 10,
+  });
+  window.dispatchEvent(event);
+}
+
+/** Press at one x, go to the other in steps, let go there, and the click that follows. */
+function drag(from: number, to: number): void {
+  pointer("pointerdown", from);
+  for (let step = 1; step <= 4; step++) {
+    wait(40);
+    move(from + ((to - from) * step) / 4);
+  }
+  pointer("pointerup", to);
+  click(to);
+}
+
+function keyup(key: string): void {
+  window.dispatchEvent(Object.assign(new Event("keyup"), { key, code: key }));
+}
+
+function press(key: string, shiftKey = false, target: EventTarget | null = null): void {
   const event = Object.assign(new Event("keydown", { cancelable: true }), {
+    composedPath: () => (target ? [target] : []),
     key,
     code: key,
-    shiftKey: false,
+    shiftKey,
     metaKey: false,
     ctrlKey: false,
     altKey: false,
@@ -151,6 +228,9 @@ beforeEach(() => {
   toasts = [];
   warmed = [];
   copies = [];
+  texts = [];
+  marquees = [];
+  trays = [];
   exits = 0;
   const style = { setAttribute: () => undefined, remove: () => undefined, textContent: "" };
   Object.defineProperty(globalThis, "window", {
@@ -309,5 +389,161 @@ describe("a click or a key while the box waits", () => {
     expect(shown()).toEqual([as(a)]);
     expect(warmed).toEqual([]);
     expect(jest.getTimerCount()).toBe(0);
+  });
+});
+
+/** What is gathered, as the overlay was last told. */
+function gathered(): Element[] {
+  return draws[draws.length - 1]?.picked ?? [];
+}
+
+describe("gathering many", () => {
+  test("one element with no notes copies its line alone", () => {
+    start(50);
+    click(50);
+    expect(texts).toEqual(["a"]);
+  });
+
+  test("letting go of shift copies nothing", () => {
+    start(50);
+    click(50, true);
+    keyup("Shift");
+    expect(copies).toEqual([]);
+    expect(exits).toBe(0);
+    expect(gathered()).toEqual([as(a)]);
+  });
+
+  test("a drag gathers what it went around, after what was gathered, and copies nothing", () => {
+    start(250);
+    click(250, true);
+    drag(0, 205);
+    expect(gathered()).toEqual([as(c), as(a), as(b)]);
+    expect(tray()?.items).toEqual(["c", "a", "b"]);
+    expect(copies).toEqual([]);
+    expect(exits).toBe(0);
+    expect(marquees.length).toBeGreaterThan(1);
+    expect(marquees[marquees.length - 1]).toBeNull();
+    expect(warmed).toEqual(expect.arrayContaining([as(a), as(b)]));
+  });
+
+  test("a drag over gathered elements keeps them as they were", () => {
+    start(50);
+    click(50, true);
+    drag(0, 205);
+    expect(gathered()).toEqual([as(a), as(b)]);
+  });
+
+  test("the box is not shown while a drag is drawn", () => {
+    start(50);
+    pointer("pointerdown", 0);
+    wait(40);
+    move(150);
+    expect(boxed()).toBeNull();
+    wait(500);
+    expect(boxed()).toBeNull();
+  });
+
+  test("shift and enter gather the boxed element, and take it back out", () => {
+    start(50);
+    press("Enter", true);
+    expect(gathered()).toEqual([as(a)]);
+    expect(tray()?.items).toEqual(["a"]);
+    press("Enter", true);
+    expect(gathered()).toEqual([]);
+    expect(tray()?.destroyed).toBe(true);
+    expect(copies).toEqual([]);
+  });
+
+  test("backspace takes the boxed element out, and its note with it", () => {
+    start(50);
+    click(50, true);
+    wait(40);
+    move(250);
+    click(250, true);
+    const fake = tray();
+    if (fake) fake.each = ["", "for c"];
+    press("Backspace");
+    expect(gathered()).toEqual([as(a)]);
+    expect(fake?.each).toEqual([""]);
+    expect(copies).toEqual([]);
+  });
+
+  test("a gathered element taken off the page loses its own note, and the others keep theirs", () => {
+    start(50);
+    click(50, true);
+    click(150, true);
+    click(250, true);
+    const fake = tray();
+    expect(fake?.items).toEqual(["a", "b", "c"]);
+    if (fake) fake.each = ["for a", "for b", "for c"];
+    a.isConnected = false;
+    c.isConnected = false;
+    wait(40);
+    move(150);
+    wait(40);
+    move(150);
+    expect(gathered()).toEqual([as(b)]);
+    expect(fake?.items).toEqual(["b"]);
+    expect(fake?.each).toEqual(["for b"]);
+  });
+
+  test("n writes a note for the boxed element, or for all", () => {
+    start(50);
+    click(50, true);
+    wait(40);
+    move(250);
+    click(250, true);
+    press("n");
+    expect(tray()?.focused).toEqual([1]);
+    move(150);
+    wait(40);
+    press("n");
+    expect(tray()?.focused).toEqual([1, null]);
+  });
+
+  test("a copy carries the notes, numbered", () => {
+    start(50);
+    click(50, true);
+    click(250, true);
+    const fake = tray();
+    if (fake) {
+      fake.each = ["make it blue", " "];
+      fake.all = "same spacing";
+    }
+    press("Enter");
+    expect(copies).toEqual([["a", "c"]]);
+    expect(texts).toEqual(["1. a\n   Note: make it blue\n2. c\n\nNote: same spacing"]);
+    expect(exits).toBe(1);
+    expect(fake?.destroyed).toBe(true);
+  });
+
+  test("keys pressed in the tray are left to it", () => {
+    start(50);
+    click(50, true);
+    click(250, true);
+    const before = draws.length;
+    for (const [key, shift] of [
+      ["c", false],
+      ["Enter", false],
+      ["ArrowUp", false],
+      ["Backspace", false],
+      ["n", false],
+      ["Enter", true],
+    ] as const) {
+      press(key, shift, inTray);
+    }
+    expect(copies).toEqual([]);
+    expect(gathered()).toEqual([as(a), as(c)]);
+    expect(draws.length).toBe(before);
+    expect(tray()?.focused).toEqual([]);
+    expect(exits).toBe(0);
+  });
+
+  test("the tray's copy button copies them all", () => {
+    start(50);
+    click(50, true);
+    click(250, true);
+    tray()?.options.onCopy();
+    expect(copies).toEqual([["a", "c"]]);
   });
 });

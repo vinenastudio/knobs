@@ -33,6 +33,8 @@ const overlay: Overlay = {
   toast: () => {
     toasts++;
   },
+  marquee: () => undefined,
+  mount: () => undefined,
   destroy: () => {
     overlays--;
   },
@@ -48,6 +50,12 @@ const page: ModePage = {
     asked.push([quiet, model]);
     overlays++;
     return overlay;
+  },
+  createTray: () => {
+    throw new Error("inspect gathers nothing");
+  },
+  elementsInRect: () => {
+    throw new Error("inspect has no drag");
   },
   grabEntry: async (element) => {
     warmed.push(element);

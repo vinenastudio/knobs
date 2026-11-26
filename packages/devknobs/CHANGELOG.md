@@ -1,5 +1,12 @@
 # changelog
 
+## Unreleased
+
+- grab gathers many elements: drag a box around them, or shift and a click. each shows its number
+- a tray lists what is gathered, with a note for each and one for all. `n` writes a note, enter, `c` or the tray's button copies them all
+- more than one element, or a note, copies numbered, each note under its element and the note for all last
+- letting go of shift no longer copies
+
 ## 0.7.5
 
 - the page under Safari's bottom bar lines up with the page above it on pages that pin a section while they scroll, and on any page with a viewport length in a class name, such as Tailwind's `h-[260svh]`

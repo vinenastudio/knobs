@@ -65,6 +65,12 @@ const CARD_WIDTH = 264;
 const CARD_HEIGHT = 180;
 /** The most characters of an element's name on the card. A longer one is cut in its middle. */
 const NAME_MAX = 26;
+/** How long a gathered box, its number and the drag's rectangle take to come in, in ms. */
+const APPEAR = 120;
+/** How tall a gathered box's number is, and the least it is wide, in px. */
+export const BADGE = 18;
+/** How far a number sits out from its box's top left corner, in px, so it covers little of the element. */
+const BADGE_OUT = 12;
 
 /** How solid two layers of one color are, the first over the second, each in percent. */
 function over(top: number, under: number): number {
@@ -168,6 +174,38 @@ ${colorRules("p3")}
   background: color-mix(in srgb, var(--grab) 5%, transparent);
   transition: border-color ${FADE}ms ease-out, background-color ${FADE}ms ease-out;
 }
+.pick, .marquee { animation: appear ${APPEAR}ms ease-out; }
+.pick.preview {
+  border-color: color-mix(in srgb, var(--grab) 20%, transparent);
+  background: color-mix(in srgb, var(--grab) 3%, transparent);
+}
+.pick-num {
+  position: absolute;
+  top: 0;
+  left: 0;
+  min-width: ${BADGE}px;
+  height: ${BADGE}px;
+  box-sizing: border-box;
+  padding: 0 5px;
+  border-radius: ${BADGE / 2}px;
+  color: #ffffff;
+  background: var(--grab);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 40%), 0 1px 3px rgb(0 0 0 / 24%);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: ${BADGE}px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.marquee {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  border: 1px dashed var(--grab);
+  background: color-mix(in srgb, var(--grab) 6%, transparent);
+}
+@keyframes appear { from { opacity: 0; } }
 .tint {
   position: absolute;
   inset: 0;
@@ -260,7 +298,7 @@ ${RINGS.map((ring) => `.tint.${ring} { background: ${boxTint(ring)}; }`).join("\
 .card .mark { flex: none; display: grid; overflow: visible; }
 .card .mark.fail { color: var(--quiet); }
 .layer [hidden] { display: none; }
-.layer[data-still] * { transition: none; }
+.layer[data-still] * { transition: none; animation: none; }
 `;
 
 function clamp(value: number, low: number, high: number): number {
@@ -320,6 +358,20 @@ export function cardPlace(
 ): { x: number; y: number } {
   const { y } = labelPlace(box, card, view, null);
   return { x: clamp(box.left, MARGIN, view.width - card.width - MARGIN), y };
+}
+
+/**
+ * Where a gathered box's number goes from the box's top left corner: out
+ * over the corner, so it covers little of the element, and in as far as it
+ * must to stay in the window.
+ */
+export function badgeOffset(box: { left: number; top: number }): { x: number; y: number } {
+  return { x: Math.max(-BADGE_OUT, -box.left), y: Math.max(-BADGE_OUT, -box.top) };
+}
+
+/** The number a gathered box shows, at `index` in the order they were picked. */
+export function pickNumber(index: number): string {
+  return String(index + 1);
 }
 
 /** The first px length of a computed `border-radius`, or 0 where it has none. */
@@ -436,6 +488,13 @@ export interface Overlay {
    * with the check, and goes with the toast.
    */
   toast(text: string, near: Element | null, check: boolean): void;
+  /**
+   * Draw a drag's rectangle, in the window's px, and a light box on each
+   * element it would gather. Null takes both away.
+   */
+  marquee(rect: { left: number; top: number; right: number; bottom: number } | null, preview: Element[]): void;
+  /** Put a node of another part of grab on the layer, over all of it, with its own styles. It goes with the layer. */
+  mount(node: HTMLElement, css?: string): void;
   /** Fade out and go, once a toast is over where there is one. */
   destroy(): void;
 }
@@ -563,6 +622,17 @@ export function createOverlay(quiet = false, model = false): BoxOverlay {
     label.append(head, card.rows);
   } else label.append(check, tag, name);
   const picks: HTMLElement[] = [];
+  /** The number on each gathered box, by the same index. */
+  const nums: HTMLElement[] = [];
+  /** The light boxes on what a drag would gather. */
+  const previews: HTMLElement[] = [];
+  const frameNode = document.createElement("div");
+  frameNode.className = "marquee";
+  frameNode.hidden = true;
+  /** What other parts of grab put on the layer. */
+  const mounted: HTMLElement[] = [];
+  /** Their styles, each put on the layer once. */
+  const mountedCss = new Set<string>();
   /** The areas of the box, under the box's own line. */
   const tints = (model ? RINGS : []).map((ring) => {
     const node = document.createElement("div");
@@ -570,7 +640,7 @@ export function createOverlay(quiet = false, model = false): BoxOverlay {
     layer.append(node);
     return { ring, node };
   });
-  layer.append(glow, glide, tip);
+  layer.append(glow, frameNode, glide, tip);
   root.append(layer);
   (document.body ?? document.documentElement).append(host);
   // In the top layer, so it boxes what is in the page's dialogs and popovers too, and under the panel.
@@ -596,6 +666,10 @@ export function createOverlay(quiet = false, model = false): BoxOverlay {
   let picked: Element[] = [];
   /** Where each gathered element was last read, or null for one that is gone. */
   let shapes: (Shape | null)[] = [];
+  /** The drag's rectangle, and what it would gather with where each was last read. */
+  let rect: { left: number; top: number; right: number; bottom: number } | null = null;
+  let previewed: Element[] = [];
+  let previewShapes: (Shape | null)[] = [];
   let at: readonly number[] | null = null;
   let target: Shape | null = null;
   let labelAt: readonly number[] | null = null;
@@ -648,7 +722,8 @@ export function createOverlay(quiet = false, model = false): BoxOverlay {
       if (isCustomColor(name)) layer.style.setProperty("--grab", name);
       else layer.style.removeProperty("--grab");
     }
-    if (bar && label.dataset.bar !== bar) label.dataset.bar = bar;
+    if (!bar) return;
+    for (const node of [label, ...mounted]) if (node.dataset.bar !== bar) node.dataset.bar = bar;
   }
 
   function schedule(): void {
@@ -656,7 +731,7 @@ export function createOverlay(quiet = false, model = false): BoxOverlay {
   }
 
   function sync(): void {
-    if (!element && picked.length === 0) return;
+    if (!element && picked.length === 0 && previewed.length === 0) return;
     stale = true;
     schedule();
   }
@@ -676,18 +751,51 @@ export function createOverlay(quiet = false, model = false): BoxOverlay {
     return [rect.left, rect.top, rect.width, rect.height, radius];
   }
 
+  /** The gathered boxes, each with its number, and the light ones of a drag, which have none. */
   function drawPicks(ratio: number): void {
     while (picks.length < shapes.length) {
       const node = document.createElement("div");
       node.className = "pick";
+      const num = document.createElement("span");
+      num.className = "pick-num";
+      node.append(num);
       layer.insertBefore(node, glide);
       picks.push(node);
+      nums.push(num);
+    }
+    while (previews.length < previewShapes.length) {
+      const node = document.createElement("div");
+      node.className = "pick preview";
+      layer.insertBefore(node, glide);
+      previews.push(node);
     }
     picks.forEach((node, index) => {
       const shape = shapes[index] ?? null;
       if (node.hidden !== (shape === null)) node.hidden = shape === null;
+      if (!shape) return;
+      place(node, shape, ratio);
+      const num = nums[index];
+      if (!num) return;
+      const said = pickNumber(index);
+      if (num.textContent !== said) num.textContent = said;
+      const off = badgeOffset({ left: shape[0], top: shape[1] });
+      write(num, "transform", `translate(${off.x}px, ${off.y}px)`);
+    });
+    previews.forEach((node, index) => {
+      const shape = previewShapes[index] ?? null;
+      if (node.hidden !== (shape === null)) node.hidden = shape === null;
       if (shape) place(node, shape, ratio);
     });
+  }
+
+  function drawMarquee(): void {
+    if (frameNode.hidden !== (rect === null)) frameNode.hidden = rect === null;
+    if (!rect) return;
+    const left = Math.min(rect.left, rect.right);
+    const top = Math.min(rect.top, rect.bottom);
+    write(frameNode, "transform", `translate(${left}px, ${top}px)`);
+    write(frameNode, "width", `${Math.abs(rect.right - rect.left)}px`);
+    write(frameNode, "height", `${Math.abs(rect.bottom - rect.top)}px`);
   }
 
   function drawBox(parts: BoxParts): void {
@@ -752,6 +860,7 @@ export function createOverlay(quiet = false, model = false): BoxOverlay {
   function measure(): void {
     if (element && !element.isConnected) element = null;
     shapes = picked.map((pick) => (pick.isConnected ? shapeOf(pick) : null));
+    previewShapes = previewed.map((one) => (one.isConnected ? shapeOf(one) : null));
     if (model) measureBox();
     if (element || toasting) {
       const { theme, grab } = read(element);
@@ -825,6 +934,7 @@ export function createOverlay(quiet = false, model = false): BoxOverlay {
       paint();
       drawPicks(ratio);
     }
+    drawMarquee();
     box.classList.toggle("on", shown);
     label.classList.toggle("toast", toasting);
     label.classList.toggle("on", shown || toasting);
@@ -957,14 +1067,40 @@ export function createOverlay(quiet = false, model = false): BoxOverlay {
       only = ring;
       schedule();
     },
+    marquee(next, preview) {
+      if (closing) return;
+      rect = next;
+      const list = next ? preview : [];
+      if (list.length !== previewed.length || list.some((one, index) => one !== previewed[index])) {
+        previewed = list;
+        stale = true;
+      }
+      schedule();
+    },
+    mount(node, css) {
+      if (closing) return;
+      if (css && !mountedCss.has(css)) {
+        mountedCss.add(css);
+        addStyle(root, css);
+      }
+      if (bar) node.dataset.bar = bar;
+      for (let at = mounted.length - 1; at >= 0; at--) if (!mounted[at]?.isConnected) mounted.splice(at, 1);
+      layer.append(node);
+      mounted.push(node);
+    },
     destroy() {
       if (closing) return;
       closing = true;
       clearTimeout(hideTimer);
       glow.classList.remove("on");
+      for (const node of mounted.splice(0)) node.remove();
       picked = [];
       shapes = [];
+      rect = null;
+      previewed = [];
+      previewShapes = [];
       drawPicks(1);
+      drawMarquee();
       if (toasting) return;
       hide();
       fadeTimer = window.setTimeout(remove, fade());

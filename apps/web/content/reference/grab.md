@@ -40,13 +40,44 @@ while it is on:
 - a click copies the element, and grab ends. the page's own click, mouse and
   pointer handlers never hear of it, and its hover handlers neither.
 - shift and a click gather elements, lighter boxes, and a second one takes one
-  back out. letting go of shift, or a click without it, copies them all, one
-  line each.
+  back out. `⇧↩` (`Shift Enter` off a Mac) gathers the boxed element or takes
+  it back out, and backspace or delete takes it out. letting go of shift copies
+  nothing: what is gathered stays until a copy, escape or its removal.
+- drag a box on the page, with shift or without, to gather every element fully
+  inside it: the outermost ones, in page order, 30 at most. those it would take
+  show lighter boxes while you drag. ones gathered before stay, and a drag
+  never copies. knobs' own ui, hidden elements, shadow roots and frames are
+  left out.
+- each gathered element shows its number, 1, 2, 3 in the order it was
+  gathered, in a badge at its box's top left. the numbers close up when one
+  goes.
+- a tray at the bottom of the window lists them: the number, the tag and the
+  component, a one-line note and a remove button. under the list are a note
+  for all and a "Copy N" button. `n` writes the boxed element's note where it
+  is gathered, or else the note for all. enter in a note, or `⌘↩` (`Ctrl
+Enter` off a Mac) anywhere, copies. escape in the tray goes back to picking,
+  and what is typed in it never moves the box or copies.
+- a click without shift, enter, `c` or the tray's button copies them all, the
+  clicked one last where it is new, and grab ends.
 - up goes to the parent, down back the way it came or to the first child, left
   and right (and tab, shift-tab) to the previous and the next element, siblings
   first, then the sibling of the nearest parent that has one. enter or `c`
   copies.
 - a check and "Copied" show by the element for a moment, the box still on it.
+
+one element with no notes copies as its line alone. more than one, or a note,
+and each element is numbered, its note on the next line under it, and the note
+for all goes last after a blank line. empty notes are left out:
+
+```
+1. [<button type="button">Save</button> in SaveButton (at src/App.jsx:5:5)]
+   Note: make it blue
+2. [<a href="/docs">Docs</a> in Nav (at src/Nav.jsx:12:9)]
+
+Note: same spacing for all of these
+```
+
+the json carries each element's `note`, and the note for all as `note`.
 
 the context of the element under the pointer is worked out while the pointer
 rests there, so a click copies it whole, inside the click, as Safari wants.
