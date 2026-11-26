@@ -3,8 +3,8 @@
 ## Unreleased
 
 - grab gathers many elements: drag a box around them, or shift and a click. each shows its number
-- a tray lists what is gathered, with a note for each and one for all. `n` writes a note, enter, `c` or the tray's button copies them all
-- more than one element, or a note, copies numbered, each note under its element and the note for all last
+- a tray lists what is gathered, with one note for them all. it wears the page's theme. `n` writes the note, enter, `c` or the tray's button copies them all
+- more than one element, or a note, copies numbered, the note last
 - letting go of shift no longer copies
 
 ## 0.7.5
