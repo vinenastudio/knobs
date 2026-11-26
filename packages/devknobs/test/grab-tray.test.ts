@@ -21,6 +21,7 @@ describe("TRAY_CSS", () => {
 
   test("grows the note with its text up to a cap, and lets it be dragged taller", () => {
     expect(TRAY_CSS).toContain("field-sizing: content;");
+    expect(TRAY_CSS).toContain("min-height: 40px;");
     expect(TRAY_CSS).toContain("max-height: 136px;");
     expect(TRAY_CSS).toContain("resize: vertical;");
     expect(TRAY_CSS).not.toContain("resize: none;");
