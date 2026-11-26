@@ -6,8 +6,8 @@ const SHOW = 150;
 
 /**
  * The tray of gathered elements, at the bottom of the window inside grab's
- * layer. It goes by the page as the label does: dark by default, light where
- * the overlay sets `data-bar="light"` on it.
+ * layer. It wears the page's own theme, not the label's inverted one: dark by
+ * default, light where the overlay sets `data-page="light"` on it.
  */
 export const TRAY_CSS = `
 .tray {
@@ -37,7 +37,7 @@ export const TRAY_CSS = `
   font-size: 13px;
   line-height: 16px;
 }
-.tray[data-bar="light"] {
+.tray[data-page="light"] {
   --bar: #ffffff;
   --quiet: #737373;
   --rim: rgb(0 0 0 / 10%);
@@ -56,6 +56,7 @@ export const TRAY_CSS = `
 .layer[data-still] .tray { animation: none; }
 .tray .list {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 2px;
   min-height: 0;
   overflow-y: auto;
@@ -85,34 +86,28 @@ export const TRAY_CSS = `
   font-variant-numeric: tabular-nums;
 }
 .tray .name {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
-  max-width: 45%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .tray .name .tag { color: var(--quiet); }
-.tray input, .tray textarea {
+.tray textarea {
   all: unset;
+  display: block;
   box-sizing: border-box;
-  min-width: 0;
+  width: 100%;
   padding: 4px 6px;
   color: inherit;
   background: var(--field);
-  border-radius: 4px;
-  font: inherit;
-}
-.tray input { flex: 1 1 auto; height: 24px; }
-.tray textarea {
-  display: block;
-  width: 100%;
   border-radius: 8px;
+  font: inherit;
   white-space: pre-wrap;
   resize: none;
 }
-.tray input::placeholder, .tray textarea::placeholder { color: var(--quiet); }
-.tray input:focus-visible, .tray textarea:focus-visible, .tray button:focus-visible {
+.tray textarea::placeholder { color: var(--quiet); }
+.tray textarea:focus-visible, .tray button:focus-visible {
   outline: 1px solid var(--quiet, #a7a7a7);
   outline-offset: -1px;
 }
@@ -159,7 +154,7 @@ export interface TrayItem {
 }
 
 export interface TrayOptions {
-  /** A row's remove button was pressed. The tray has dropped its note already. */
+  /** A row's remove button was pressed. */
   onRemove(index: number): void;
   onCopy(): void;
 }
@@ -167,23 +162,13 @@ export interface TrayOptions {
 export interface Tray {
   node: HTMLElement;
   update(items: TrayItem[]): void;
-  /** Take a row out as its remove button does: its note goes, and `onRemove` is told. */
+  /** Take a row out as its remove button does: `onRemove` is told. */
   remove(index: number): void;
-  /** Each row's note and the overall one, as typed. */
-  notes(): { each: string[]; all: string };
-  /** Focus a row's note, or with null the overall note. */
-  focusNote(index: number | null): void;
+  /** The note, as typed. */
+  note(): string;
+  focusNote(): void;
   contains(target: EventTarget | null): boolean;
   destroy(): void;
-}
-
-/**
- * The notes kept when the list changes: the one at `removed` dropped, then
- * cut or filled with empty ones to `length`.
- */
-export function alignNotes(notes: readonly string[], removed: number | null, length: number): string[] {
-  const kept = removed === null ? [...notes] : notes.filter((_, index) => index !== removed);
-  return Array.from({ length }, (_, index) => kept[index] ?? "");
 }
 
 interface Row {
@@ -191,7 +176,6 @@ interface Row {
   num: HTMLElement;
   tag: HTMLElement;
   name: HTMLElement;
-  input: HTMLInputElement;
   remove: HTMLButtonElement;
   key: string;
 }
@@ -202,8 +186,8 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = ""):
   return node;
 }
 
-function isField(target: EventTarget | null): target is HTMLInputElement | HTMLTextAreaElement {
-  return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+function isField(target: EventTarget | null): target is HTMLTextAreaElement {
+  return target instanceof HTMLTextAreaElement;
 }
 
 export function createTray(options: TrayOptions): Tray {
@@ -212,17 +196,17 @@ export function createTray(options: TrayOptions): Tray {
   node.setAttribute("role", "region");
   node.setAttribute("aria-label", "Picked elements");
   const list = element("div", "list");
-  const all = element("textarea");
-  all.rows = 2;
-  all.placeholder = "Note for all";
-  all.setAttribute("aria-label", "Note for all");
+  const note = element("textarea");
+  note.rows = 2;
+  note.placeholder = "Note";
+  note.setAttribute("aria-label", "Note");
   const foot = element("div", "foot");
   const hint = element("div", "hint");
   hint.textContent = "⇧ click or drag to add · n note · ↩ copy · esc";
   const copy = element("button", "copy");
   copy.type = "button";
   foot.append(hint, copy);
-  node.append(list, all, foot);
+  node.append(list, note, foot);
 
   const rows: Row[] = [];
   let shown = false;
@@ -233,30 +217,18 @@ export function createTray(options: TrayOptions): Tray {
       num: element("span", "num"),
       tag: element("span", "tag"),
       name: element("span", "name"),
-      input: element("input"),
       remove: element("button", "remove"),
       key: "",
     };
-    row.input.type = "text";
-    row.input.placeholder = "Note";
-    row.input.spellcheck = false;
     row.remove.type = "button";
     row.remove.textContent = "×";
     row.remove.addEventListener("click", () => removeAt(rows.indexOf(row)));
-    row.node.append(row.num, row.name, row.input, row.remove);
+    row.node.append(row.num, row.name, row.remove);
     return row;
   }
 
   function removeAt(index: number): void {
     if (index < 0 || index >= rows.length) return;
-    const notes = alignNotes(
-      rows.map((each) => each.input.value),
-      index,
-      rows.length - 1,
-    );
-    rows.forEach((each, at) => {
-      if (at < notes.length) each.input.value = notes[at] ?? "";
-    });
     options.onRemove(index);
   }
 
@@ -270,7 +242,6 @@ export function createTray(options: TrayOptions): Tray {
     row.name.replaceChildren(row.tag);
     if (item.label.name) row.name.append(` ${item.label.name}`);
     row.name.title = item.label.name ? `${item.label.tag} ${item.label.name}` : item.label.tag;
-    row.input.setAttribute("aria-label", `Note for ${number}`);
     row.remove.setAttribute("aria-label", `Remove ${number}`);
   }
 
@@ -306,8 +277,7 @@ export function createTray(options: TrayOptions): Tray {
       return;
     }
     if (event.key === "Enter" && !event.isComposing) {
-      const command = event.metaKey || event.ctrlKey;
-      if (command || (target instanceof HTMLInputElement && !event.shiftKey)) {
+      if (event.metaKey || event.ctrlKey) {
         event.preventDefault();
         event.stopPropagation();
         options.onCopy();
@@ -336,13 +306,11 @@ export function createTray(options: TrayOptions): Tray {
     node,
     update,
     remove: removeAt,
-    notes() {
-      return { each: rows.map((row) => row.input.value), all: all.value };
+    note() {
+      return note.value;
     },
-    focusNote(index) {
-      const field = index === null ? all : rows[index]?.input;
-      field?.focus({ preventScroll: true });
-      field?.scrollIntoView({ block: "nearest" });
+    focusNote() {
+      note.focus({ preventScroll: true });
     },
     contains(target) {
       return target instanceof Node && node.contains(target);

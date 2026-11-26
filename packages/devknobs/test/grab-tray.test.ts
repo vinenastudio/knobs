@@ -1,31 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { alignNotes, TRAY_CSS } from "../src/grab/tray";
-
-describe("alignNotes", () => {
-  test("keeps the notes of items that stay", () => {
-    expect(alignNotes(["a", "b", "c"], null, 3)).toEqual(["a", "b", "c"]);
-  });
-
-  test("drops the removed note and moves the rest up", () => {
-    expect(alignNotes(["a", "b", "c"], 1, 2)).toEqual(["a", "c"]);
-    expect(alignNotes(["a", "b", "c"], 0, 2)).toEqual(["b", "c"]);
-    expect(alignNotes(["a", "b", "c"], 2, 2)).toEqual(["a", "b"]);
-  });
-
-  test("gives new items empty notes", () => {
-    expect(alignNotes(["a"], null, 3)).toEqual(["a", "", ""]);
-    expect(alignNotes(["a", "b"], 0, 3)).toEqual(["b", "", ""]);
-  });
-
-  test("cuts notes when the list shrinks with nothing removed", () => {
-    expect(alignNotes(["a", "b", "c"], null, 1)).toEqual(["a"]);
-    expect(alignNotes([], null, 0)).toEqual([]);
-  });
-
-  test("ignores a removed index out of range", () => {
-    expect(alignNotes(["a", "b"], 5, 2)).toEqual(["a", "b"]);
-  });
-});
+import { TRAY_CSS } from "../src/grab/tray";
 
 describe("TRAY_CSS", () => {
   test("keeps the tray fixed, bounded and still with reduced motion", () => {
@@ -34,5 +8,14 @@ describe("TRAY_CSS", () => {
     expect(TRAY_CSS).toContain("width: min(380px, calc(100vw - 32px));");
     expect(TRAY_CSS).toContain("env(safe-area-inset-bottom");
     expect(TRAY_CSS).toContain("prefers-reduced-motion: reduce");
+  });
+
+  test("goes light by the page's theme, not by the label's", () => {
+    expect(TRAY_CSS).toContain('.tray[data-page="light"]');
+    expect(TRAY_CSS).not.toContain("data-bar");
+  });
+
+  test("keeps the list's column to the tray's width, so a long label never pushes a row's start out", () => {
+    expect(TRAY_CSS).toContain("grid-template-columns: minmax(0, 1fr);");
   });
 });
