@@ -99,7 +99,7 @@ export const TRAY_CSS = `
   box-sizing: border-box;
   flex: none;
   width: 100%;
-  min-height: 24px;
+  min-height: 40px;
   max-height: 136px;
   padding: 4px 6px;
   overflow-y: auto;
@@ -199,7 +199,7 @@ export function createTray(options: TrayOptions): Tray {
   node.setAttribute("aria-label", "Picked elements");
   const list = element("div", "list");
   const note = element("textarea");
-  note.rows = 1;
+  note.rows = 2;
   if (typeof CSS === "undefined" || !CSS.supports("field-sizing", "content")) {
     note.addEventListener("input", () => {
       note.style.height = "auto";
