@@ -21,7 +21,7 @@ Sizzy is a desktop app for macOS (Apple silicon and Intel), Windows and Linux. I
 | -------------- | --------------------------------------------------------- | ------------------------------------------- |
 | Price          | free                                                      | $15 a month, $144 a year, $499 lifetime     |
 | Platform       | npm package in any browser; extension for Chrome and Edge | desktop app: macOS, Windows, Linux          |
-| Latest release | Chrome extension 0.7.0, November 12, 2026                 | not documented; the homepage names Sizzy 74 |
+| Latest release | 0.7.6, November 26, 2026                                  | not documented; the homepage names Sizzy 74 |
 
 ## Features
 

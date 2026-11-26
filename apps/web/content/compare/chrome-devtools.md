@@ -22,7 +22,7 @@ Chrome DevTools is free and part of Chrome, on every desktop system Chrome runs 
 | Price          | free                                                      | free, part of Chrome                                       |
 | License        | MIT                                                       | frontend under BSD-3-Clause                                |
 | Platform       | npm package in any browser; extension for Chrome and Edge | Chrome on desktop                                          |
-| Latest release | Chrome extension 0.7.0, November 12, 2026                 | ships with Chrome; Stable 158.0.8127.37 on Mac, 2026-11-12 |
+| Latest release | 0.7.6, November 26, 2026                                  | ships with Chrome; Stable 158.0.8127.37 on Mac, 2026-11-12 |
 
 ## Features
 
