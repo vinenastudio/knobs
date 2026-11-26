@@ -70,7 +70,7 @@ interface FakeTray {
 }
 let trays: FakeTray[];
 /** An element the fake tray holds, for keys typed in the tray. */
-const inTray = {} as EventTarget;
+const inTray = new EventTarget();
 
 function tray(): FakeTray | undefined {
   return trays[trays.length - 1];
