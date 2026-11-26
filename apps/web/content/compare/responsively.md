@@ -22,7 +22,7 @@ Responsively App is a free, open source desktop app for Mac, Windows and Linux, 
 | Price          | free                                                      | free                                                       |
 | License        | MIT                                                       | AGPL-3.0                                                   |
 | Platform       | npm package in any browser; extension for Chrome and Edge | desktop app: Mac, Windows, Linux                           |
-| Latest release | Chrome extension 0.7.0, November 12, 2026                 | v1.18.0, 2026-02-17; v2.0.0-beta.0 pre-release, 2026-09-20 |
+| Latest release | 0.7.6, November 26, 2026                                  | v1.18.0, 2026-02-17; v2.0.0-beta.0 pre-release, 2026-09-20 |
 
 ## Features
 

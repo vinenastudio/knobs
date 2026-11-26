@@ -1,11 +1,12 @@
 # changelog
 
-## Unreleased
+## 0.7.6
 
 - grab gathers many elements: drag a box around them, or shift and a click. each shows its number
-- a tray lists what is gathered, with one note for them all. it wears the page's theme. `n` writes the note, enter, `c` or the tray's button copies them all
+- a tray lists what is gathered, with one note for them all. it wears the page's theme. the note starts at two rows and grows with its text. `n` writes the note, enter, `c` or the tray's button copies them all
 - more than one element, or a note, copies numbered, the note last
 - letting go of shift no longer copies
+- the page under Safari's bottom bar keeps the right size for videos, for pictures the page has not loaded yet and for pictures picked from a srcset, and takes the page's font once it arrives
 
 ## 0.7.5
 

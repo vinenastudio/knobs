@@ -22,7 +22,7 @@ Responsive Viewer is a Chrome extension, open source under the MIT license. It i
 | Price          | free                                                      | free; Professional plan $4.99 monthly or $3.99 yearly |
 | License        | MIT                                                       | MIT                                                   |
 | Platform       | npm package in any browser; extension for Chrome and Edge | Chrome extension                                      |
-| Latest release | Chrome extension 0.7.0, November 12, 2026                 | store version 1.1.25, August 12, 2026                 |
+| Latest release | 0.7.6, November 26, 2026                                  | store version 1.1.25, August 12, 2026                 |
 
 ## Features
 

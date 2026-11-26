@@ -21,7 +21,7 @@ Polypane is a desktop app for Windows, macOS and Linux. It has a 14 day free tri
 | -------------- | --------------------------------------------------------- | ---------------------------------- |
 | Price          | free                                                      | 14 day trial, then paid plans      |
 | Platform       | npm package in any browser; extension for Chrome and Edge | desktop app: Windows, macOS, Linux |
-| Latest release | Chrome extension 0.7.0, November 12, 2026                 | v31.0.0, September 29, 2026        |
+| Latest release | 0.7.6, November 26, 2026                                  | v31.0.0, September 29, 2026        |
 
 ## Features
 
