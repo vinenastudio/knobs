@@ -169,6 +169,8 @@ export interface TrayOptions {
 export interface Tray {
   node: HTMLElement;
   update(items: TrayItem[]): void;
+  /** Take a row out as its remove button does: its note goes, and `onRemove` is told. */
+  remove(index: number): void;
   /** Each row's note and the overall one, as typed. */
   notes(): { each: string[]; all: string };
   /** Focus a row's note, or with null the overall note. */
@@ -251,21 +253,22 @@ export function createTray(options: TrayOptions): Tray {
     row.input.spellcheck = false;
     row.remove.type = "button";
     row.remove.textContent = "×";
-    row.remove.addEventListener("click", () => {
-      const index = rows.indexOf(row);
-      if (index < 0) return;
-      const notes = alignNotes(
-        rows.map((each) => each.input.value),
-        index,
-        rows.length - 1,
-      );
-      rows.forEach((each, at) => {
-        if (at < notes.length) each.input.value = notes[at] ?? "";
-      });
-      options.onRemove(index);
-    });
+    row.remove.addEventListener("click", () => removeAt(rows.indexOf(row)));
     row.node.append(row.num, row.name, row.input, row.remove);
     return row;
+  }
+
+  function removeAt(index: number): void {
+    if (index < 0 || index >= rows.length) return;
+    const notes = alignNotes(
+      rows.map((each) => each.input.value),
+      index,
+      rows.length - 1,
+    );
+    rows.forEach((each, at) => {
+      if (at < notes.length) each.input.value = notes[at] ?? "";
+    });
+    options.onRemove(index);
   }
 
   function fill(row: Row, item: TrayItem, index: number): void {
@@ -338,6 +341,7 @@ export function createTray(options: TrayOptions): Tray {
   return {
     node,
     update,
+    remove: removeAt,
     notes() {
       return { each: rows.map((row) => row.input.value), all: all.value };
     },

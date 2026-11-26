@@ -252,7 +252,7 @@ describe("CSS", () => {
   });
 
   test("draws a gathered box's number round, in grab's color, on figures of one width", () => {
-    const num = [...CSS.matchAll(/([^{}]+)\{([^}]*)\}/g)].find(([, selector]) => selector?.trim() === ".num");
+    const num = [...CSS.matchAll(/([^{}]+)\{([^}]*)\}/g)].find(([, selector]) => selector?.trim() === ".pick-num");
     expect(num?.[2]).toContain(`min-width: ${BADGE}px`);
     expect(num?.[2]).toContain(`border-radius: ${BADGE / 2}px`);
     expect(num?.[2]).toContain("background: var(--grab)");

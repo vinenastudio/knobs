@@ -51,6 +51,12 @@ const page: ModePage = {
     overlays++;
     return overlay;
   },
+  createTray: () => {
+    throw new Error("inspect gathers nothing");
+  },
+  elementsInRect: () => {
+    throw new Error("inspect has no drag");
+  },
   grabEntry: async (element) => {
     warmed.push(element);
     return entryOf(element);

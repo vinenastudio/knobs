@@ -179,7 +179,7 @@ ${colorRules("p3")}
   border-color: color-mix(in srgb, var(--grab) 20%, transparent);
   background: color-mix(in srgb, var(--grab) 3%, transparent);
 }
-.num {
+.pick-num {
   position: absolute;
   top: 0;
   left: 0;
@@ -631,6 +631,8 @@ export function createOverlay(quiet = false, model = false): BoxOverlay {
   frameNode.hidden = true;
   /** What other parts of grab put on the layer. */
   const mounted: HTMLElement[] = [];
+  /** Their styles, each put on the layer once. */
+  const mountedCss = new Set<string>();
   /** The areas of the box, under the box's own line. */
   const tints = (model ? RINGS : []).map((ring) => {
     const node = document.createElement("div");
@@ -720,7 +722,8 @@ export function createOverlay(quiet = false, model = false): BoxOverlay {
       if (isCustomColor(name)) layer.style.setProperty("--grab", name);
       else layer.style.removeProperty("--grab");
     }
-    if (bar && label.dataset.bar !== bar) label.dataset.bar = bar;
+    if (!bar) return;
+    for (const node of [label, ...mounted]) if (node.dataset.bar !== bar) node.dataset.bar = bar;
   }
 
   function schedule(): void {
@@ -754,7 +757,7 @@ export function createOverlay(quiet = false, model = false): BoxOverlay {
       const node = document.createElement("div");
       node.className = "pick";
       const num = document.createElement("span");
-      num.className = "num";
+      num.className = "pick-num";
       node.append(num);
       layer.insertBefore(node, glide);
       picks.push(node);
@@ -1076,7 +1079,12 @@ export function createOverlay(quiet = false, model = false): BoxOverlay {
     },
     mount(node, css) {
       if (closing) return;
-      if (css) addStyle(root, css);
+      if (css && !mountedCss.has(css)) {
+        mountedCss.add(css);
+        addStyle(root, css);
+      }
+      if (bar) node.dataset.bar = bar;
+      for (let at = mounted.length - 1; at >= 0; at--) if (!mounted[at]?.isConnected) mounted.splice(at, 1);
       layer.append(node);
       mounted.push(node);
     },
