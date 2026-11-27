@@ -96,6 +96,18 @@ describe("a send target", () => {
     expect(await sendGrab(PAYLOAD, 5)).toBe(false);
   });
 
+  test("a URL that never answers counts as failed after the timeout", async () => {
+    globalThis.fetch = Object.assign(
+      (_url: string | URL | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+        }),
+      { preconnect: realFetch.preconnect },
+    );
+    setGrabSend("/api/grab");
+    expect(await sendGrab(PAYLOAD, 5)).toBe(false);
+  });
+
   test("a URL gets the payload POSTed as json", async () => {
     setGrabSend("/api/grab");
     expect(await sendGrab(PAYLOAD)).toBe(true);
