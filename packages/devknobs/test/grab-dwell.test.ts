@@ -566,9 +566,7 @@ describe("a grab handed out", () => {
     start(50);
     click(50);
     expect(said).toEqual(["Copied"]);
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    for (let tick = 0; tick < 5; tick++) await Promise.resolve();
     expect(got).toEqual(["a"]);
     expect(said).toEqual(["Copied", "Copied · Sent"]);
   });
@@ -582,5 +580,19 @@ describe("a grab handed out", () => {
     for (let tick = 0; tick < 5; tick++) await Promise.resolve();
     expect(copies).toEqual([["a"]]);
     expect(said).toEqual(["Copied", "Send failed"]);
+  });
+
+  test("a failed copy says Copy failed at once, though the target never settles", async () => {
+    const copyGrab = page.copyGrab;
+    page.copyGrab = async () => false;
+    setGrabSend(() => new Promise<void>(() => undefined));
+    try {
+      start(50);
+      click(50);
+      for (let tick = 0; tick < 5; tick++) await Promise.resolve();
+      expect(said).toEqual(["Copied", "Copy failed"]);
+    } finally {
+      page.copyGrab = copyGrab;
+    }
   });
 });

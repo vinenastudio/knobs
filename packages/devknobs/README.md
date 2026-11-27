@@ -67,7 +67,7 @@ or on for any host.
 
 ## send each grab
 
-every grab fires a `knobs:grab` event on `window`, the payload as its
+every grab fires one `knobs:grab` event on `window` as the copy starts, the payload as its
 `detail`. `grabSend` also POSTs it as json (`{ "type": "knobs.grab", payload }`)
 to a URL on the page's origin or on localhost, or hands it to a function. the
 copy still happens:

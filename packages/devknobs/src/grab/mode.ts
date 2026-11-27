@@ -256,9 +256,13 @@ export function startMode(options: ModeOptions, page: ModePage = PAGE): Mode {
     const anchor = elements[elements.length - 1] ?? null;
     overlay.toast(copiedText(elements.length), anchor, true);
     const delivery = deliverGrab(picksPayload(entries, tray?.note()), page.copyGrab);
-    void Promise.all([delivery.copied, delivery.sent]).then(([copied, sent]) => {
-      const settled = settledText(elements.length, copied, sent);
-      if (settled) overlay.toast(settled.text, anchor, settled.good);
+    void delivery.copied.then((copied) => {
+      const failed = settledText(elements.length, copied, null);
+      if (failed) overlay.toast(failed.text, anchor, failed.good);
+      return delivery.sent.then((sent) => {
+        const settled = sent === null ? null : settledText(elements.length, copied, sent);
+        if (settled) overlay.toast(settled.text, anchor, settled.good);
+      });
     });
     for (const element of elements) warm(element);
     exit();

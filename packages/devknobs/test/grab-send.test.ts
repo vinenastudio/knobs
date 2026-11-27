@@ -69,6 +69,14 @@ describe("allowedEndpoint", () => {
     expect(allowedEndpoint("ftp://localhost/grab", PAGE)).toBeNull();
     expect(allowedEndpoint("javascript:alert(1)", PAGE)).toBeNull();
   });
+
+  test("refuses everything on a page with an opaque origin", () => {
+    for (const base of ["file:///Users/me/page.html", "about:blank"]) {
+      expect(allowedEndpoint("javascript:alert(1)", base)).toBeNull();
+      expect(allowedEndpoint("data:text/plain,hi", base)).toBeNull();
+      expect(allowedEndpoint("//evil.com/grab", base)).toBeNull();
+    }
+  });
 });
 
 describe("the knobs:grab event", () => {
@@ -83,6 +91,11 @@ describe("the knobs:grab event", () => {
 });
 
 describe("a send target", () => {
+  test("a function that never settles counts as failed after the timeout", async () => {
+    setGrabSend(() => new Promise<void>(() => undefined));
+    expect(await sendGrab(PAYLOAD, 5)).toBe(false);
+  });
+
   test("a URL gets the payload POSTed as json", async () => {
     setGrabSend("/api/grab");
     expect(await sendGrab(PAYLOAD)).toBe(true);

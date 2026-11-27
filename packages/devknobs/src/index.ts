@@ -576,7 +576,7 @@ export function describe(): KnobDescription[] {
  * components that rendered them and where. Takes an element, an array or a
  * NodeList of them. Loads on first use, so the page never pays for it until
  * then. It fires `knobs:grab` and goes to `grabSend` as a grab from the keys does.
- * then. The payload comes back even when the copy fails, with `copied` false. Entries that are
+ * The payload comes back even when the copy fails, with `copied` false. Entries that are
  * not elements, such as a `querySelector` that found nothing, are skipped.
  * Null when the elements gave nothing.
  */

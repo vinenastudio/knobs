@@ -26,8 +26,9 @@ export function allowedEndpoint(url: string, base: string): string | null {
   } catch {
     return null;
   }
+  if (parsed.origin === "null" || (parsed.protocol !== "http:" && parsed.protocol !== "https:")) return null;
   if (parsed.origin === new URL(base).origin) return parsed.href;
-  if ((parsed.protocol === "http:" || parsed.protocol === "https:") && LOCAL.test(parsed.hostname)) return parsed.href;
+  if (LOCAL.test(parsed.hostname)) return parsed.href;
   return null;
 }
 
@@ -55,18 +56,29 @@ export function announceGrab(payload: GrabPayload): void {
   }
 }
 
-/** Send a grab to the target: true where it went, false where it failed, null with no target. */
-export async function sendGrab(payload: GrabPayload): Promise<boolean | null> {
+/** How long a send may take before it counts as failed, in ms. */
+export const SEND_TIMEOUT = 10000;
+
+/** Send a grab to the target: true where it went, false where it failed or timed out, null with no target. */
+export async function sendGrab(payload: GrabPayload, timeout = SEND_TIMEOUT): Promise<boolean | null> {
   const send = target;
   if (send === null) return null;
   try {
     if (typeof send === "function") {
-      await send(payload);
-      return true;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const late = new Promise<false>((resolve) => {
+        timer = setTimeout(() => resolve(false), timeout);
+      });
+      try {
+        return await Promise.race([Promise.resolve(send(payload)).then(() => true), late]);
+      } finally {
+        clearTimeout(timer);
+      }
     }
     const response = await fetch(send, {
       method: "POST",
       credentials: "same-origin",
+      signal: AbortSignal.timeout(timeout),
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "knobs.grab", payload }),
     });

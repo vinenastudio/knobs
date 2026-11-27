@@ -140,7 +140,7 @@ both by Aiden Bai and MIT, see
 ## send each grab
 
 every grab, from the keys or from `grab()`, fires one `knobs:grab` event on
-`window` once it is copied, whether the copy worked or not. its `detail` is
+`window` as the copy starts, before it is known whether the copy worked. its `detail` is
 the payload: `content`, `entries` and `note` where there is one. it cannot be
 canceled.
 

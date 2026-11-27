@@ -46,8 +46,8 @@ mount({ grabKey: 'alt+shift+g' });
 
 ## send each grab
 
-every grab also fires a `knobs:grab` event on `window`, with what was copied
-as its `detail`:
+every grab also fires one `knobs:grab` event on `window` as the copy starts,
+with what it copies as its `detail`:
 
 ```js
 window.addEventListener('knobs:grab', (event) => {
