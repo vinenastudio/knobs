@@ -3,7 +3,7 @@ title: grab and inspect
 meta_title: Grab and inspect elements for a coding agent with knobs
 description: Grab any element on the page and copy its html, the components that rendered it and their source files for a coding agent, or inspect its box and css.
 order: 5
-updated: 2026-11-26
+updated: 2026-11-27
 ---
 
 ## grab
@@ -43,6 +43,36 @@ mount({ grabKey: 'alt+shift+g' });
 ```
 
 `grab: false` leaves grab out. `grab(elements)` copies elements from code.
+
+## send each grab
+
+every grab also fires a `knobs:grab` event on `window`, with what was copied
+as its `detail`:
+
+```js
+window.addEventListener('knobs:grab', (event) => {
+  console.log(event.detail.content, event.detail.entries, event.detail.note);
+});
+```
+
+`grabSend` sends each grab somewhere too, so nobody has to paste. a URL gets
+a POST of `{ "type": "knobs.grab", "payload": ... }` as json; it has to be
+the page's own origin, or http(s) on `localhost`, `127.0.0.1` or a
+`.localhost` name. a function gets the payload:
+
+```js
+mount({ grabSend: '/api/grab' });
+mount({ grabSend: (payload) => socket.send(JSON.stringify(payload)) });
+```
+
+with the script tag, set it on the tag:
+
+```html
+<script src="//unpkg.com/@vinena/knobs/dist/index.global.js" data-grab-send="/api/grab"></script>
+```
+
+the copy still happens. the toast says `Copied · Sent` once it went, and
+`Send failed` when it did not.
 
 ## coming from react-grab
 

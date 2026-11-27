@@ -1,5 +1,10 @@
 # changelog
 
+## Unreleased
+
+- every grab fires a `knobs:grab` event on `window`, with what was copied as its `detail`
+- `grabSend` sends each grab on as well: a URL on the page's origin or on localhost gets it as a json POST, a function gets the payload. the script tag takes it as `data-grab-send`. the copy still happens, and the toast says `Sent` or `Send failed`
+
 ## 0.7.6
 
 - grab gathers many elements: drag a box around them, or shift and a click. each shows its number

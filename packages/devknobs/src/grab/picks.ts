@@ -11,6 +11,16 @@ export function copiedText(count: number): string {
   return count > 1 ? `Copied ${count}` : "Copied";
 }
 
+/**
+ * What the toast says once the copy and the send are done, and whether that went well.
+ * Null where the first toast still holds: a copy with no target.
+ */
+export function settledText(count: number, copied: boolean, sent: boolean | null): { text: string; good: boolean } | null {
+  if (sent === true) return { text: copied ? `${copiedText(count)} · Sent` : "Sent", good: true };
+  if (sent === false) return { text: copied ? "Send failed" : "Copy and send failed", good: false };
+  return copied ? null : { text: "Copy failed", good: false };
+}
+
 function cleanNote(note: string | undefined): string | undefined {
   const trimmed = note?.trim();
   return trimmed ? trimmed : undefined;

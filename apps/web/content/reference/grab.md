@@ -137,6 +137,45 @@ reads React's internals through [bippy](https://github.com/aidenybai/bippy),
 both by Aiden Bai and MIT, see
 [THIRD_PARTY_NOTICES.md](https://github.com/vinenastudio/knobs/blob/main/packages/devknobs/THIRD_PARTY_NOTICES.md).
 
+## send each grab
+
+every grab, from the keys or from `grab()`, fires one `knobs:grab` event on
+`window` once it is copied, whether the copy worked or not. its `detail` is
+the payload: `content`, `entries` and `note` where there is one. it cannot be
+canceled.
+
+```js
+window.addEventListener('knobs:grab', (event) => {
+  console.log(event.detail.content, event.detail.entries, event.detail.note);
+});
+```
+
+the `grabSend` mount option sends each grab on as well, so nobody has to paste:
+
+- a URL gets a POST with `Content-Type: application/json` and
+  `credentials: "same-origin"`, its body `{ "type": "knobs.grab", "payload": ... }`.
+  only the page's own origin, a relative path included, and http(s) on
+  `localhost`, `127.0.0.1` or a `.localhost` name are taken; any other URL is
+  ignored with one warning in the console.
+- a function is called with the payload, and may return a promise.
+
+```js
+mount({ grabSend: '/api/grab' });
+mount({ grabSend: (payload) => socket.send(JSON.stringify(payload)) });
+```
+
+the script tag build takes it from a `data-grab-send` attribute:
+
+```html
+<script src="//unpkg.com/@vinena/knobs/dist/index.global.js" data-grab-send="/api/grab"></script>
+```
+
+a send never stops the copy. once it went, the toast says `Copied · Sent`
+(`Sent` alone where the copy failed). where it fails, a thrown error, a
+rejected promise, a network error or a status that is not 2xx, the toast says
+`Send failed`. a page whose own mount defers to the extension hands its
+`grabSend` to the extension's copy, as it does its keys.
+
 ## migrating from react-grab
 
 knobs covers it: the same grab, the same line format, the same

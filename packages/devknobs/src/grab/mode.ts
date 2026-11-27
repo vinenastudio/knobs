@@ -1,13 +1,13 @@
 import { ensureStyle, removeStyle } from "../engine/style";
 import { pause } from "../engine/touchpointer";
-import { copyGrab } from "./clipboard";
+import { copyGrab, deliverGrab } from "./clipboard";
 import { componentOf, grabEntry, quickEntry } from "./context";
 import { DWELL, settles, speedOf } from "./dwell";
 import { grabTargetAt, isDevknobs } from "./hit";
 import { isCLike } from "./keys";
 import { createNavigator, stepOf } from "./navigate";
 import { createOverlay, HIDE_WAIT, type Overlay } from "./overlay";
-import { copiedText, flushPicks, picksPayload } from "./picks";
+import { copiedText, flushPicks, picksPayload, settledText } from "./picks";
 import { elementsInRect, isDrag, type Point, rectFrom } from "./rect";
 import { createTray, type Tray, TRAY_CSS } from "./tray";
 import type { GrabEntry } from "./types";
@@ -255,8 +255,10 @@ export function startMode(options: ModeOptions, page: ModePage = PAGE): Mode {
     const entries = elements.map((element) => ready.get(element) ?? page.quickEntry(element));
     const anchor = elements[elements.length - 1] ?? null;
     overlay.toast(copiedText(elements.length), anchor, true);
-    void page.copyGrab(picksPayload(entries, tray?.note())).then((copied) => {
-      if (!copied) overlay.toast("Copy failed", anchor, false);
+    const delivery = deliverGrab(picksPayload(entries, tray?.note()), page.copyGrab);
+    void Promise.all([delivery.copied, delivery.sent]).then(([copied, sent]) => {
+      const settled = settledText(elements.length, copied, sent);
+      if (settled) overlay.toast(settled.text, anchor, settled.good);
     });
     for (const element of elements) warm(element);
     exit();

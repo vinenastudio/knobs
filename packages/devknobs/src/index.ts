@@ -15,6 +15,7 @@ import { clearForced, type ForcedState, forceState as forceOn } from "./styles/f
 import { watchAnnotations } from "./grab/annotations";
 import { createGrab, type GrabControl } from "./grab/control";
 import { createInspect, type InspectControl, oneAtATime } from "./grab/inspect";
+import { type GrabSend, setGrabSend } from "./grab/send";
 import type { GrabOptions, GrabResult } from "./grab/types";
 import {
   type HostBuild,
@@ -103,6 +104,7 @@ export type {
   GrabResult,
   ResolvedSource,
 } from "./grab/types";
+export type { GrabSend } from "./grab/send";
 
 export interface MountOptions extends engine.EngineOptions {
   /**
@@ -124,6 +126,13 @@ export interface MountOptions extends engine.EngineOptions {
    * first: blue, and green where the page behind the element is blue.
    */
   grabColor?: GrabColorValue;
+  /**
+   * Where each grab goes besides the clipboard. A URL gets a POST of
+   * `{ type: "knobs.grab", payload }` as JSON; only the page's own origin and
+   * http(s) on localhost, 127.0.0.1 or a `.localhost` name are taken. A
+   * function is called with the payload. Either way the copy still happens.
+   */
+  grabSend?: GrabSend;
   /**
    * Show the handle on the window's edge while the panel is closed. Defaults
    * to true. With false, the panel key opens it. What the user sets in the
@@ -268,6 +277,7 @@ function attach(options: MountOptions): void {
     store: options.keysStore,
   });
   keys = live;
+  setGrabSend(options.grab !== false ? options.grabSend : undefined);
   // Ahead of the panel's keys, so escape ends grab before it closes the panel.
   // A key the panel records is never grab's.
   if (options.grab !== false) {
@@ -354,6 +364,7 @@ function choose(options: MountOptions): void {
 }
 
 function detach(): void {
+  setGrabSend(undefined);
   panel?.destroy();
   panel = null;
   grabControl?.destroy();
@@ -383,6 +394,7 @@ function adopt(options: object, take?: Take): void {
   );
   mounted = { ...mounted, ...chosen };
   if (!rebuild) {
+    if (chosen.grabSend !== undefined && mounted.grab !== false) setGrabSend(chosen.grabSend);
     if (!isDevknobsFrame()) choose(chosen);
     return;
   }
@@ -563,6 +575,7 @@ export function describe(): KnobDescription[] {
  * Copy what an agent needs to find the elements in the code: their html, the
  * components that rendered them and where. Takes an element, an array or a
  * NodeList of them. Loads on first use, so the page never pays for it until
+ * then. It fires `knobs:grab` and goes to `grabSend` as a grab from the keys does.
  * then. The payload comes back even when the copy fails, with `copied` false. Entries that are
  * not elements, such as a `querySelector` that found nothing, are skipped.
  * Null when the elements gave nothing.
