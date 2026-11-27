@@ -65,6 +65,22 @@ production. an icon from another origin that does not allow it (CORS) keeps
 its own picture. the dev tab icon switch in the panel's settings turns it off,
 or on for any host.
 
+## send each grab
+
+every grab fires one `knobs:grab` event on `window` as the copy starts, the payload as its
+`detail`. `grabSend` also POSTs it as json (`{ "type": "knobs.grab", payload }`)
+to a URL on the page's origin or on localhost, or hands it to a function. the
+copy still happens:
+
+```js
+window.addEventListener("knobs:grab", (event) => console.log(event.detail.content));
+mount({ grabSend: "/api/grab" });
+```
+
+```html
+<script src="//unpkg.com/@vinena/knobs/dist/index.global.js" data-grab-send="/api/grab"></script>
+```
+
 ## docs
 
 - [start](https://knobs.dev/docs/start): install @vinena/knobs and mount it in

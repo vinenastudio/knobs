@@ -1,9 +1,10 @@
 import { checkPatch } from "./engine/check";
+import { isGrabSend } from "./grab/send";
 import type { MountOptions } from "./index";
 
 /**
  * What a page's own mount may choose on a host's panel: its keys, grab, its
- * color and whether the panel starts open. The rest is the host's to say.
+ * color, where grabs are sent and whether the panel starts open. The rest is the host's to say.
  * Read field by field, as it comes from another copy, maybe of another version.
  */
 export function pageChoices(options: object): MountOptions {
@@ -13,10 +14,12 @@ export function pageChoices(options: object): MountOptions {
   const grab: unknown = Reflect.get(options, "grab");
   const open: unknown = Reflect.get(options, "open");
   const grabColor: unknown = Reflect.get(options, "grabColor");
+  const grabSend: unknown = Reflect.get(options, "grabSend");
   if (typeof hotkey === "string") chosen.hotkey = hotkey;
   if (typeof grabKey === "string") chosen.grabKey = grabKey;
   if (typeof grab === "boolean") chosen.grab = grab;
   if (typeof open === "boolean") chosen.open = open;
+  if (isGrabSend(grabSend)) chosen.grabSend = grabSend;
   if (grabColor !== undefined) {
     const patch = { grabColor };
     try {

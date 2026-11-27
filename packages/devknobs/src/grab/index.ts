@@ -1,4 +1,4 @@
-import { copyGrab } from "./clipboard";
+import { deliverGrab } from "./clipboard";
 import { grabContext } from "./context";
 import { isElement } from "./inspect";
 import type { GrabOptions, GrabResult } from "./types";
@@ -32,5 +32,5 @@ export async function grab(
   if (found.length === 0) return null;
   const payload = await grabContext(found, options);
   if (!payload.content.trim()) return null;
-  return { ...payload, copied: await copyGrab(payload) };
+  return { ...payload, copied: await deliverGrab(payload).copied };
 }

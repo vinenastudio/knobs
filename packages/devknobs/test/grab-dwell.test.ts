@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import { DWELL, SLOW, settles, speedOf } from "../src/grab/dwell";
+import { GRAB_EVENT, setGrabSend } from "../src/grab/send";
 import { type Mode, type ModePage, startMode } from "../src/grab/mode";
 import type { Overlay } from "../src/grab/overlay";
 import type { PageRect } from "../src/grab/rect";
@@ -50,6 +51,8 @@ let laid: FakeElement[];
 /** Every element the overlay was told to box, with the tag on its label and the gathered ones. */
 let draws: { element: Element | null; tag: string; picked: Element[] }[];
 let toasts: (Element | null)[];
+/** What each toast said, in order. */
+let said: string[];
 let warmed: Element[];
 let copies: string[][];
 /** The text of each copy. */
@@ -103,7 +106,10 @@ function entryOf(element: Element): GrabEntry {
 const overlay: Overlay = {
   draw: (element, label, picked) => draws.push({ element, tag: label.tag, picked }),
   point: () => undefined,
-  toast: (_text, near) => toasts.push(near),
+  toast: (text, near) => {
+    toasts.push(near);
+    said.push(text);
+  },
   marquee: (rect) => marquees.push(rect),
   mount: () => undefined,
   destroy: () => undefined,
@@ -224,6 +230,7 @@ beforeEach(() => {
   laid = [a, b, c];
   draws = [];
   toasts = [];
+  said = [];
   warmed = [];
   copies = [];
   texts = [];
@@ -255,6 +262,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  setGrabSend(undefined);
   mode?.stop();
   mode = null;
   jest.useRealTimers();
@@ -538,5 +546,53 @@ describe("gathering many", () => {
     click(250, true);
     tray()?.options.onCopy();
     expect(copies).toEqual([["a", "c"]]);
+  });
+});
+
+describe("a grab handed out", () => {
+  test("a click fires one knobs:grab event with the payload", () => {
+    const heard: unknown[] = [];
+    window.addEventListener(GRAB_EVENT, (event) => heard.push(event instanceof CustomEvent ? event.detail : null));
+    start(50);
+    click(50);
+    expect(heard).toEqual([{ content: "a", entries: [entryOf(as(a))] }]);
+  });
+
+  test("with a target, the toast says Sent once it went", async () => {
+    const got: string[] = [];
+    setGrabSend((payload) => {
+      got.push(payload.content);
+    });
+    start(50);
+    click(50);
+    expect(said).toEqual(["Copied"]);
+    for (let tick = 0; tick < 5; tick++) await Promise.resolve();
+    expect(got).toEqual(["a"]);
+    expect(said).toEqual(["Copied", "Copied · Sent"]);
+  });
+
+  test("a target that fails leaves the copy, and the toast says Send failed", async () => {
+    setGrabSend(async () => {
+      throw new Error("down");
+    });
+    start(50);
+    click(50);
+    for (let tick = 0; tick < 5; tick++) await Promise.resolve();
+    expect(copies).toEqual([["a"]]);
+    expect(said).toEqual(["Copied", "Send failed"]);
+  });
+
+  test("a failed copy says Copy failed at once, though the target never settles", async () => {
+    const copyGrab = page.copyGrab;
+    page.copyGrab = async () => false;
+    setGrabSend(() => new Promise<void>(() => undefined));
+    try {
+      start(50);
+      click(50);
+      for (let tick = 0; tick < 5; tick++) await Promise.resolve();
+      expect(said).toEqual(["Copied", "Copy failed"]);
+    } finally {
+      page.copyGrab = copyGrab;
+    }
   });
 });
